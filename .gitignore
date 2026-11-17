@@ -1,0 +1,51 @@
+# Generated Flutter / Dart files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+*.iml
+.idea/
+.vscode/
+Thumbs.db
+# Android local files and credentials
+android/local.properties
+android/.gradle/
+android/.kotlin/
+android/key.properties
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+# App and provider secrets
+.env
+.env.*
+!.env.example
+secrets.json
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+
+# Distribution artifacts, SDK installations and machine-local caches
+*.apk
+*.aab
+.gradle/
+flutter/
+flutter-sdk/
+dart-sdk/
+android-sdk/
+sdk/
+.sdks/
+.fvm/
+.credentials/
+*.pfx
+*.p8
+*.mobileprovision
+# Gradle wrapper files are required for reproducible builds
+!android/gradle/wrapper/gradle-wrapper.jar
+!android/gradlew
+!android/gradlew.bat

@@ -1,0 +1,11 @@
+analyzer:
+  errors:
+    unused_import: error
+    dead_code: warning
+  exclude:
+    - build/**
+    - android/**
+linter:
+  rules:
+    - avoid_print
+    - prefer_const_constructors

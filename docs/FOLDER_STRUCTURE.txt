@@ -1,0 +1,1784 @@
+# ANDRIL Flutter — Physical folder structure v1.1
+
+The V1.1 blueprint expands the verified 123-directory optimized scaffold. That scaffold contained 123 files, including 99 zero-byte markers and 24 substantive files. The tree below reflects the expanded filesystem.
+
+## Clean Architecture and MVVM
+
+- Application composition belongs in lib/app. Use one router with feature route registrations and guards. Keep shared theme primitives and the Learning, Hobbies and Social theme boundaries.
+- lib/core owns reusable infrastructure. It has no dependency on product implementations. lib/shared_core owns account workflows. lib/features/common owns module-scoped shared features, including Diary.
+- Learning, Hobbies and Social are the three product modules. Each owns its private profile data, screens, state and business behavior. Use backend-authorized module-profile scope for caches, requests, drafts and subscriptions.
+- Screens and widgets render state from ViewModels. Domain defines business types, policies and repository interfaces. Data implements those interfaces and maps external DTOs. App composition wires dependencies.
+- Groups, Andril Map and Personality each use one data/domain/presentation tree. Preserve module-specific group contracts. Social Home and Profile should share one Personality destination. Its v1 questionnaire is optional and requires 12 valid answers for completion.
+- Social requires backend-confirmed 18+ eligibility and explicit opt-in. Match-based private communication requires server-authorized mutual matching. MoodTone stays Social-only.
+- Andril Map reserves a Mapbox boundary, fresh in-app capture and location evidence. Public visibility and rewards depend on server and Admin approval. Flight Points, module XP and purchased coins remain distinct. Excluded Hobbies events and removed Learning features stay out of scope.
+
+## Ownership
+
+- M1 Thusa owns Learning, CV, Portfolio, Diary and AI Chat.
+- M2 Vizhan owns authentication, privacy, module identity, Premium, payments and Wallet.
+- M3 Priyanka owns Hobbies, Andril Map, Flight Points and gamification.
+- M4 Thushani owns chat, calls, streaming, notifications and Social MoodTone.
+- M5 Thulaanchan owns Social, Personality, discovery, matching and Zones, and coordinates Shared Groups backend work.
+- M6 Lucina owns Angular Admin, AI safety, QA and CI. Shared contracts and app integration require the relevant owners.
+
+## Assets, tests and implementation status
+
+- The official branding PNG is the existing asset. Icons, images, illustrations and animations are organized by Shared Core, Common and the three product modules. Gifts and fonts have dedicated placeholder paths.
+- test includes the existing app widget test and placeholder coverage for app infrastructure and scoped features. integration_test reserves onboarding, module isolation and module journeys.
+- Read the tree labels as [files] for a directory that contains substantive files somewhere below it, [scaffold] for a placeholder-only subtree, [existing file] for a preserved substantive file, and [structure document] for this updated file.
+- [v1.1] marks a directory or marker added relative to the verified 123-directory scaffold. Existing markers were retained. New markers belong only to empty leaves.
+- This is a filesystem scaffold. Add product code, contracts and dependencies through separate implementation work. Preserve authorized scope and do not add mock files that imply feature completion.
+- Existing localization resource lib/l10n/app_en.arb is preserved. app_ta.arb and app_si.arb remain pending genuine translations. The official Tamil name is அன்றில்.
+- Android still requires an approved application ID, toolchain and platform generation. Flutter packages, generation, builds and tests were outside the scope of this migration.
+
+## Complete physical tree
+
+andril-mobile/
+├── .github/ [files]
+│   └── workflows/ [files]
+│       └── mobile-ci.yml [existing file]
+├── android/ [scaffold]
+│   ├── app/ [scaffold]
+│   │   └── .gitkeep
+│   └── gradle/ [scaffold]
+│       └── .gitkeep
+├── assets/ [files]
+│   ├── animations/ [scaffold] [v1.1]
+│   │   ├── common/ [scaffold] [v1.1]
+│   │   │   ├── calls/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── chat/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── notifications/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── virtual_gifts/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── hobbies/ [scaffold] [v1.1]
+│   │   │   ├── andril_map/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── contributions/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── flight_points/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── success/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── learning/ [scaffold] [v1.1]
+│   │   │   ├── achievements/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── progress/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── success/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── shared_core/ [scaffold] [v1.1]
+│   │   │   ├── loading/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── onboarding/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── splash/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── success/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── transitions/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   └── social/ [scaffold] [v1.1]
+│   │       ├── connections/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── matching/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── personality/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       └── success/ [scaffold] [v1.1]
+│   │           └── .gitkeep [v1.1]
+│   ├── branding/ [files]
+│   │   └── andril_black_logo.png [existing file]
+│   ├── fonts/ [scaffold] [v1.1]
+│   │   └── .gitkeep [v1.1]
+│   ├── gifts/ [scaffold] [v1.1]
+│   │   ├── celebrations/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── reactions/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   └── special/ [scaffold] [v1.1]
+│   │       └── .gitkeep [v1.1]
+│   ├── icons/ [scaffold] [v1.1]
+│   │   ├── common/ [scaffold] [v1.1]
+│   │   │   ├── ai_chat/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── calls/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── chat/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── diary/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── groups/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── notifications/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── hobbies/ [scaffold] [v1.1]
+│   │   │   ├── andril_map/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── clubs/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── flight_points/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── gallery/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── home/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── profile/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── learning/ [scaffold] [v1.1]
+│   │   │   ├── classrooms/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── cv_maker/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── home/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── portfolio_maker/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── profile/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── skill_exchange/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── shared_core/ [scaffold] [v1.1]
+│   │   │   ├── authentication/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── module_selection/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── module_switching/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── navigation/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── onboarding/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── settings/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── wallet/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   └── social/ [scaffold] [v1.1]
+│   │       ├── discovery/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── home/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── likes_matches/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── moodtone/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── personality/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── profile/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── smart_matching/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       └── zones/ [scaffold] [v1.1]
+│   │           └── .gitkeep [v1.1]
+│   ├── illustrations/ [scaffold] [v1.1]
+│   │   ├── common/ [scaffold] [v1.1]
+│   │   │   ├── ai_chat/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── chat/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── diary/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── empty_states/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── groups/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── hobbies/ [scaffold] [v1.1]
+│   │   │   ├── andril_map/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── empty_states/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── flight_points/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── gallery/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── home/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── profile/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── learning/ [scaffold] [v1.1]
+│   │   │   ├── achievements/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── classrooms/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── empty_states/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── home/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── profile/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── skill_exchange/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── shared_core/ [scaffold] [v1.1]
+│   │   │   ├── authentication/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── empty_states/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── module_selection/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── onboarding/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── settings/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   └── social/ [scaffold] [v1.1]
+│   │       ├── discovery/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── empty_states/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── home/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── personality/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── profile/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── smart_matching/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       └── zones/ [scaffold] [v1.1]
+│   │           └── .gitkeep [v1.1]
+│   └── images/ [scaffold] [v1.1]
+│       ├── common/ [scaffold] [v1.1]
+│       │   ├── ai_chat/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── chat/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── diary/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── groups/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   └── notifications/ [scaffold] [v1.1]
+│       │       └── .gitkeep [v1.1]
+│       ├── hobbies/ [scaffold] [v1.1]
+│       │   ├── andril_map/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── clubs/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── gallery/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── home/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   └── profile/ [scaffold] [v1.1]
+│       │       └── .gitkeep [v1.1]
+│       ├── learning/ [scaffold] [v1.1]
+│       │   ├── classrooms/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── cv_maker/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── home/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── portfolio_maker/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── profile/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   └── skill_exchange/ [scaffold] [v1.1]
+│       │       └── .gitkeep [v1.1]
+│       ├── shared_core/ [scaffold] [v1.1]
+│       │   ├── authentication/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── backgrounds/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── module_selection/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   ├── onboarding/ [scaffold] [v1.1]
+│       │   │   └── .gitkeep [v1.1]
+│       │   └── settings/ [scaffold] [v1.1]
+│       │       └── .gitkeep [v1.1]
+│       └── social/ [scaffold] [v1.1]
+│           ├── discovery/ [scaffold] [v1.1]
+│           │   └── .gitkeep [v1.1]
+│           ├── home/ [scaffold] [v1.1]
+│           │   └── .gitkeep [v1.1]
+│           ├── moodtone/ [scaffold] [v1.1]
+│           │   └── .gitkeep [v1.1]
+│           ├── personality/ [scaffold] [v1.1]
+│           │   └── .gitkeep [v1.1]
+│           ├── profile/ [scaffold] [v1.1]
+│           │   └── .gitkeep [v1.1]
+│           ├── smart_matching/ [scaffold] [v1.1]
+│           │   └── .gitkeep [v1.1]
+│           └── zones/ [scaffold] [v1.1]
+│               └── .gitkeep [v1.1]
+├── docs/ [files]
+│   ├── API_INTEGRATION.md [existing file]
+│   ├── ARCHITECTURE.md [existing file]
+│   ├── DECISIONS_AND_ASSUMPTIONS.md [existing file]
+│   ├── FOLDER_STRUCTURE.txt [structure document]
+│   ├── SECURITY_BOUNDARIES.md [existing file]
+│   ├── TEAM_OWNERSHIP.md [existing file]
+│   ├── TESTING.md [existing file]
+│   └── UI_DESIGN_SYSTEM.md [existing file]
+├── integration_test/ [files]
+│   ├── hobbies/ [scaffold]
+│   │   └── .gitkeep
+│   ├── learning/ [scaffold]
+│   │   └── .gitkeep
+│   ├── module_isolation/ [scaffold]
+│   │   └── .gitkeep
+│   ├── onboarding/ [scaffold]
+│   │   └── .gitkeep
+│   ├── social/ [scaffold]
+│   │   └── .gitkeep
+│   └── README.md [existing file]
+├── lib/ [files]
+│   ├── app/ [files]
+│   │   ├── bootstrap/ [files]
+│   │   │   └── scaffold_home.dart [existing file]
+│   │   ├── dependencies/ [scaffold]
+│   │   │   ├── registrations/ [scaffold] [v1.1]
+│   │   │   │   ├── common/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── core/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── hobbies/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── learning/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── shared_core/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── social/ [scaffold] [v1.1]
+│   │   │   │       └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── router/ [scaffold]
+│   │   │   ├── deep_links/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── guards/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── routes/ [scaffold] [v1.1]
+│   │   │   │   ├── hobbies/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── learning/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── shared_core/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── social/ [scaffold] [v1.1]
+│   │   │   │       └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── themes/ [scaffold]
+│   │   │   ├── hobbies/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── learning/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── shared_core/ [scaffold]
+│   │   │   │   ├── colors/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── components/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── spacing/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── typography/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   └── social/ [scaffold]
+│   │   │       └── .gitkeep
+│   │   └── andril_app.dart [existing file]
+│   ├── core/ [scaffold]
+│   │   ├── constants/ [scaffold]
+│   │   │   └── .gitkeep
+│   │   ├── errors/ [scaffold]
+│   │   │   ├── mapping/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── network/ [scaffold]
+│   │   │   ├── api_client/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── connectivity/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── endpoints/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── interceptors/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   └── serialization/ [scaffold] [v1.1]
+│   │   │       └── .gitkeep [v1.1]
+│   │   ├── permissions/ [scaffold]
+│   │   │   ├── camera/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── location/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── microphone/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── notifications/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── security/ [scaffold]
+│   │   │   ├── module_isolation/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── redaction/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── session/ [scaffold]
+│   │   │       └── .gitkeep
+│   │   ├── storage/ [scaffold]
+│   │   │   ├── cache/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── secure/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── utils/ [scaffold]
+│   │   │   ├── formatters/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── validators/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   └── widgets/ [scaffold]
+│   │       ├── buttons/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── cards/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── dialogs/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── feedback/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── inputs/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       └── .gitkeep
+│   ├── features/ [scaffold]
+│   │   ├── common/ [scaffold]
+│   │   │   ├── ai_chat/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── audio_calls/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── rtc/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── chat/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   ├── datasources/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── models/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── repositories/ [scaffold] [v1.1]
+│   │   │   │   │       └── .gitkeep [v1.1]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   ├── entities/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── repositories/ [scaffold] [v1.1]
+│   │   │   │   │       └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── widgets/ [scaffold] [v1.1]
+│   │   │   │   │       └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── connections/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── contextual_recommendations/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── diary/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   ├── entries/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── plans/ [scaffold] [v1.1]
+│   │   │   │   │       └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── widgets/ [scaffold] [v1.1]
+│   │   │   │   │       └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── discovery/ [scaffold]
+│   │   │   │   ├── contracts/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── groups/ [scaffold]
+│   │   │   │   ├── data/ [scaffold]
+│   │   │   │   │   ├── datasources/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── models/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── repositories/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── .gitkeep
+│   │   │   │   ├── domain/ [scaffold]
+│   │   │   │   │   ├── entities/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── policies/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── repositories/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── .gitkeep
+│   │   │   │   └── presentation/ [scaffold]
+│   │   │   │       ├── screens/ [scaffold] [v1.1]
+│   │   │   │       │   └── .gitkeep [v1.1]
+│   │   │   │       ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │       │   └── .gitkeep [v1.1]
+│   │   │   │       ├── widgets/ [scaffold] [v1.1]
+│   │   │   │       │   └── .gitkeep [v1.1]
+│   │   │   │       └── .gitkeep
+│   │   │   ├── interests_goals/ [scaffold]
+│   │   │   │   ├── contracts/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── live_streaming/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── rtc/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── notifications/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── profiles/ [scaffold]
+│   │   │   │   ├── contracts/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── safety_reporting/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── video_calls/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── rtc/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── virtual_gifts/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── xp_levels/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   └── .gitkeep
+│   │   ├── hobbies/ [scaffold]
+│   │   │   ├── andril_map/ [scaffold]
+│   │   │   │   ├── data/ [scaffold]
+│   │   │   │   │   ├── datasources/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── mapbox/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── models/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── repositories/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── .gitkeep
+│   │   │   │   ├── domain/ [scaffold]
+│   │   │   │   │   ├── entities/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── policies/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── repositories/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── .gitkeep
+│   │   │   │   └── presentation/ [scaffold]
+│   │   │   │       ├── screens/ [scaffold] [v1.1]
+│   │   │   │       │   └── .gitkeep [v1.1]
+│   │   │   │       ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │       │   └── .gitkeep [v1.1]
+│   │   │   │       ├── widgets/ [scaffold] [v1.1]
+│   │   │   │       │   ├── camera_capture/ [scaffold] [v1.1]
+│   │   │   │       │   │   └── .gitkeep [v1.1]
+│   │   │   │       │   ├── contribution_status/ [scaffold] [v1.1]
+│   │   │   │       │   │   └── .gitkeep [v1.1]
+│   │   │   │       │   ├── location_evidence/ [scaffold] [v1.1]
+│   │   │   │       │   │   └── .gitkeep [v1.1]
+│   │   │   │       │   └── map_markers/ [scaffold] [v1.1]
+│   │   │   │       │       └── .gitkeep [v1.1]
+│   │   │   │       └── .gitkeep
+│   │   │   ├── clubs/ [scaffold]
+│   │   │   │   ├── group_contracts/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── flight_points/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── gallery/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── home/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── interests_goals/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── profile/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   └── .gitkeep
+│   │   ├── learning/ [scaffold]
+│   │   │   ├── circles/ [scaffold]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── classrooms/ [scaffold]
+│   │   │   │   ├── group_contracts/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── cv_maker/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── growth_mentorship/ [scaffold]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── home/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── interests_goals/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── pacts/ [scaffold]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── portfolio_maker/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── profile/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── skill_exchange/ [scaffold]
+│   │   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   │   ├── datasources/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── models/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── repositories/ [scaffold] [v1.1]
+│   │   │   │   │       └── .gitkeep [v1.1]
+│   │   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   │   ├── entities/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── repositories/ [scaffold] [v1.1]
+│   │   │   │   │       └── .gitkeep [v1.1]
+│   │   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   │   └── widgets/ [scaffold] [v1.1]
+│   │   │   │   │       └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   └── .gitkeep
+│   │   └── social/ [scaffold]
+│   │       ├── discovery/ [scaffold]
+│   │       │   ├── data/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── domain/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── presentation/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   └── .gitkeep
+│   │       ├── home/ [scaffold]
+│   │       │   ├── screens/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── viewmodels/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── widgets/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   └── .gitkeep
+│   │       ├── interests_preferences/ [scaffold]
+│   │       │   ├── domain/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── presentation/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   └── .gitkeep
+│   │       ├── likes_matches/ [scaffold]
+│   │       │   ├── data/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── domain/ [scaffold] [v1.1]
+│   │       │   │   └── authorization/ [scaffold] [v1.1]
+│   │       │   │       └── .gitkeep [v1.1]
+│   │       │   ├── presentation/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   └── .gitkeep
+│   │       ├── moodtone/ [scaffold]
+│   │       │   ├── domain/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── presentation/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   └── .gitkeep
+│   │       ├── personality/ [scaffold]
+│   │       │   ├── data/ [scaffold]
+│   │       │   │   ├── datasources/ [scaffold] [v1.1]
+│   │       │   │   │   └── .gitkeep [v1.1]
+│   │       │   │   ├── models/ [scaffold] [v1.1]
+│   │       │   │   │   └── .gitkeep [v1.1]
+│   │       │   │   ├── repositories/ [scaffold] [v1.1]
+│   │       │   │   │   └── .gitkeep [v1.1]
+│   │       │   │   └── .gitkeep
+│   │       │   ├── domain/ [scaffold]
+│   │       │   │   ├── entities/ [scaffold] [v1.1]
+│   │       │   │   │   └── .gitkeep [v1.1]
+│   │       │   │   ├── repositories/ [scaffold] [v1.1]
+│   │       │   │   │   └── .gitkeep [v1.1]
+│   │       │   │   ├── usecases/ [scaffold] [v1.1]
+│   │       │   │   │   └── .gitkeep [v1.1]
+│   │       │   │   └── .gitkeep
+│   │       │   └── presentation/ [scaffold]
+│   │       │       ├── screens/ [scaffold] [v1.1]
+│   │       │       │   └── .gitkeep [v1.1]
+│   │       │       ├── states/ [scaffold] [v1.1]
+│   │       │       │   └── .gitkeep [v1.1]
+│   │       │       ├── viewmodels/ [scaffold] [v1.1]
+│   │       │       │   └── .gitkeep [v1.1]
+│   │       │       ├── widgets/ [scaffold] [v1.1]
+│   │       │       │   └── .gitkeep [v1.1]
+│   │       │       └── .gitkeep
+│   │       ├── profile/ [scaffold]
+│   │       │   ├── screens/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── viewmodels/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── widgets/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   └── .gitkeep
+│   │       ├── smart_matching/ [scaffold]
+│   │       │   ├── domain/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── presentation/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   └── .gitkeep
+│   │       ├── zones/ [scaffold]
+│   │       │   ├── group_contracts/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   ├── presentation/ [scaffold] [v1.1]
+│   │       │   │   └── .gitkeep [v1.1]
+│   │       │   └── .gitkeep
+│   │       └── .gitkeep
+│   ├── l10n/ [files]
+│   │   └── app_en.arb [existing file]
+│   ├── shared_core/ [scaffold]
+│   │   ├── account/ [scaffold]
+│   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── authentication/ [scaffold]
+│   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   ├── datasources/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── models/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── repositories/ [scaffold] [v1.1]
+│   │   │   │       └── .gitkeep [v1.1]
+│   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   ├── entities/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── repositories/ [scaffold] [v1.1]
+│   │   │   │       └── .gitkeep [v1.1]
+│   │   │   ├── google_sign_in/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── login/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── password_recovery/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── registration/ [scaffold]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── widgets/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── .gitkeep
+│   │   │   └── verification/ [scaffold]
+│   │   │       ├── screens/ [scaffold] [v1.1]
+│   │   │       │   └── .gitkeep [v1.1]
+│   │   │       ├── viewmodels/ [scaffold] [v1.1]
+│   │   │       │   └── .gitkeep [v1.1]
+│   │   │       └── .gitkeep
+│   │   ├── language_selection/ [scaffold]
+│   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── module_activation/ [scaffold]
+│   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── widgets/ [scaffold] [v1.1]
+│   │   │   │       └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── module_profile_setup/ [scaffold]
+│   │   │   ├── data/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── widgets/ [scaffold] [v1.1]
+│   │   │   │       └── .gitkeep [v1.1]
+│   │   │   ├── private_media/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   └── .gitkeep
+│   │   ├── module_switching/ [scaffold]
+│   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── onboarding/ [scaffold]
+│   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   │   └── .gitkeep [v1.1]
+│   │   │   │   └── widgets/ [scaffold] [v1.1]
+│   │   │   │       └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── premium/ [scaffold]
+│   │   │   ├── domain/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── presentation/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── privacy/ [scaffold]
+│   │   │   ├── consent/ [scaffold]
+│   │   │   │   └── .gitkeep
+│   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   ├── settings/ [scaffold]
+│   │   │   ├── screens/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   ├── viewmodels/ [scaffold] [v1.1]
+│   │   │   │   └── .gitkeep [v1.1]
+│   │   │   └── .gitkeep
+│   │   └── wallet/ [scaffold]
+│   │       ├── data/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── domain/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       ├── presentation/ [scaffold] [v1.1]
+│   │       │   └── .gitkeep [v1.1]
+│   │       └── .gitkeep
+│   └── main.dart [existing file]
+├── scripts/ [files]
+│   ├── setup_android.ps1 [existing file]
+│   └── setup_android.sh [existing file]
+├── test/ [files]
+│   ├── app/ [files]
+│   │   └── andril_app_test.dart [existing file]
+│   ├── common/ [scaffold]
+│   │   ├── ai_chat/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── chat/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── diary/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── groups/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── notifications/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   └── .gitkeep
+│   ├── core/ [scaffold]
+│   │   ├── module_isolation/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── network/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── security/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   └── .gitkeep
+│   ├── hobbies/ [scaffold]
+│   │   ├── andril_map/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── flight_points/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── gallery/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   └── .gitkeep
+│   ├── learning/ [scaffold]
+│   │   ├── home/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── profile/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── skill_exchange/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   └── .gitkeep
+│   ├── shared_core/ [scaffold]
+│   │   ├── authentication/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── module_activation/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── module_switching/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   ├── onboarding/ [scaffold] [v1.1]
+│   │   │   └── .gitkeep [v1.1]
+│   │   └── .gitkeep
+│   └── social/ [scaffold]
+│       ├── discovery/ [scaffold] [v1.1]
+│       │   └── .gitkeep [v1.1]
+│       ├── likes_matches/ [scaffold] [v1.1]
+│       │   └── .gitkeep [v1.1]
+│       ├── moodtone/ [scaffold] [v1.1]
+│       │   └── .gitkeep [v1.1]
+│       ├── personality/ [scaffold] [v1.1]
+│       │   └── .gitkeep [v1.1]
+│       └── .gitkeep
+├── .env.example [existing file]
+├── .gitignore [existing file]
+├── analysis_options.yaml [existing file]
+├── l10n.yaml [existing file]
+├── pubspec.yaml [existing file]
+└── README.md [existing file]
+
+## Exact V1.1 directory additions
+
+assets/animations
+assets/animations/common
+assets/animations/common/calls
+assets/animations/common/chat
+assets/animations/common/notifications
+assets/animations/common/virtual_gifts
+assets/animations/hobbies
+assets/animations/hobbies/andril_map
+assets/animations/hobbies/contributions
+assets/animations/hobbies/flight_points
+assets/animations/hobbies/success
+assets/animations/learning
+assets/animations/learning/achievements
+assets/animations/learning/progress
+assets/animations/learning/success
+assets/animations/shared_core
+assets/animations/shared_core/loading
+assets/animations/shared_core/onboarding
+assets/animations/shared_core/splash
+assets/animations/shared_core/success
+assets/animations/shared_core/transitions
+assets/animations/social
+assets/animations/social/connections
+assets/animations/social/matching
+assets/animations/social/personality
+assets/animations/social/success
+assets/fonts
+assets/gifts
+assets/gifts/celebrations
+assets/gifts/reactions
+assets/gifts/special
+assets/icons
+assets/icons/common
+assets/icons/common/ai_chat
+assets/icons/common/calls
+assets/icons/common/chat
+assets/icons/common/diary
+assets/icons/common/groups
+assets/icons/common/notifications
+assets/icons/hobbies
+assets/icons/hobbies/andril_map
+assets/icons/hobbies/clubs
+assets/icons/hobbies/flight_points
+assets/icons/hobbies/gallery
+assets/icons/hobbies/home
+assets/icons/hobbies/profile
+assets/icons/learning
+assets/icons/learning/classrooms
+assets/icons/learning/cv_maker
+assets/icons/learning/home
+assets/icons/learning/portfolio_maker
+assets/icons/learning/profile
+assets/icons/learning/skill_exchange
+assets/icons/shared_core
+assets/icons/shared_core/authentication
+assets/icons/shared_core/module_selection
+assets/icons/shared_core/module_switching
+assets/icons/shared_core/navigation
+assets/icons/shared_core/onboarding
+assets/icons/shared_core/settings
+assets/icons/shared_core/wallet
+assets/icons/social
+assets/icons/social/discovery
+assets/icons/social/home
+assets/icons/social/likes_matches
+assets/icons/social/moodtone
+assets/icons/social/personality
+assets/icons/social/profile
+assets/icons/social/smart_matching
+assets/icons/social/zones
+assets/illustrations
+assets/illustrations/common
+assets/illustrations/common/ai_chat
+assets/illustrations/common/chat
+assets/illustrations/common/diary
+assets/illustrations/common/empty_states
+assets/illustrations/common/groups
+assets/illustrations/hobbies
+assets/illustrations/hobbies/andril_map
+assets/illustrations/hobbies/empty_states
+assets/illustrations/hobbies/flight_points
+assets/illustrations/hobbies/gallery
+assets/illustrations/hobbies/home
+assets/illustrations/hobbies/profile
+assets/illustrations/learning
+assets/illustrations/learning/achievements
+assets/illustrations/learning/classrooms
+assets/illustrations/learning/empty_states
+assets/illustrations/learning/home
+assets/illustrations/learning/profile
+assets/illustrations/learning/skill_exchange
+assets/illustrations/shared_core
+assets/illustrations/shared_core/authentication
+assets/illustrations/shared_core/empty_states
+assets/illustrations/shared_core/module_selection
+assets/illustrations/shared_core/onboarding
+assets/illustrations/shared_core/settings
+assets/illustrations/social
+assets/illustrations/social/discovery
+assets/illustrations/social/empty_states
+assets/illustrations/social/home
+assets/illustrations/social/personality
+assets/illustrations/social/profile
+assets/illustrations/social/smart_matching
+assets/illustrations/social/zones
+assets/images
+assets/images/common
+assets/images/common/ai_chat
+assets/images/common/chat
+assets/images/common/diary
+assets/images/common/groups
+assets/images/common/notifications
+assets/images/hobbies
+assets/images/hobbies/andril_map
+assets/images/hobbies/clubs
+assets/images/hobbies/gallery
+assets/images/hobbies/home
+assets/images/hobbies/profile
+assets/images/learning
+assets/images/learning/classrooms
+assets/images/learning/cv_maker
+assets/images/learning/home
+assets/images/learning/portfolio_maker
+assets/images/learning/profile
+assets/images/learning/skill_exchange
+assets/images/shared_core
+assets/images/shared_core/authentication
+assets/images/shared_core/backgrounds
+assets/images/shared_core/module_selection
+assets/images/shared_core/onboarding
+assets/images/shared_core/settings
+assets/images/social
+assets/images/social/discovery
+assets/images/social/home
+assets/images/social/moodtone
+assets/images/social/personality
+assets/images/social/profile
+assets/images/social/smart_matching
+assets/images/social/zones
+lib/app/dependencies/registrations
+lib/app/dependencies/registrations/common
+lib/app/dependencies/registrations/core
+lib/app/dependencies/registrations/hobbies
+lib/app/dependencies/registrations/learning
+lib/app/dependencies/registrations/shared_core
+lib/app/dependencies/registrations/social
+lib/app/router/deep_links
+lib/app/router/guards
+lib/app/router/routes
+lib/app/router/routes/hobbies
+lib/app/router/routes/learning
+lib/app/router/routes/shared_core
+lib/app/router/routes/social
+lib/app/themes/shared_core/colors
+lib/app/themes/shared_core/components
+lib/app/themes/shared_core/spacing
+lib/app/themes/shared_core/typography
+lib/core/errors/mapping
+lib/core/network/connectivity
+lib/core/network/serialization
+lib/core/permissions/camera
+lib/core/permissions/location
+lib/core/permissions/microphone
+lib/core/permissions/notifications
+lib/core/security/redaction
+lib/core/storage/cache
+lib/core/storage/secure
+lib/core/utils/formatters
+lib/core/utils/validators
+lib/core/widgets/buttons
+lib/core/widgets/cards
+lib/core/widgets/dialogs
+lib/core/widgets/feedback
+lib/core/widgets/inputs
+lib/features/common/ai_chat/data
+lib/features/common/ai_chat/domain
+lib/features/common/ai_chat/presentation
+lib/features/common/audio_calls/domain
+lib/features/common/audio_calls/presentation
+lib/features/common/audio_calls/rtc
+lib/features/common/chat/data
+lib/features/common/chat/data/datasources
+lib/features/common/chat/data/models
+lib/features/common/chat/data/repositories
+lib/features/common/chat/domain
+lib/features/common/chat/domain/entities
+lib/features/common/chat/domain/repositories
+lib/features/common/chat/presentation
+lib/features/common/chat/presentation/screens
+lib/features/common/chat/presentation/viewmodels
+lib/features/common/chat/presentation/widgets
+lib/features/common/connections/domain
+lib/features/common/connections/presentation
+lib/features/common/contextual_recommendations/domain
+lib/features/common/contextual_recommendations/presentation
+lib/features/common/diary/data
+lib/features/common/diary/domain
+lib/features/common/diary/domain/entries
+lib/features/common/diary/domain/plans
+lib/features/common/diary/presentation
+lib/features/common/diary/presentation/screens
+lib/features/common/diary/presentation/viewmodels
+lib/features/common/diary/presentation/widgets
+lib/features/common/discovery/contracts
+lib/features/common/discovery/widgets
+lib/features/common/groups/data/datasources
+lib/features/common/groups/data/models
+lib/features/common/groups/data/repositories
+lib/features/common/groups/domain/entities
+lib/features/common/groups/domain/policies
+lib/features/common/groups/domain/repositories
+lib/features/common/groups/presentation/screens
+lib/features/common/groups/presentation/viewmodels
+lib/features/common/groups/presentation/widgets
+lib/features/common/interests_goals/contracts
+lib/features/common/interests_goals/widgets
+lib/features/common/live_streaming/domain
+lib/features/common/live_streaming/presentation
+lib/features/common/live_streaming/rtc
+lib/features/common/notifications/data
+lib/features/common/notifications/presentation
+lib/features/common/profiles/contracts
+lib/features/common/profiles/widgets
+lib/features/common/safety_reporting/data
+lib/features/common/safety_reporting/domain
+lib/features/common/safety_reporting/presentation
+lib/features/common/video_calls/domain
+lib/features/common/video_calls/presentation
+lib/features/common/video_calls/rtc
+lib/features/common/virtual_gifts/domain
+lib/features/common/virtual_gifts/presentation
+lib/features/common/xp_levels/domain
+lib/features/common/xp_levels/presentation
+lib/features/hobbies/andril_map/data/datasources
+lib/features/hobbies/andril_map/data/mapbox
+lib/features/hobbies/andril_map/data/models
+lib/features/hobbies/andril_map/data/repositories
+lib/features/hobbies/andril_map/domain/entities
+lib/features/hobbies/andril_map/domain/policies
+lib/features/hobbies/andril_map/domain/repositories
+lib/features/hobbies/andril_map/presentation/screens
+lib/features/hobbies/andril_map/presentation/viewmodels
+lib/features/hobbies/andril_map/presentation/widgets
+lib/features/hobbies/andril_map/presentation/widgets/camera_capture
+lib/features/hobbies/andril_map/presentation/widgets/contribution_status
+lib/features/hobbies/andril_map/presentation/widgets/location_evidence
+lib/features/hobbies/andril_map/presentation/widgets/map_markers
+lib/features/hobbies/clubs/group_contracts
+lib/features/hobbies/clubs/presentation
+lib/features/hobbies/flight_points/domain
+lib/features/hobbies/flight_points/presentation
+lib/features/hobbies/gallery/data
+lib/features/hobbies/gallery/domain
+lib/features/hobbies/gallery/presentation
+lib/features/hobbies/home/screens
+lib/features/hobbies/home/viewmodels
+lib/features/hobbies/home/widgets
+lib/features/hobbies/interests_goals/screens
+lib/features/hobbies/interests_goals/viewmodels
+lib/features/hobbies/profile/screens
+lib/features/hobbies/profile/viewmodels
+lib/features/hobbies/profile/widgets
+lib/features/learning/circles/presentation
+lib/features/learning/classrooms/group_contracts
+lib/features/learning/classrooms/presentation
+lib/features/learning/cv_maker/data
+lib/features/learning/cv_maker/domain
+lib/features/learning/cv_maker/presentation
+lib/features/learning/growth_mentorship/domain
+lib/features/learning/growth_mentorship/presentation
+lib/features/learning/home/screens
+lib/features/learning/home/viewmodels
+lib/features/learning/home/widgets
+lib/features/learning/interests_goals/screens
+lib/features/learning/interests_goals/viewmodels
+lib/features/learning/pacts/presentation
+lib/features/learning/portfolio_maker/data
+lib/features/learning/portfolio_maker/domain
+lib/features/learning/portfolio_maker/presentation
+lib/features/learning/profile/screens
+lib/features/learning/profile/viewmodels
+lib/features/learning/profile/widgets
+lib/features/learning/skill_exchange/data
+lib/features/learning/skill_exchange/data/datasources
+lib/features/learning/skill_exchange/data/models
+lib/features/learning/skill_exchange/data/repositories
+lib/features/learning/skill_exchange/domain
+lib/features/learning/skill_exchange/domain/entities
+lib/features/learning/skill_exchange/domain/repositories
+lib/features/learning/skill_exchange/presentation
+lib/features/learning/skill_exchange/presentation/screens
+lib/features/learning/skill_exchange/presentation/viewmodels
+lib/features/learning/skill_exchange/presentation/widgets
+lib/features/social/discovery/data
+lib/features/social/discovery/domain
+lib/features/social/discovery/presentation
+lib/features/social/home/screens
+lib/features/social/home/viewmodels
+lib/features/social/home/widgets
+lib/features/social/interests_preferences/domain
+lib/features/social/interests_preferences/presentation
+lib/features/social/likes_matches/data
+lib/features/social/likes_matches/domain
+lib/features/social/likes_matches/domain/authorization
+lib/features/social/likes_matches/presentation
+lib/features/social/moodtone/domain
+lib/features/social/moodtone/presentation
+lib/features/social/personality/data/datasources
+lib/features/social/personality/data/models
+lib/features/social/personality/data/repositories
+lib/features/social/personality/domain/entities
+lib/features/social/personality/domain/repositories
+lib/features/social/personality/domain/usecases
+lib/features/social/personality/presentation/screens
+lib/features/social/personality/presentation/states
+lib/features/social/personality/presentation/viewmodels
+lib/features/social/personality/presentation/widgets
+lib/features/social/profile/screens
+lib/features/social/profile/viewmodels
+lib/features/social/profile/widgets
+lib/features/social/smart_matching/domain
+lib/features/social/smart_matching/presentation
+lib/features/social/zones/group_contracts
+lib/features/social/zones/presentation
+lib/shared_core/account/data
+lib/shared_core/account/domain
+lib/shared_core/account/presentation
+lib/shared_core/authentication/data
+lib/shared_core/authentication/data/datasources
+lib/shared_core/authentication/data/models
+lib/shared_core/authentication/data/repositories
+lib/shared_core/authentication/domain
+lib/shared_core/authentication/domain/entities
+lib/shared_core/authentication/domain/repositories
+lib/shared_core/authentication/login/screens
+lib/shared_core/authentication/login/viewmodels
+lib/shared_core/authentication/login/widgets
+lib/shared_core/authentication/password_recovery/screens
+lib/shared_core/authentication/password_recovery/viewmodels
+lib/shared_core/authentication/registration/screens
+lib/shared_core/authentication/registration/viewmodels
+lib/shared_core/authentication/registration/widgets
+lib/shared_core/authentication/verification/screens
+lib/shared_core/authentication/verification/viewmodels
+lib/shared_core/language_selection/screens
+lib/shared_core/language_selection/viewmodels
+lib/shared_core/module_activation/domain
+lib/shared_core/module_activation/presentation
+lib/shared_core/module_activation/presentation/screens
+lib/shared_core/module_activation/presentation/viewmodels
+lib/shared_core/module_activation/presentation/widgets
+lib/shared_core/module_profile_setup/data
+lib/shared_core/module_profile_setup/domain
+lib/shared_core/module_profile_setup/presentation
+lib/shared_core/module_profile_setup/presentation/screens
+lib/shared_core/module_profile_setup/presentation/viewmodels
+lib/shared_core/module_profile_setup/presentation/widgets
+lib/shared_core/module_switching/screens
+lib/shared_core/module_switching/viewmodels
+lib/shared_core/onboarding/domain
+lib/shared_core/onboarding/presentation
+lib/shared_core/onboarding/presentation/screens
+lib/shared_core/onboarding/presentation/viewmodels
+lib/shared_core/onboarding/presentation/widgets
+lib/shared_core/premium/domain
+lib/shared_core/premium/presentation
+lib/shared_core/privacy/screens
+lib/shared_core/privacy/viewmodels
+lib/shared_core/settings/screens
+lib/shared_core/settings/viewmodels
+lib/shared_core/wallet/data
+lib/shared_core/wallet/domain
+lib/shared_core/wallet/presentation
+test/common/ai_chat
+test/common/chat
+test/common/diary
+test/common/groups
+test/common/notifications
+test/core/module_isolation
+test/core/network
+test/core/security
+test/hobbies/andril_map
+test/hobbies/flight_points
+test/hobbies/gallery
+test/learning/home
+test/learning/profile
+test/learning/skill_exchange
+test/shared_core/authentication
+test/shared_core/module_activation
+test/shared_core/module_switching
+test/shared_core/onboarding
+test/social/discovery
+test/social/likes_matches
+test/social/moodtone
+test/social/personality
+
+## Exact V1.1 marker additions
+
+assets/animations/common/calls/.gitkeep
+assets/animations/common/chat/.gitkeep
+assets/animations/common/notifications/.gitkeep
+assets/animations/common/virtual_gifts/.gitkeep
+assets/animations/hobbies/andril_map/.gitkeep
+assets/animations/hobbies/contributions/.gitkeep
+assets/animations/hobbies/flight_points/.gitkeep
+assets/animations/hobbies/success/.gitkeep
+assets/animations/learning/achievements/.gitkeep
+assets/animations/learning/progress/.gitkeep
+assets/animations/learning/success/.gitkeep
+assets/animations/shared_core/loading/.gitkeep
+assets/animations/shared_core/onboarding/.gitkeep
+assets/animations/shared_core/splash/.gitkeep
+assets/animations/shared_core/success/.gitkeep
+assets/animations/shared_core/transitions/.gitkeep
+assets/animations/social/connections/.gitkeep
+assets/animations/social/matching/.gitkeep
+assets/animations/social/personality/.gitkeep
+assets/animations/social/success/.gitkeep
+assets/fonts/.gitkeep
+assets/gifts/celebrations/.gitkeep
+assets/gifts/reactions/.gitkeep
+assets/gifts/special/.gitkeep
+assets/icons/common/ai_chat/.gitkeep
+assets/icons/common/calls/.gitkeep
+assets/icons/common/chat/.gitkeep
+assets/icons/common/diary/.gitkeep
+assets/icons/common/groups/.gitkeep
+assets/icons/common/notifications/.gitkeep
+assets/icons/hobbies/andril_map/.gitkeep
+assets/icons/hobbies/clubs/.gitkeep
+assets/icons/hobbies/flight_points/.gitkeep
+assets/icons/hobbies/gallery/.gitkeep
+assets/icons/hobbies/home/.gitkeep
+assets/icons/hobbies/profile/.gitkeep
+assets/icons/learning/classrooms/.gitkeep
+assets/icons/learning/cv_maker/.gitkeep
+assets/icons/learning/home/.gitkeep
+assets/icons/learning/portfolio_maker/.gitkeep
+assets/icons/learning/profile/.gitkeep
+assets/icons/learning/skill_exchange/.gitkeep
+assets/icons/shared_core/authentication/.gitkeep
+assets/icons/shared_core/module_selection/.gitkeep
+assets/icons/shared_core/module_switching/.gitkeep
+assets/icons/shared_core/navigation/.gitkeep
+assets/icons/shared_core/onboarding/.gitkeep
+assets/icons/shared_core/settings/.gitkeep
+assets/icons/shared_core/wallet/.gitkeep
+assets/icons/social/discovery/.gitkeep
+assets/icons/social/home/.gitkeep
+assets/icons/social/likes_matches/.gitkeep
+assets/icons/social/moodtone/.gitkeep
+assets/icons/social/personality/.gitkeep
+assets/icons/social/profile/.gitkeep
+assets/icons/social/smart_matching/.gitkeep
+assets/icons/social/zones/.gitkeep
+assets/illustrations/common/ai_chat/.gitkeep
+assets/illustrations/common/chat/.gitkeep
+assets/illustrations/common/diary/.gitkeep
+assets/illustrations/common/empty_states/.gitkeep
+assets/illustrations/common/groups/.gitkeep
+assets/illustrations/hobbies/andril_map/.gitkeep
+assets/illustrations/hobbies/empty_states/.gitkeep
+assets/illustrations/hobbies/flight_points/.gitkeep
+assets/illustrations/hobbies/gallery/.gitkeep
+assets/illustrations/hobbies/home/.gitkeep
+assets/illustrations/hobbies/profile/.gitkeep
+assets/illustrations/learning/achievements/.gitkeep
+assets/illustrations/learning/classrooms/.gitkeep
+assets/illustrations/learning/empty_states/.gitkeep
+assets/illustrations/learning/home/.gitkeep
+assets/illustrations/learning/profile/.gitkeep
+assets/illustrations/learning/skill_exchange/.gitkeep
+assets/illustrations/shared_core/authentication/.gitkeep
+assets/illustrations/shared_core/empty_states/.gitkeep
+assets/illustrations/shared_core/module_selection/.gitkeep
+assets/illustrations/shared_core/onboarding/.gitkeep
+assets/illustrations/shared_core/settings/.gitkeep
+assets/illustrations/social/discovery/.gitkeep
+assets/illustrations/social/empty_states/.gitkeep
+assets/illustrations/social/home/.gitkeep
+assets/illustrations/social/personality/.gitkeep
+assets/illustrations/social/profile/.gitkeep
+assets/illustrations/social/smart_matching/.gitkeep
+assets/illustrations/social/zones/.gitkeep
+assets/images/common/ai_chat/.gitkeep
+assets/images/common/chat/.gitkeep
+assets/images/common/diary/.gitkeep
+assets/images/common/groups/.gitkeep
+assets/images/common/notifications/.gitkeep
+assets/images/hobbies/andril_map/.gitkeep
+assets/images/hobbies/clubs/.gitkeep
+assets/images/hobbies/gallery/.gitkeep
+assets/images/hobbies/home/.gitkeep
+assets/images/hobbies/profile/.gitkeep
+assets/images/learning/classrooms/.gitkeep
+assets/images/learning/cv_maker/.gitkeep
+assets/images/learning/home/.gitkeep
+assets/images/learning/portfolio_maker/.gitkeep
+assets/images/learning/profile/.gitkeep
+assets/images/learning/skill_exchange/.gitkeep
+assets/images/shared_core/authentication/.gitkeep
+assets/images/shared_core/backgrounds/.gitkeep
+assets/images/shared_core/module_selection/.gitkeep
+assets/images/shared_core/onboarding/.gitkeep
+assets/images/shared_core/settings/.gitkeep
+assets/images/social/discovery/.gitkeep
+assets/images/social/home/.gitkeep
+assets/images/social/moodtone/.gitkeep
+assets/images/social/personality/.gitkeep
+assets/images/social/profile/.gitkeep
+assets/images/social/smart_matching/.gitkeep
+assets/images/social/zones/.gitkeep
+lib/app/dependencies/registrations/common/.gitkeep
+lib/app/dependencies/registrations/core/.gitkeep
+lib/app/dependencies/registrations/hobbies/.gitkeep
+lib/app/dependencies/registrations/learning/.gitkeep
+lib/app/dependencies/registrations/shared_core/.gitkeep
+lib/app/dependencies/registrations/social/.gitkeep
+lib/app/router/deep_links/.gitkeep
+lib/app/router/guards/.gitkeep
+lib/app/router/routes/hobbies/.gitkeep
+lib/app/router/routes/learning/.gitkeep
+lib/app/router/routes/shared_core/.gitkeep
+lib/app/router/routes/social/.gitkeep
+lib/app/themes/shared_core/colors/.gitkeep
+lib/app/themes/shared_core/components/.gitkeep
+lib/app/themes/shared_core/spacing/.gitkeep
+lib/app/themes/shared_core/typography/.gitkeep
+lib/core/errors/mapping/.gitkeep
+lib/core/network/connectivity/.gitkeep
+lib/core/network/serialization/.gitkeep
+lib/core/permissions/camera/.gitkeep
+lib/core/permissions/location/.gitkeep
+lib/core/permissions/microphone/.gitkeep
+lib/core/permissions/notifications/.gitkeep
+lib/core/security/redaction/.gitkeep
+lib/core/storage/cache/.gitkeep
+lib/core/storage/secure/.gitkeep
+lib/core/utils/formatters/.gitkeep
+lib/core/utils/validators/.gitkeep
+lib/core/widgets/buttons/.gitkeep
+lib/core/widgets/cards/.gitkeep
+lib/core/widgets/dialogs/.gitkeep
+lib/core/widgets/feedback/.gitkeep
+lib/core/widgets/inputs/.gitkeep
+lib/features/common/ai_chat/data/.gitkeep
+lib/features/common/ai_chat/domain/.gitkeep
+lib/features/common/ai_chat/presentation/.gitkeep
+lib/features/common/audio_calls/domain/.gitkeep
+lib/features/common/audio_calls/presentation/.gitkeep
+lib/features/common/audio_calls/rtc/.gitkeep
+lib/features/common/chat/data/datasources/.gitkeep
+lib/features/common/chat/data/models/.gitkeep
+lib/features/common/chat/data/repositories/.gitkeep
+lib/features/common/chat/domain/entities/.gitkeep
+lib/features/common/chat/domain/repositories/.gitkeep
+lib/features/common/chat/presentation/screens/.gitkeep
+lib/features/common/chat/presentation/viewmodels/.gitkeep
+lib/features/common/chat/presentation/widgets/.gitkeep
+lib/features/common/connections/domain/.gitkeep
+lib/features/common/connections/presentation/.gitkeep
+lib/features/common/contextual_recommendations/domain/.gitkeep
+lib/features/common/contextual_recommendations/presentation/.gitkeep
+lib/features/common/diary/data/.gitkeep
+lib/features/common/diary/domain/entries/.gitkeep
+lib/features/common/diary/domain/plans/.gitkeep
+lib/features/common/diary/presentation/screens/.gitkeep
+lib/features/common/diary/presentation/viewmodels/.gitkeep
+lib/features/common/diary/presentation/widgets/.gitkeep
+lib/features/common/discovery/contracts/.gitkeep
+lib/features/common/discovery/widgets/.gitkeep
+lib/features/common/groups/data/datasources/.gitkeep
+lib/features/common/groups/data/models/.gitkeep
+lib/features/common/groups/data/repositories/.gitkeep
+lib/features/common/groups/domain/entities/.gitkeep
+lib/features/common/groups/domain/policies/.gitkeep
+lib/features/common/groups/domain/repositories/.gitkeep
+lib/features/common/groups/presentation/screens/.gitkeep
+lib/features/common/groups/presentation/viewmodels/.gitkeep
+lib/features/common/groups/presentation/widgets/.gitkeep
+lib/features/common/interests_goals/contracts/.gitkeep
+lib/features/common/interests_goals/widgets/.gitkeep
+lib/features/common/live_streaming/domain/.gitkeep
+lib/features/common/live_streaming/presentation/.gitkeep
+lib/features/common/live_streaming/rtc/.gitkeep
+lib/features/common/notifications/data/.gitkeep
+lib/features/common/notifications/presentation/.gitkeep
+lib/features/common/profiles/contracts/.gitkeep
+lib/features/common/profiles/widgets/.gitkeep
+lib/features/common/safety_reporting/data/.gitkeep
+lib/features/common/safety_reporting/domain/.gitkeep
+lib/features/common/safety_reporting/presentation/.gitkeep
+lib/features/common/video_calls/domain/.gitkeep
+lib/features/common/video_calls/presentation/.gitkeep
+lib/features/common/video_calls/rtc/.gitkeep
+lib/features/common/virtual_gifts/domain/.gitkeep
+lib/features/common/virtual_gifts/presentation/.gitkeep
+lib/features/common/xp_levels/domain/.gitkeep
+lib/features/common/xp_levels/presentation/.gitkeep
+lib/features/hobbies/andril_map/data/datasources/.gitkeep
+lib/features/hobbies/andril_map/data/mapbox/.gitkeep
+lib/features/hobbies/andril_map/data/models/.gitkeep
+lib/features/hobbies/andril_map/data/repositories/.gitkeep
+lib/features/hobbies/andril_map/domain/entities/.gitkeep
+lib/features/hobbies/andril_map/domain/policies/.gitkeep
+lib/features/hobbies/andril_map/domain/repositories/.gitkeep
+lib/features/hobbies/andril_map/presentation/screens/.gitkeep
+lib/features/hobbies/andril_map/presentation/viewmodels/.gitkeep
+lib/features/hobbies/andril_map/presentation/widgets/camera_capture/.gitkeep
+lib/features/hobbies/andril_map/presentation/widgets/contribution_status/.gitkeep
+lib/features/hobbies/andril_map/presentation/widgets/location_evidence/.gitkeep
+lib/features/hobbies/andril_map/presentation/widgets/map_markers/.gitkeep
+lib/features/hobbies/clubs/group_contracts/.gitkeep
+lib/features/hobbies/clubs/presentation/.gitkeep
+lib/features/hobbies/flight_points/domain/.gitkeep
+lib/features/hobbies/flight_points/presentation/.gitkeep
+lib/features/hobbies/gallery/data/.gitkeep
+lib/features/hobbies/gallery/domain/.gitkeep
+lib/features/hobbies/gallery/presentation/.gitkeep
+lib/features/hobbies/home/screens/.gitkeep
+lib/features/hobbies/home/viewmodels/.gitkeep
+lib/features/hobbies/home/widgets/.gitkeep
+lib/features/hobbies/interests_goals/screens/.gitkeep
+lib/features/hobbies/interests_goals/viewmodels/.gitkeep
+lib/features/hobbies/profile/screens/.gitkeep
+lib/features/hobbies/profile/viewmodels/.gitkeep
+lib/features/hobbies/profile/widgets/.gitkeep
+lib/features/learning/circles/presentation/.gitkeep
+lib/features/learning/classrooms/group_contracts/.gitkeep
+lib/features/learning/classrooms/presentation/.gitkeep
+lib/features/learning/cv_maker/data/.gitkeep
+lib/features/learning/cv_maker/domain/.gitkeep
+lib/features/learning/cv_maker/presentation/.gitkeep
+lib/features/learning/growth_mentorship/domain/.gitkeep
+lib/features/learning/growth_mentorship/presentation/.gitkeep
+lib/features/learning/home/screens/.gitkeep
+lib/features/learning/home/viewmodels/.gitkeep
+lib/features/learning/home/widgets/.gitkeep
+lib/features/learning/interests_goals/screens/.gitkeep
+lib/features/learning/interests_goals/viewmodels/.gitkeep
+lib/features/learning/pacts/presentation/.gitkeep
+lib/features/learning/portfolio_maker/data/.gitkeep
+lib/features/learning/portfolio_maker/domain/.gitkeep
+lib/features/learning/portfolio_maker/presentation/.gitkeep
+lib/features/learning/profile/screens/.gitkeep
+lib/features/learning/profile/viewmodels/.gitkeep
+lib/features/learning/profile/widgets/.gitkeep
+lib/features/learning/skill_exchange/data/datasources/.gitkeep
+lib/features/learning/skill_exchange/data/models/.gitkeep
+lib/features/learning/skill_exchange/data/repositories/.gitkeep
+lib/features/learning/skill_exchange/domain/entities/.gitkeep
+lib/features/learning/skill_exchange/domain/repositories/.gitkeep
+lib/features/learning/skill_exchange/presentation/screens/.gitkeep
+lib/features/learning/skill_exchange/presentation/viewmodels/.gitkeep
+lib/features/learning/skill_exchange/presentation/widgets/.gitkeep
+lib/features/social/discovery/data/.gitkeep
+lib/features/social/discovery/domain/.gitkeep
+lib/features/social/discovery/presentation/.gitkeep
+lib/features/social/home/screens/.gitkeep
+lib/features/social/home/viewmodels/.gitkeep
+lib/features/social/home/widgets/.gitkeep
+lib/features/social/interests_preferences/domain/.gitkeep
+lib/features/social/interests_preferences/presentation/.gitkeep
+lib/features/social/likes_matches/data/.gitkeep
+lib/features/social/likes_matches/domain/authorization/.gitkeep
+lib/features/social/likes_matches/presentation/.gitkeep
+lib/features/social/moodtone/domain/.gitkeep
+lib/features/social/moodtone/presentation/.gitkeep
+lib/features/social/personality/data/datasources/.gitkeep
+lib/features/social/personality/data/models/.gitkeep
+lib/features/social/personality/data/repositories/.gitkeep
+lib/features/social/personality/domain/entities/.gitkeep
+lib/features/social/personality/domain/repositories/.gitkeep
+lib/features/social/personality/domain/usecases/.gitkeep
+lib/features/social/personality/presentation/screens/.gitkeep
+lib/features/social/personality/presentation/states/.gitkeep
+lib/features/social/personality/presentation/viewmodels/.gitkeep
+lib/features/social/personality/presentation/widgets/.gitkeep
+lib/features/social/profile/screens/.gitkeep
+lib/features/social/profile/viewmodels/.gitkeep
+lib/features/social/profile/widgets/.gitkeep
+lib/features/social/smart_matching/domain/.gitkeep
+lib/features/social/smart_matching/presentation/.gitkeep
+lib/features/social/zones/group_contracts/.gitkeep
+lib/features/social/zones/presentation/.gitkeep
+lib/shared_core/account/data/.gitkeep
+lib/shared_core/account/domain/.gitkeep
+lib/shared_core/account/presentation/.gitkeep
+lib/shared_core/authentication/data/datasources/.gitkeep
+lib/shared_core/authentication/data/models/.gitkeep
+lib/shared_core/authentication/data/repositories/.gitkeep
+lib/shared_core/authentication/domain/entities/.gitkeep
+lib/shared_core/authentication/domain/repositories/.gitkeep
+lib/shared_core/authentication/login/screens/.gitkeep
+lib/shared_core/authentication/login/viewmodels/.gitkeep
+lib/shared_core/authentication/login/widgets/.gitkeep
+lib/shared_core/authentication/password_recovery/screens/.gitkeep
+lib/shared_core/authentication/password_recovery/viewmodels/.gitkeep
+lib/shared_core/authentication/registration/screens/.gitkeep
+lib/shared_core/authentication/registration/viewmodels/.gitkeep
+lib/shared_core/authentication/registration/widgets/.gitkeep
+lib/shared_core/authentication/verification/screens/.gitkeep
+lib/shared_core/authentication/verification/viewmodels/.gitkeep
+lib/shared_core/language_selection/screens/.gitkeep
+lib/shared_core/language_selection/viewmodels/.gitkeep
+lib/shared_core/module_activation/domain/.gitkeep
+lib/shared_core/module_activation/presentation/screens/.gitkeep
+lib/shared_core/module_activation/presentation/viewmodels/.gitkeep
+lib/shared_core/module_activation/presentation/widgets/.gitkeep
+lib/shared_core/module_profile_setup/data/.gitkeep
+lib/shared_core/module_profile_setup/domain/.gitkeep
+lib/shared_core/module_profile_setup/presentation/screens/.gitkeep
+lib/shared_core/module_profile_setup/presentation/viewmodels/.gitkeep
+lib/shared_core/module_profile_setup/presentation/widgets/.gitkeep
+lib/shared_core/module_switching/screens/.gitkeep
+lib/shared_core/module_switching/viewmodels/.gitkeep
+lib/shared_core/onboarding/domain/.gitkeep
+lib/shared_core/onboarding/presentation/screens/.gitkeep
+lib/shared_core/onboarding/presentation/viewmodels/.gitkeep
+lib/shared_core/onboarding/presentation/widgets/.gitkeep
+lib/shared_core/premium/domain/.gitkeep
+lib/shared_core/premium/presentation/.gitkeep
+lib/shared_core/privacy/screens/.gitkeep
+lib/shared_core/privacy/viewmodels/.gitkeep
+lib/shared_core/settings/screens/.gitkeep
+lib/shared_core/settings/viewmodels/.gitkeep
+lib/shared_core/wallet/data/.gitkeep
+lib/shared_core/wallet/domain/.gitkeep
+lib/shared_core/wallet/presentation/.gitkeep
+test/common/ai_chat/.gitkeep
+test/common/chat/.gitkeep
+test/common/diary/.gitkeep
+test/common/groups/.gitkeep
+test/common/notifications/.gitkeep
+test/core/module_isolation/.gitkeep
+test/core/network/.gitkeep
+test/core/security/.gitkeep
+test/hobbies/andril_map/.gitkeep
+test/hobbies/flight_points/.gitkeep
+test/hobbies/gallery/.gitkeep
+test/learning/home/.gitkeep
+test/learning/profile/.gitkeep
+test/learning/skill_exchange/.gitkeep
+test/shared_core/authentication/.gitkeep
+test/shared_core/module_activation/.gitkeep
+test/shared_core/module_switching/.gitkeep
+test/shared_core/onboarding/.gitkeep
+test/social/discovery/.gitkeep
+test/social/likes_matches/.gitkeep
+test/social/moodtone/.gitkeep
+test/social/personality/.gitkeep
