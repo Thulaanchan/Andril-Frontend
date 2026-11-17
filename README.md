@@ -50,7 +50,13 @@ Android SDK is at `C:\Android\Sdk`. Set your own local SDK paths through
 the normal Flutter and Android tooling. Review Android SDK license terms
 interactively if `flutter doctor -v` reports a pending license.
 
-From the project root:
+From the project root, run the Windows setup script in PowerShell:
+
+```powershell
+.\scripts\setup_android.ps1
+```
+
+Or execute the commands individually:
 
 ```powershell
 flutter pub get --enforce-lockfile

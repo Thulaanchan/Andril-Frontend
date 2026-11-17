@@ -961,8 +961,7 @@ andril-mobile/
 │   │       └── .gitkeep
 │   └── main.dart [existing file]
 ├── scripts/ [files]
-│   ├── setup_android.ps1 [existing file]
-│   └── setup_android.sh [existing file]
+│   └── setup_android.ps1 [existing file]
 ├── test/ [files]
 │   ├── app/ [files]
 │   │   └── andril_app_test.dart [existing file]
