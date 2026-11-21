@@ -1,37 +1,50 @@
 import 'package:flutter/foundation.dart';
 
-/// Supported onboarding steps in Batch 02B.
+/// Supported onboarding steps in the Learning module onboarding flow.
+///
+/// Under ANDRIL Phase 10 architecture, the draft progression spans:
+/// 0 - Profile Basics (display name, bio)
+/// 1 - Skills to Learn
+/// 2 - Skills to Share
+/// 3 - Learning Goals
+/// 4 - Review & Confirm
 enum OnboardingStep {
   basics('Profile Basics'),
   skillsToLearn('Skills to Learn'),
-  skillsToShare('Skills to Share');
+  skillsToShare('Skills to Share'),
+  goals('Learning Goals'),
+  review('Review & Confirm');
 
   final String title;
   const OnboardingStep(this.title);
 }
 
-/// ViewModel managing draft user input for the initial Learning onboarding steps.
+/// ViewModel managing draft user input for Learning onboarding steps.
 ///
-/// Under ANDRIL architecture (§04.1-04.3, CF-01, CF-02), M2 owns global account
-/// identity, module activation, and display-name uniqueness. This ViewModel
-/// manages strictly temporary, unpersisted presentation drafts for steps 1 to 3.
-/// It never manufactures account IDs, profile IDs, or local activation grants.
+/// Under ANDRIL architecture (§04.1-04.3, CF-01, CF-02, AND-M2-ONB-DEC-20261121-01),
+/// M2 owns global account identity, module activation, and display-name uniqueness.
+/// This ViewModel manages strictly temporary, unpersisted presentation drafts for
+/// steps 1 through 5. It never manufactures account IDs, profile IDs, or local
+/// activation grants.
 class LearningOnboardingViewModel extends ChangeNotifier {
-  /// Total number of onboarding steps managed in this batch.
-  static const int totalSteps = 3;
+  /// Total number of onboarding steps managed in this flow.
+  static const int totalSteps = 5;
 
   int _currentStep = 0;
   String _displayName = '';
   String _bio = '';
   final List<String> _skillsToLearn = [];
   final List<String> _skillsToShare = [];
+  final List<String> _learningGoals = [];
+  String _availabilityPreference = '';
 
   String? _displayNameError;
   bool _isLoading = false;
   String? _errorMessage;
   bool _isDisposed = false;
 
-  /// Current active step index (0 = Basics, 1 = Skills to Learn, 2 = Skills to Share).
+  /// Current active step index (0 = Basics, 1 = Skills to Learn, 2 = Skills to Share,
+  /// 3 = Goals, 4 = Review).
   int get currentStep => _currentStep;
 
   /// Semantic enum representation of the current active step.
@@ -61,12 +74,20 @@ class LearningOnboardingViewModel extends ChangeNotifier {
   /// Defensive unmodifiable view of selected skills the learner can teach or share.
   List<String> get skillsToShare => List.unmodifiable(_skillsToShare);
 
+  /// Defensive unmodifiable view of selected learning goals.
+  List<String> get learningGoals => List.unmodifiable(_learningGoals);
+
+  /// Optional availability preference draft (e.g., '1-3 hrs/week', 'Flexible').
+  String get availabilityPreference => _availabilityPreference;
+
   /// Whether any draft inputs have been modified by the user.
   bool get hasUnsavedChanges {
     return _displayName.trim().isNotEmpty ||
         _bio.trim().isNotEmpty ||
         _skillsToLearn.isNotEmpty ||
-        _skillsToShare.isNotEmpty;
+        _skillsToShare.isNotEmpty ||
+        _learningGoals.isNotEmpty ||
+        _availabilityPreference.trim().isNotEmpty;
   }
 
   /// Sets the draft display name and clears existing validation errors.
@@ -88,6 +109,14 @@ class LearningOnboardingViewModel extends ChangeNotifier {
     }
   }
 
+  /// Sets the optional availability preference draft.
+  void setAvailabilityPreference(String value) {
+    if (_availabilityPreference != value) {
+      _availabilityPreference = value;
+      notifyListeners();
+    }
+  }
+
   /// Sets the current step directly, clamping to valid indices [0, totalSteps - 1].
   void setStep(int stepIndex) {
     final int clamped = stepIndex.clamp(0, totalSteps - 1);
@@ -99,7 +128,8 @@ class LearningOnboardingViewModel extends ChangeNotifier {
 
   /// Validates the current step and advances to the next step if valid.
   ///
-  /// Returns `true` if transition was successful, `false` if validation failed.
+  /// Returns `true` if transition was successful, `false` if validation failed
+  /// or already at the final step.
   bool nextStep() {
     if (_currentStep == 0) {
       if (_displayName.trim().isEmpty) {
@@ -200,6 +230,41 @@ class LearningOnboardingViewModel extends ChangeNotifier {
     }
   }
 
+  /// Adds a learning goal to the draft, preventing duplicate entries.
+  void addLearningGoal(String goal) {
+    final trimmed = goal.trim();
+    if (trimmed.isNotEmpty && !_learningGoals.contains(trimmed)) {
+      _learningGoals.add(trimmed);
+      notifyListeners();
+    }
+  }
+
+  /// Removes a learning goal from the draft.
+  void removeLearningGoal(String goal) {
+    if (_learningGoals.remove(goal.trim())) {
+      notifyListeners();
+    }
+  }
+
+  /// Toggles selection of a learning goal in the draft.
+  void toggleLearningGoal(String goal) {
+    final trimmed = goal.trim();
+    if (_learningGoals.contains(trimmed)) {
+      _learningGoals.remove(trimmed);
+    } else if (trimmed.isNotEmpty) {
+      _learningGoals.add(trimmed);
+    }
+    notifyListeners();
+  }
+
+  /// Clears all selected learning goals in the draft.
+  void clearLearningGoals() {
+    if (_learningGoals.isNotEmpty) {
+      _learningGoals.clear();
+      notifyListeners();
+    }
+  }
+
   /// Sets the loading state.
   void setLoading(bool loading) {
     if (_isLoading != loading) {
@@ -223,6 +288,8 @@ class LearningOnboardingViewModel extends ChangeNotifier {
     _bio = '';
     _skillsToLearn.clear();
     _skillsToShare.clear();
+    _learningGoals.clear();
+    _availabilityPreference = '';
     _displayNameError = null;
     _isLoading = false;
     _errorMessage = null;
