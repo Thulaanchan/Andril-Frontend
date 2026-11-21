@@ -112,8 +112,16 @@ class SessionController extends ChangeNotifier {
     if (signedOut) _recovery = false;
     if (event.kind == SessionEventKind.recovery) _recovery = true;
     _identity = event.subject;
-    _subject = null;
-    _phase = SessionPhase.restoring;
+    // Keep the mounted navigation tree during a refresh of the active account.
+    // Resolution failures still transition to unavailable and clear private state.
+    final refreshingActiveSession = event.kind == SessionEventKind.refreshed &&
+        _phase == SessionPhase.signedIn &&
+        _subject == event.subject &&
+        ordinarySessionActive;
+    if (!refreshingActiveSession) {
+      _subject = null;
+      _phase = SessionPhase.restoring;
+    }
     notifyListeners();
     final bool? recovery;
     if (signedOut) {

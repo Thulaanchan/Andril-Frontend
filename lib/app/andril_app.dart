@@ -5,12 +5,17 @@ import '../core/constants/app_config.dart';
 import '../core/security/session/session_controller.dart';
 import 'bootstrap/scaffold_home.dart';
 import 'dependencies/supabase_bootstrap.dart';
+import 'themes/learning/learning_theme.dart';
 
-/// Technical bootstrapping only. Product screens and module authorization
-/// are not implemented in this scaffold.
+/// Hosts the starter scaffold or a caller-supplied router after auth startup.
 class AndrilApp extends StatefulWidget {
-  const AndrilApp({super.key, this.initialize = initializeAuthFoundation});
+  const AndrilApp({
+    super.key,
+    this.routerConfig,
+    this.initialize = initializeAuthFoundation,
+  });
 
+  final RouterConfig<Object>? routerConfig;
   final Future<SessionController> Function() initialize;
 
   @override
@@ -49,37 +54,48 @@ class _AndrilAppState extends State<AndrilApp> {
     super.dispose();
   }
 
+  Widget _gate(BuildContext context, Widget? child) {
+    if (_error case final error?) return _BootstrapMessage(error);
+    return switch (context.watch<SessionController?>()?.phase) {
+      null || SessionPhase.restoring => const _BootstrapMessage(null),
+      SessionPhase.unavailable =>
+        const _BootstrapMessage('Authentication session unavailable.'),
+      SessionPhase.recovery => const _BootstrapMessage(
+          'Password recovery requires the approved recovery flow.'),
+      SessionPhase.signedIn ||
+      SessionPhase.signedOut =>
+        child ?? const _BootstrapMessage('Navigation unavailable.'),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    final session = _session;
-    final home = _error != null
-        ? _BootstrapMessage(_error!)
-        : session == null
-            ? const _BootstrapMessage(null)
-            : Consumer<SessionController>(
-                builder: (context, state, child) => switch (state.phase) {
-                  SessionPhase.restoring => const _BootstrapMessage(null),
-                  SessionPhase.unavailable => const _BootstrapMessage(
-                      'Authentication session unavailable.'),
-                  SessionPhase.recovery => const _BootstrapMessage(
-                      'Password recovery requires the approved recovery flow.'),
-                  SessionPhase.signedIn ||
-                  SessionPhase.signedOut =>
-                    const ScaffoldHome(),
-                },
-              );
-    final app = MaterialApp(
-      title: 'ANDRIL',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF364B66)),
-        useMaterial3: true,
-      ),
-      home: home,
+    final routerConfig = widget.routerConfig;
+    final Widget app;
+    if (routerConfig == null) {
+      app = MaterialApp(
+        title: 'ANDRIL',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF364B66)),
+          useMaterial3: true,
+        ),
+        home: const ScaffoldHome(),
+        builder: _gate,
+      );
+    } else {
+      app = MaterialApp.router(
+        title: 'ANDRIL',
+        debugShowCheckedModeBanner: false,
+        theme: LearningTheme.theme,
+        routerConfig: routerConfig,
+        builder: _gate,
+      );
+    }
+    return ChangeNotifierProvider<SessionController?>.value(
+      value: _session,
+      child: app,
     );
-    return session == null
-        ? app
-        : ChangeNotifierProvider.value(value: session, child: app);
   }
 }
 
