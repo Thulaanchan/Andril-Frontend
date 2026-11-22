@@ -383,5 +383,131 @@ void main() {
       expect(find.byKey(const Key('discard_dialog_title')), findsNothing);
       expect(exitInvoked, isTrue);
     });
+
+    // 15. Exit navigation ownership: onExit callback is invoked without double pop
+    testWidgets(
+        '15. Exit navigation ownership: onExit callback is invoked without double pop',
+        (tester) async {
+      int exitCount = 0;
+
+      await tester.pumpWidget(
+        _buildTestScreen(
+          viewModel: viewModel,
+          onExit: () => exitCount++,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('onboarding_exit_button')));
+      await tester.pumpAndSettle();
+
+      expect(exitCount, 1);
+    });
+
+    // 16. Rapid repeated exit taps prevent duplicate discard dialogs
+    testWidgets(
+        '16. Rapid repeated exit taps prevent duplicate discard dialogs',
+        (tester) async {
+      viewModel.setDisplayName('Alex');
+      await tester.pumpWidget(_buildTestScreen(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      // Double tap exit button rapidly
+      await tester.tap(find.byKey(const Key('onboarding_exit_button')));
+      await tester.tap(find.byKey(const Key('onboarding_exit_button')),
+          warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('discard_dialog_title')), findsOneWidget);
+    });
+
+    // 17. Exit guard recovery: after canceling discard, subsequent exit works
+    testWidgets(
+        '17. Exit guard recovery: after canceling discard, subsequent exit works',
+        (tester) async {
+      bool exitInvoked = false;
+      viewModel.setDisplayName('Alex');
+      await tester.pumpWidget(
+        _buildTestScreen(
+          viewModel: viewModel,
+          onExit: () => exitInvoked = true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap exit -> dialog -> cancel
+      await tester.tap(find.byKey(const Key('onboarding_exit_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('discard_dialog_cancel_button')));
+      await tester.pumpAndSettle();
+
+      expect(exitInvoked, isFalse);
+      expect(viewModel.displayName, 'Alex');
+
+      // Tap exit again -> dialog -> confirm
+      await tester.tap(find.byKey(const Key('onboarding_exit_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('discard_dialog_confirm_button')));
+      await tester.pumpAndSettle();
+
+      expect(exitInvoked, isTrue);
+    });
+
+    // 18. System back invocation via PopScope triggers exit confirmation
+    testWidgets(
+        '18. System back invocation via PopScope triggers exit confirmation',
+        (tester) async {
+      viewModel.setDisplayName('Alex');
+      await tester.pumpWidget(_buildTestScreen(viewModel: viewModel));
+      await tester.pumpAndSettle();
+
+      // Trigger system back
+      final dynamic popScope = tester.widget(
+        find.byWidgetPredicate((w) => w is PopScope),
+      );
+      popScope.onPopInvokedWithResult(false, null);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('discard_dialog_title')), findsOneWidget);
+    });
+
+    // 19. Internal navigator pop triggers when no onExit callback is supplied
+    testWidgets(
+        '19. Internal navigator pop triggers when no onExit callback is supplied',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: LearningTheme.theme,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                key: const Key('launch_button'),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        LearningOnboardingScreen(viewModel: viewModel),
+                  ),
+                ),
+                child: const Text('Launch Onboarding'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('launch_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LearningOnboardingScreen), findsOneWidget);
+
+      // Tap exit with clean draft -> route is popped by internal Navigator.pop()
+      await tester.tap(find.byKey(const Key('onboarding_exit_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LearningOnboardingScreen), findsNothing);
+      expect(find.byKey(const Key('launch_button')), findsOneWidget);
+    });
   });
 }

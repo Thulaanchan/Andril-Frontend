@@ -128,12 +128,22 @@ class _LearningOnboardingScreenState extends State<LearningOnboardingScreen> {
 
   Future<void> _handleExit(BuildContext context) async {
     if (_isExiting) return;
-    final shouldExit = await _confirmDiscardChanges(context);
-    if (shouldExit && mounted) {
-      _isExiting = true;
-      widget.onExit?.call();
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+    _isExiting = true;
+    try {
+      final shouldExit = await _confirmDiscardChanges(context);
+      if (!mounted) return;
+      if (shouldExit) {
+        if (widget.onExit != null) {
+          widget.onExit!.call();
+        } else if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      } else {
+        _isExiting = false;
+      }
+    } catch (_) {
+      if (mounted) {
+        _isExiting = false;
       }
     }
   }
