@@ -75,11 +75,22 @@ class _Exchange {
 
 class _Store extends MemorySecureStore {
   Completer<void>? blockPkceDelete;
+  Completer<void>? blockFlowDelete;
   bool failFlowDelete = false;
+  bool failFlowWrite = false;
+
+  @override
+  Future<void> write(String key, String value) async {
+    if (failFlowWrite && key.endsWith('.flow')) {
+      throw StateError('synthetic storage failure');
+    }
+    await super.write(key, value);
+  }
 
   @override
   Future<void> delete(String key) async {
     if (key.endsWith('-code-verifier')) await blockPkceDelete?.future;
+    if (key.endsWith('.flow')) await blockFlowDelete?.future;
     if (failFlowDelete && key.endsWith('.flow')) {
       throw StateError('synthetic storage failure');
     }
@@ -282,7 +293,90 @@ Future<_Fixture> _fixture() async {
   return f;
 }
 
+Future<SessionPhase> _restartFrom(Map<String, String> durable) async {
+  final store = MemorySecureStore()..values.addAll(durable);
+  final storage = SupabaseSecureStorage(store: store, namespace: 'test');
+  final sdk = GoTrueClient(
+    url: 'https://synthetic.invalid/auth/v1',
+    autoRefreshToken: false,
+    asyncStorage: SecurePkceStorage(storage),
+    httpClient:
+        MockClient((_) async => throw StateError('Restart must be offline')),
+  );
+  final controller = SessionController(SupabaseSessionSource(sdk, storage),
+      storageFailures: storage.failures);
+  try {
+    final session = await storage.accessToken();
+    if (session != null) await sdk.setInitialSession(session);
+    await controller.start();
+    await flushSessionWork();
+    return controller.phase;
+  } finally {
+    controller.dispose();
+    sdk.dispose();
+    await storage.dispose();
+  }
+}
+
 void main() {
+  test('interrupted logout exposes the current durable restoration limitation',
+      () async {
+    final f = await _fixture();
+    await f.login(f.newFlow(), 'known-owner');
+    final pause = Completer<void>();
+    f.store.blockFlowDelete = pause;
+    final logout = f.source.signOutInteractive();
+    try {
+      await flushSessionWork();
+      expect(f.controller.backendSession, isNull);
+      expect(f.handoff.account, isNull);
+      // A process killed before deletion can leave both previous records.
+      // Characterize the current policy for the Option D review.
+      final interrupted = Map<String, String>.of(f.store.values);
+      expect(await _restartFrom(interrupted), SessionPhase.signedIn);
+      final staleReceipt = Map<String, String>.of(interrupted)
+        ..['test.session'] = jsonEncode(_session('known-owner', 2));
+      expect(await _restartFrom(staleReceipt), SessionPhase.unavailable);
+    } finally {
+      pause.complete();
+      await logout;
+    }
+    await flushSessionWork();
+    expect(await _restartFrom(f.store.values), SessionPhase.signedOut);
+  });
+
+  test('failed ordinary receipt write prevents account handoff', () async {
+    final f = await _fixture();
+    f.store.failFlowWrite = true;
+    final request = f.next('token', 'password');
+    final pending = f.newFlow().signIn(_email, _password);
+    await request.started.future;
+    request.reply(_session('write-failure'));
+    expect((await pending).state, isNot(EmailAuthState.authenticated));
+    await flushSessionWork();
+    expect(f.storage.hasFailed, isTrue);
+    expect(f.controller.phase, SessionPhase.unavailable);
+    expect(f.controller.backendSession, isNull);
+    expect(f.backend.calls, isEmpty);
+  });
+
+  test('unadmitted same-subject replacement credential clears private state',
+      () async {
+    final f = await _fixture();
+    await f.login(f.newFlow(), 'same-owner');
+    expect(f.handoff.account, isNotNull);
+    final replacement = f.next('token', 'password');
+    final raw = f.sdk.signInWithPassword(email: _email, password: _password);
+    await replacement.started.future;
+    replacement.reply(_session('same-owner', 2));
+    await raw;
+    await flushSessionWork();
+    expect(f.controller.phase, SessionPhase.unavailable);
+    expect(f.controller.backendSession, isNull);
+    expect(f.handoff.account, isNull);
+    expect(f.backend.calls, hasLength(2));
+  });
+
   test('real SDK installs late login after logout, application rejects it',
       () async {
     final f = await _fixture();
