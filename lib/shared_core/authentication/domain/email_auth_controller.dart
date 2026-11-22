@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/security/session/interactive_session_admission.dart';
 import '../../../core/security/session/session_controller.dart';
 import 'repositories/auth_repository.dart';
 
@@ -9,14 +10,18 @@ import 'repositories/auth_repository.dart';
 /// provider events and the existing account handoff observes that controller.
 class EmailAuthController extends ChangeNotifier {
   EmailAuthController(this._repository, this._session,
-      {Duration sessionWait = const Duration(seconds: 8)})
-      : _sessionWait = sessionWait {
+      {Duration sessionWait = const Duration(seconds: 8),
+      InteractiveSessionAdmission? interactiveAdmission})
+      : _sessionWait = sessionWait,
+        _interactiveAdmission = interactiveAdmission {
     _session.addListener(_observe);
   }
 
   final AuthRepository _repository;
   final SessionController _session;
   final Duration _sessionWait;
+  final InteractiveSessionAdmission? _interactiveAdmission;
+  InteractiveSessionAttempt? _admissionAttempt;
   String? _verificationEmail;
   BackendSession? _authenticatedOwner;
   bool _busy = false;
@@ -107,6 +112,12 @@ class EmailAuthController extends ChangeNotifier {
       {required String address,
       bool pendingWithoutSession = false,
       bool expectsSession = true}) async {
+    final admission = expectsSession ? _interactiveAdmission : null;
+    final lease = admission?.begin();
+    if (admission != null && lease == null) {
+      return _failure(EmailAuthIssue.busy);
+    }
+    _admissionAttempt = lease;
     final attempt = ++_attempt;
     _startingGeneration = _session.generation;
     _busy = true;
@@ -120,13 +131,15 @@ class EmailAuthController extends ChangeNotifier {
       final issue = result.issue;
       final receipt = result.session;
       if (receipt != null && expectsSession && issue == null) {
+        lease?.approve(receipt.recognizes);
         final confirmed = await _waitForSession(attempt, receipt);
         if (!_active(attempt)) return changed;
-        if (!confirmed) {
+        final owner = confirmed ? _matchingOwner(receipt) : null;
+        if (owner == null) {
           return _outcome = _failure(EmailAuthIssue.confirmationRequired);
         }
         _verificationEmail = null;
-        _authenticatedOwner = _session.backendSession;
+        _authenticatedOwner = owner;
         return _outcome = const EmailAuthOutcome(EmailAuthState.authenticated);
       }
       if (_session.phase != SessionPhase.signedOut) return changed;
@@ -140,6 +153,8 @@ class EmailAuthController extends ChangeNotifier {
       if (!_active(attempt)) return changed;
       return _outcome = _failure(EmailAuthIssue.unavailable);
     } finally {
+      lease?.close();
+      _admissionAttempt = null;
       _busy = false;
       _startingGeneration = null;
       if (!_disposed) notifyListeners();
@@ -147,6 +162,14 @@ class EmailAuthController extends ChangeNotifier {
   }
 
   bool _active(int attempt) => !_disposed && attempt == _attempt;
+
+  BackendSession? _matchingOwner(AuthSessionReceipt receipt) {
+    final owner = _session.backendSession;
+    if (owner == null || _session.generation == _startingGeneration)
+      return null;
+    final credential = _session.credentialFor(owner);
+    return credential != null && receipt.recognizes(credential) ? owner : null;
+  }
 
   Future<bool> _waitForSession(int attempt, AuthSessionReceipt receipt) async {
     final result = Completer<bool>();
@@ -156,12 +179,8 @@ class EmailAuthController extends ChangeNotifier {
         result.complete(false);
         return;
       }
-      final owner = _session.backendSession;
-      if (owner == null) return;
-      final credential = _session.credentialFor(owner);
-      result.complete(_session.generation != _startingGeneration &&
-          credential != null &&
-          receipt.recognizes(owner, credential));
+      if (_session.backendSession == null) return;
+      result.complete(_matchingOwner(receipt) != null);
     }
 
     _settle = check;
@@ -203,6 +222,7 @@ class EmailAuthController extends ChangeNotifier {
   /// Keeps the submission lock until any outstanding provider call settles.
   void cancel() {
     if (_disposed) return;
+    _admissionAttempt?.close();
     ++_attempt;
     _startingGeneration = null;
     _verificationEmail = null;
@@ -215,6 +235,7 @@ class EmailAuthController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _admissionAttempt?.close();
     _verificationEmail = null;
     _session.removeListener(_observe);
     _settle?.call();

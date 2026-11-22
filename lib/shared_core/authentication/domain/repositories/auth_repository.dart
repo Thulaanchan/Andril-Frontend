@@ -36,10 +36,10 @@ class AuthRepositoryResult {
 /// The opaque predicate stays within the authentication boundary.
 class AuthSessionReceipt {
   const AuthSessionReceipt(this._matches);
-  final bool Function(BackendSession, BackendCredential) _matches;
+  final bool Function(BackendCredential) _matches;
 
-  bool recognizes(BackendSession owner, BackendCredential credential) =>
-      credential.emailConfirmed && _matches(owner, credential);
+  bool recognizes(BackendCredential credential) =>
+      credential.emailConfirmed && _matches(credential);
 }
 
 abstract interface class AuthRepository {
