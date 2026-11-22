@@ -40,6 +40,27 @@ abstract interface class SessionSource {
   Future<SessionResolution> resolve(SessionEvent event, {bool? recovery});
 }
 
+/// Optional capability of the authentication source, consumed by backend transport.
+abstract interface class BackendSessionSource {
+  BackendCredential? get backendCredential;
+  Future<void> refreshBackendCredential(BackendCredential rejected);
+}
+
+class BackendCredential {
+  const BackendCredential(this.subject, this.accessToken,
+      {required this.emailConfirmed});
+
+  final String subject;
+  final String accessToken;
+  final bool emailConfirmed;
+
+  @override
+  String toString() => 'BackendCredential(redacted)';
+}
+
+/// A session boundary survives token rotation but not logout or sign-in.
+typedef BackendSession = ({String subject, int epoch});
+
 /// Authentication state only: signedIn never authorizes an ANDRIL module.
 class SessionController extends ChangeNotifier {
   SessionController(this._source, {Stream<void>? storageFailures}) {
@@ -59,6 +80,7 @@ class SessionController extends ChangeNotifier {
   String? _identity;
   String? _ordinaryIdentity;
   int _generation = 0;
+  int _backendEpoch = 0;
   bool _recovery = false;
   bool _disposed = false;
   bool _storageFailed = false;
@@ -68,6 +90,37 @@ class SessionController extends ChangeNotifier {
   String? get subject => _subject;
   int get generation => _generation;
   bool get moduleHomeAuthorized => false;
+  bool get supportsBackend => _source is BackendSessionSource;
+
+  BackendSession? get backendSession {
+    final subject = _subject;
+    if (_disposed || _phase != SessionPhase.signedIn || subject == null) {
+      return null;
+    }
+    return (subject: subject, epoch: _backendEpoch);
+  }
+
+  BackendCredential? credentialFor(BackendSession session) {
+    final source = _source;
+    if (backendSession != session || source is! BackendSessionSource) {
+      return null;
+    }
+    final credential = (source as BackendSessionSource).backendCredential;
+    return credential?.subject == session.subject ? credential : null;
+  }
+
+  Future<void> refreshBackendCredential(
+      BackendSession session, BackendCredential rejected) async {
+    final source = _source;
+    final current = credentialFor(session);
+    if (source is BackendSessionSource &&
+        current != null &&
+        current.emailConfirmed &&
+        current.accessToken == rejected.accessToken) {
+      await (source as BackendSessionSource).refreshBackendCredential(current);
+    }
+  }
+
   bool isCurrent(int generation) => !_disposed && generation == _generation;
 
   VoidCallback registerPrivateStateClearer(VoidCallback clear) {
@@ -101,7 +154,10 @@ class SessionController extends ChangeNotifier {
     final signedOut = event.kind == SessionEventKind.signedOut;
     final changed = event.subject != _identity;
     if (changed || signedOut) _ordinaryIdentity = null;
-    if (signedOut || changed || event.kind == SessionEventKind.recovery) {
+    if (signedOut ||
+        changed ||
+        event.kind == SessionEventKind.recovery ||
+        (ordinarySessionActive && event.kind == SessionEventKind.signedIn)) {
       if (!_clearPrivateState()) {
         _fail();
         return;
@@ -159,6 +215,7 @@ class SessionController extends ChangeNotifier {
   }
 
   bool _clearPrivateState() {
+    ++_backendEpoch;
     var success = true;
     for (final clear in List<VoidCallback>.of(_privateStateClearers)) {
       try {

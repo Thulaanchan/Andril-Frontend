@@ -156,4 +156,26 @@ void main() {
     expect((await source.resolve(await source.restore())).recovery, false);
     controller.dispose();
   });
+  test('backend credentials require classification of the exact SDK token',
+      () async {
+    final controller = SessionController(source);
+    await source.resolve(await source.restore(), recovery: false);
+    await controller.start();
+    final bound = controller.backendSession!;
+    expect(controller.credentialFor(bound)?.accessToken, current!.accessToken);
+
+    current = syntheticSession(revision: 2);
+    expect(controller.credentialFor(bound), isNull);
+    events.add(AuthState(AuthChangeEvent.tokenRefreshed, current));
+    await flushSessionWork();
+    expect(controller.credentialFor(bound)?.accessToken, current!.accessToken);
+
+    current = syntheticSession(revision: 3);
+    expect(controller.credentialFor(bound), isNull);
+    events.add(AuthState(AuthChangeEvent.passwordRecovery, current));
+    await flushSessionWork();
+    expect(source.backendCredential, isNull);
+    expect(controller.backendSession, isNull);
+    controller.dispose();
+  });
 }
