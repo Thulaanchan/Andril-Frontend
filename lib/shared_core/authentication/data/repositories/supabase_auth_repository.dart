@@ -63,8 +63,9 @@ class SupabaseAuthRepository implements AuthRepository {
       final subject = session.user.id;
       final token = session.accessToken;
       return AuthRepositoryResult(
-          session: AuthSessionReceipt((owner, credential) =>
-              owner.subject == subject && credential.accessToken == token));
+          session: AuthSessionReceipt((credential) =>
+              credential.subject == subject &&
+              credential.accessToken == token));
     } catch (error) {
       return _classify(error,
           neutralExistence: neutralExistence, passwordLogin: passwordLogin);
