@@ -22,11 +22,39 @@ class _SessionContext {
 
 /// Keeps SDK sessions/tokens outside presentation state. It makes no backend
 /// authorization or email-verification claim.
-class SupabaseSessionSource implements SessionSource {
+class SupabaseSessionSource implements SessionSource, BackendSessionSource {
   SupabaseSessionSource(this._auth, this._storage);
 
   final GoTrueClient _auth;
   final SupabaseSecureStorage _storage;
+  String? _ordinaryAccessToken;
+
+  @override
+  BackendCredential? get backendCredential {
+    final session = _auth.currentSession;
+    // The SDK may replace currentSession before publishing its auth event.
+    // A new token is ineligible until its flow has been classified.
+    if (session == null || session.accessToken != _ordinaryAccessToken) {
+      return null;
+    }
+    final confirmedAt = session.user.emailConfirmedAt;
+    return BackendCredential(session.user.id, session.accessToken,
+        emailConfirmed: confirmedAt != null &&
+            DateTime.tryParse(confirmedAt) != null &&
+            session.user.isAnonymous != true);
+  }
+
+  @override
+  Future<void> refreshBackendCredential(BackendCredential rejected) async {
+    final current = _auth.currentSession;
+    if (current?.user.id != rejected.subject ||
+        current?.accessToken != rejected.accessToken ||
+        current?.accessToken != _ordinaryAccessToken) {
+      return;
+    }
+    // The SDK coordinates refreshes and discards results after a session change.
+    await _auth.refreshSession();
+  }
 
   SessionEvent _event(SessionEventKind kind, Session? session) => SessionEvent(
         kind,
@@ -56,6 +84,7 @@ class SupabaseSessionSource implements SessionSource {
   Future<SessionResolution> resolve(SessionEvent event,
       {bool? recovery}) async {
     if (event.kind == SessionEventKind.signedOut) {
+      _ordinaryAccessToken = null;
       await _storage.deleteValue('flow');
       return const SessionResolution(null, recovery: false);
     }
@@ -71,6 +100,14 @@ class SupabaseSessionSource implements SessionSource {
       throw const SessionUnavailableException();
     }
     final session = context.session;
+    if (session.accessToken == _auth.currentSession?.accessToken) {
+      // An already classified ordinary refresh can service queued reads.
+      // SessionController still closes the boundary if receipt storage fails.
+      _ordinaryAccessToken =
+          event.kind == SessionEventKind.refreshed && recovery == false
+              ? session.accessToken
+              : null;
+    }
     if (recovery == null) {
       // A receipt matches this exact token, never just an email or user UUID.
       // Missing/stale receipts fail closed rather than promote recovery after
@@ -94,6 +131,9 @@ class SupabaseSessionSource implements SessionSource {
             'token': session.accessToken,
             'recovery': recovery,
           }));
+    }
+    if (session.accessToken == _auth.currentSession?.accessToken) {
+      _ordinaryAccessToken = recovery ? null : session.accessToken;
     }
     return SessionResolution(event.subject, recovery: recovery);
   }

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/constants/app_config.dart';
+import '../core/network/api_client/andril_api_client.dart';
 import '../core/security/session/session_controller.dart';
+import '../shared_core/account/account_handoff_controller.dart';
 import 'bootstrap/scaffold_home.dart';
 import 'dependencies/supabase_bootstrap.dart';
 import 'themes/learning/learning_theme.dart';
@@ -13,10 +15,12 @@ class AndrilApp extends StatefulWidget {
     super.key,
     this.routerConfig,
     this.initialize = initializeAuthFoundation,
+    this.createHandoff = _createAccountHandoff,
   });
 
   final RouterConfig<Object>? routerConfig;
   final Future<SessionController> Function() initialize;
+  final AccountHandoffController? Function(SessionController) createHandoff;
 
   @override
   State<AndrilApp> createState() => _AndrilAppState();
@@ -24,6 +28,7 @@ class AndrilApp extends StatefulWidget {
 
 class _AndrilAppState extends State<AndrilApp> {
   SessionController? _session;
+  AccountHandoffController? _handoff;
   String? _error;
 
   @override
@@ -39,7 +44,17 @@ class _AndrilAppState extends State<AndrilApp> {
         controller.dispose();
         return;
       }
-      setState(() => _session = controller);
+      final AccountHandoffController? handoff;
+      try {
+        handoff = widget.createHandoff(controller);
+      } catch (_) {
+        controller.dispose();
+        rethrow;
+      }
+      setState(() {
+        _session = controller;
+        _handoff = handoff;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error is ConfigurationException
@@ -50,6 +65,7 @@ class _AndrilAppState extends State<AndrilApp> {
 
   @override
   void dispose() {
+    _handoff?.dispose();
     _session?.dispose();
     super.dispose();
   }
@@ -94,9 +110,18 @@ class _AndrilAppState extends State<AndrilApp> {
     }
     return ChangeNotifierProvider<SessionController?>.value(
       value: _session,
-      child: app,
+      child: ChangeNotifierProvider<AccountHandoffController?>.value(
+        value: _handoff,
+        child: app,
+      ),
     );
   }
+}
+
+AccountHandoffController? _createAccountHandoff(SessionController session) {
+  if (!session.supportsBackend) return null;
+  return AccountHandoffController(
+      session, AndrilApiClient(AppConfig.fromEnvironment(), session));
 }
 
 class _BootstrapMessage extends StatelessWidget {
