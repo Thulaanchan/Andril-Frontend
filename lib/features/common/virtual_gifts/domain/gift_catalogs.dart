@@ -7,7 +7,7 @@
 class AndrilGift {
   final String id;
   final String
-  name; // Internal / a11y label only. Never shown in visual picker.
+      name; // Internal / a11y label only. Never shown in visual picker.
   final int coins;
   final String assetPath;
   final String? stickerOverride;
