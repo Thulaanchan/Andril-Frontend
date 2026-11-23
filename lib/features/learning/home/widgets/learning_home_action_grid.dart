@@ -82,6 +82,25 @@ class LearningHomeActionGrid extends StatelessWidget {
       return _buildEmptyState();
     }
 
+    // AND-LRN-HOME-03G-01: Fail-closed duplicate ID remediation.
+    // Count exact ID occurrences and exclude any action with duplicate IDs.
+    final idCounts = <String, int>{};
+    for (final action in actions) {
+      idCounts.update(
+        action.id,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+
+    final safeActions = actions
+        .where((action) => idCounts[action.id] == 1)
+        .toList(growable: false);
+
+    if (safeActions.isEmpty) {
+      return _buildEmptyState();
+    }
+
     return Padding(
       padding: padding,
       child: Column(
@@ -102,7 +121,7 @@ class LearningHomeActionGrid extends StatelessWidget {
               return Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
-                children: actions.map((item) {
+                children: safeActions.map((item) {
                   return SizedBox(
                     key: Key(item.id),
                     width: itemWidth,
