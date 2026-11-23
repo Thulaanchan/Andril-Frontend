@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:andril_mobile/app/themes/learning/learning_colors.dart';
@@ -424,44 +425,124 @@ void main() {
       expect(actions.first.id, equals('1'));
     });
 
-    testWidgets('TEST-03F-17: Stable item identity maintained via Widget Keys',
+    testWidgets(
+        'TEST-03F-17: Stable item identity and callback mapping across reordering and rebuilds',
         (tester) async {
-      final actions = [
+      int countA = 0;
+      int countB = 0;
+      int countC = 0;
+
+      // 1. Initial order: A, B (unavailable), C
+      final actionsInitial = [
         LearningHomeActionItem(
-          id: 'first_id',
-          title: 'First Item',
+          id: 'action_a',
+          title: 'Action Alpha',
           icon: Icons.looks_one,
-          onTap: () {},
+          onTap: () => countA++,
         ),
         LearningHomeActionItem(
-          id: 'second_id',
-          title: 'Second Item',
+          id: 'action_b',
+          title: 'Action Beta',
           icon: Icons.looks_two,
-          onTap: () {},
+          onTap: () => countB++,
+          unavailableReason: 'Locked initially',
+        ),
+        LearningHomeActionItem(
+          id: 'action_c',
+          title: 'Action Gamma',
+          icon: Icons.looks_3,
+          onTap: () => countC++,
         ),
       ];
 
       await tester.pumpWidget(
         _buildActionGridHarness(
-          child: LearningHomeActionGrid(actions: actions),
+          child: LearningHomeActionGrid(actions: actionsInitial),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('first_id')), findsOneWidget);
-      expect(find.byKey(const Key('second_id')), findsOneWidget);
+      // Verify initial layout order and keys
+      expect(find.byKey(const Key('action_a')), findsOneWidget);
+      expect(find.byKey(const Key('action_b')), findsOneWidget);
+      expect(find.byKey(const Key('action_c')), findsOneWidget);
+
+      final posA1 = tester.getTopLeft(find.text('Action Alpha'));
+      final posB1 = tester.getTopLeft(find.text('Action Beta'));
+      expect(posA1.dx, lessThan(posB1.dx));
+
+      // Initial tap on Alpha (enabled) works
+      await tester.tap(find.text('Action Alpha'));
+      await tester.pump();
+      expect(countA, equals(1));
+
+      // Initial tap on Beta (unavailable) does nothing
+      await tester.tap(find.text('Action Beta'));
+      await tester.pump();
+      expect(countB, equals(0));
+
+      // 2. Rebuild with reordered actions and changed availability: C, B (now enabled), A (now locked)
+      final actionsReordered = [
+        LearningHomeActionItem(
+          id: 'action_c',
+          title: 'Action Gamma',
+          icon: Icons.looks_3,
+          onTap: () => countC++,
+        ),
+        LearningHomeActionItem(
+          id: 'action_b',
+          title: 'Action Beta',
+          icon: Icons.looks_two,
+          onTap: () => countB++,
+        ),
+        LearningHomeActionItem(
+          id: 'action_a',
+          title: 'Action Alpha',
+          icon: Icons.looks_one,
+          onTap: () => countA++,
+          unavailableReason: 'Now locked',
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actionsReordered),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify keys preserved
+      expect(find.byKey(const Key('action_a')), findsOneWidget);
+      expect(find.byKey(const Key('action_b')), findsOneWidget);
+      expect(find.byKey(const Key('action_c')), findsOneWidget);
+
+      // Verify new visual order (Gamma is now first, Beta is second)
+      final posC2 = tester.getTopLeft(find.text('Action Gamma'));
+      final posB2 = tester.getTopLeft(find.text('Action Beta'));
+      expect(posC2.dx, lessThan(posB2.dx));
+
+      // Tap Gamma (C): countC increments
+      await tester.tap(find.text('Action Gamma'));
+      await tester.pump();
+      expect(countC, equals(1));
+      expect(countA, equals(1)); // unchanged
+
+      // Tap Beta (B, now enabled): countB increments
+      await tester.tap(find.text('Action Beta'));
+      await tester.pump();
+      expect(countB, equals(1));
+
+      // Tap Alpha (A, now locked): countA does not increment
+      await tester.tap(find.text('Action Alpha'));
+      await tester.pump();
+      expect(countA, equals(1));
+
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets(
         'TEST-03F-18: Ordinary rendering is safe with distinct IDs without uncaught exceptions',
         (tester) async {
-      // Per Section 7 TEST-03F-18:
-      // "Investigate and test the actual behavior when duplicate item IDs are provided.
-      // If the widget claims deduplication or rejection, verify that contract.
-      // If there is no documented duplicate-ID policy, do not invent one; test that ordinary
-      // rendering is safe and report the unresolved policy."
-      // The production widget assigns Key(item.id) to children of Wrap. Sibling keys
-      // must be distinct per Flutter framework constraints; duplicate ID policy is caller-managed.
       final actions = [
         LearningHomeActionItem(
           id: 'action_ordinary_1',
@@ -920,29 +1001,53 @@ void main() {
     });
 
     testWidgets(
-        'TEST-03F-35: Keyboard/focus behavior: available action is focusable',
+        'TEST-03F-35: Keyboard/focus behavior: available action acquires focus and activates via keyboard',
         (tester) async {
+      int tapCount = 0;
       final action = LearningHomeActionItem(
         id: 'focus_test',
         title: 'Focusable Card',
         icon: Icons.keyboard,
-        onTap: () {},
+        onTap: () => tapCount++,
+      );
+      final disabledAction = const LearningHomeActionItem(
+        id: 'disabled_focus',
+        title: 'Disabled Focus Card',
+        icon: Icons.lock,
+        unavailableReason: 'Locked for focus test',
       );
 
       await tester.pumpWidget(
         _buildActionGridHarness(
-          child: LearningHomeActionGrid(actions: [action]),
+          child: LearningHomeActionGrid(actions: [action, disabledAction]),
         ),
       );
       await tester.pumpAndSettle();
 
-      final FocusNode focusNode = FocusNode();
-      tester.binding.focusManager.highlightStrategy =
-          FocusHighlightStrategy.alwaysTouch;
-
+      // Obtain the FocusNode managed by the interactive InkWell
+      final focusNode = Focus.of(tester.element(find.text('Focusable Card')));
+      focusNode.requestFocus();
       await tester.pump();
-      expect(find.byType(InkWell), findsOneWidget);
-      focusNode.dispose();
+
+      // Verify focus is held
+      expect(focusNode.hasFocus, isTrue);
+
+      // Activate via Enter key
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(tapCount, equals(1));
+
+      // Activate via Space key
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(tapCount, equals(2));
+
+      // Verify disabled card cannot receive focus
+      final disabledFinder = find.text('Disabled Focus Card');
+      final disabledFocusNode = Focus.of(tester.element(disabledFinder));
+      // Disabled card should not be the same focus node and cannot hold primary focus
+      expect(disabledFocusNode.hasPrimaryFocus, isFalse);
+      expect(tester.takeException(), isNull);
     });
 
     // =========================================================================
@@ -1100,6 +1205,550 @@ void main() {
       expect(find.textContaining('Streak'), findsNothing);
       expect(find.textContaining('Level'), findsNothing);
       expect(find.textContaining('Coins'), findsNothing);
+    });
+
+    // =========================================================================
+    // GROUP G: Direct Fail-Closed Duplicate-ID Regression (Batch 03G-2)
+    // Rule ID: AND-LRN-HOME-03G-01
+    // =========================================================================
+    testWidgets(
+        'TEST-03G-2-01: Adjacent duplicate IDs exclude conflicting items and render unique item',
+        (tester) async {
+      final actions = [
+        LearningHomeActionItem(
+          id: 'action_a',
+          title: 'Action A1',
+          icon: Icons.looks_one,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'action_a',
+          title: 'Action A2',
+          icon: Icons.looks_two,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'action_b',
+          title: 'Action B',
+          icon: Icons.star,
+          onTap: () {},
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Action A1'), findsNothing);
+      expect(find.text('Action A2'), findsNothing);
+      expect(find.text('Action B'), findsOneWidget);
+      expect(find.byKey(const Key('action_a')), findsNothing);
+      expect(find.byKey(const Key('action_b')), findsOneWidget);
+    });
+
+    testWidgets(
+        'TEST-03G-2-02: Separated duplicate IDs exclude conflicting items and preserve ordering',
+        (tester) async {
+      final actions = [
+        LearningHomeActionItem(
+          id: 'action_a',
+          title: 'Action A1',
+          icon: Icons.looks_one,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'action_b',
+          title: 'Action B',
+          icon: Icons.star,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'action_a',
+          title: 'Action A2',
+          icon: Icons.looks_two,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'action_c',
+          title: 'Action C',
+          icon: Icons.check,
+          onTap: () {},
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Action A1'), findsNothing);
+      expect(find.text('Action A2'), findsNothing);
+      expect(find.text('Action B'), findsOneWidget);
+      expect(find.text('Action C'), findsOneWidget);
+
+      final posB = tester.getTopLeft(find.text('Action B'));
+      final posC = tester.getTopLeft(find.text('Action C'));
+      expect(posB.dx, lessThan(posC.dx));
+    });
+
+    testWidgets(
+        'TEST-03G-2-03: All IDs conflicting renders empty state without exceptions',
+        (tester) async {
+      final actions = [
+        LearningHomeActionItem(
+          id: 'action_a',
+          title: 'Action A1',
+          icon: Icons.looks_one,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'action_a',
+          title: 'Action A2',
+          icon: Icons.looks_one,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'action_b',
+          title: 'Action B1',
+          icon: Icons.looks_two,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'action_b',
+          title: 'Action B2',
+          icon: Icons.looks_two,
+          onTap: () {},
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('No learning actions available'), findsOneWidget);
+      expect(find.byType(InkWell), findsNothing);
+    });
+
+    testWidgets(
+        'TEST-03G-2-04: Multiple conflicting IDs with one safe item renders only safe item',
+        (tester) async {
+      int countC = 0;
+      final actions = [
+        LearningHomeActionItem(
+          id: 'dup_1',
+          title: 'Dup 1 First',
+          icon: Icons.looks_one,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'dup_2',
+          title: 'Dup 2 First',
+          icon: Icons.looks_two,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'dup_1',
+          title: 'Dup 1 Second',
+          icon: Icons.looks_one,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'dup_2',
+          title: 'Dup 2 Second',
+          icon: Icons.looks_two,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'safe_c',
+          title: 'Safe Action C',
+          icon: Icons.verified,
+          onTap: () => countC++,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Safe Action C'), findsOneWidget);
+      expect(find.byType(InkWell), findsOneWidget);
+
+      await tester.tap(find.text('Safe Action C'));
+      await tester.pump();
+      expect(countC, equals(1));
+    });
+
+    testWidgets(
+        'TEST-03G-2-05: Same ID with different callbacks excludes both and invokes neither callback',
+        (tester) async {
+      int countA1 = 0;
+      int countA2 = 0;
+      int countSafe = 0;
+
+      final actions = [
+        LearningHomeActionItem(
+          id: 'conflict_id',
+          title: 'Conflicting Item 1',
+          icon: Icons.warning,
+          onTap: () => countA1++,
+        ),
+        LearningHomeActionItem(
+          id: 'conflict_id',
+          title: 'Conflicting Item 2',
+          icon: Icons.warning,
+          onTap: () => countA2++,
+        ),
+        LearningHomeActionItem(
+          id: 'safe_unique',
+          title: 'Safe Unique Item',
+          icon: Icons.check,
+          onTap: () => countSafe++,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Conflicting Item 1'), findsNothing);
+      expect(find.text('Conflicting Item 2'), findsNothing);
+      expect(find.text('Safe Unique Item'), findsOneWidget);
+
+      await tester.tap(find.text('Safe Unique Item'));
+      await tester.pump();
+
+      expect(countSafe, equals(1));
+      expect(countA1, equals(0));
+      expect(countA2, equals(0));
+    });
+
+    testWidgets(
+        'TEST-03G-2-06: Enabled and unavailable conflict excludes both and renders unique item',
+        (tester) async {
+      int enabledTap = 0;
+      int safeTap = 0;
+
+      final actions = [
+        LearningHomeActionItem(
+          id: 'circle',
+          title: 'Enabled Circle',
+          icon: Icons.circle,
+          onTap: () => enabledTap++,
+        ),
+        LearningHomeActionItem(
+          id: 'circle',
+          title: 'Unavailable Circle',
+          icon: Icons.circle_outlined,
+          onTap: () {},
+          unavailableReason: 'Locked by system',
+        ),
+        LearningHomeActionItem(
+          id: 'unique_safe',
+          title: 'Safe Action',
+          icon: Icons.star,
+          onTap: () => safeTap++,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Enabled Circle'), findsNothing);
+      expect(find.text('Unavailable Circle'), findsNothing);
+      expect(find.text('Safe Action'), findsOneWidget);
+
+      await tester.tap(find.text('Safe Action'));
+      await tester.pump();
+
+      expect(safeTap, equals(1));
+      expect(enabledTap, equals(0));
+    });
+
+    testWidgets(
+        'TEST-03G-2-07: Exact string equality treats case variants as distinct actions',
+        (tester) async {
+      final actions = [
+        LearningHomeActionItem(
+          id: 'circle',
+          title: 'Lower Circle',
+          icon: Icons.circle,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'Circle',
+          title: 'Title Circle',
+          icon: Icons.circle_outlined,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'CIRCLE',
+          title: 'Upper Circle',
+          icon: Icons.lens,
+          onTap: () {},
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Lower Circle'), findsOneWidget);
+      expect(find.text('Title Circle'), findsOneWidget);
+      expect(find.text('Upper Circle'), findsOneWidget);
+      expect(find.byType(InkWell), findsNWidgets(3));
+    });
+
+    testWidgets('TEST-03G-2-08: Duplicate Unicode IDs are safely excluded',
+        (tester) async {
+      final actions = [
+        LearningHomeActionItem(
+          id: 'வட்டம்',
+          title: 'Tamil Circle 1',
+          icon: Icons.circle,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'வட்டம்',
+          title: 'Tamil Circle 2',
+          icon: Icons.circle_outlined,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'சதுரம்',
+          title: 'Tamil Square',
+          icon: Icons.crop_square,
+          onTap: () {},
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Tamil Circle 1'), findsNothing);
+      expect(find.text('Tamil Circle 2'), findsNothing);
+      expect(find.text('Tamil Square'), findsOneWidget);
+      expect(find.byKey(const Key('வட்டம்')), findsNothing);
+      expect(find.byKey(const Key('சதுரம்')), findsOneWidget);
+    });
+
+    testWidgets(
+        'TEST-03G-2-09: Duplicate empty-string IDs are excluded while unique action renders',
+        (tester) async {
+      final actions = [
+        LearningHomeActionItem(
+          id: '',
+          title: 'Empty ID 1',
+          icon: Icons.help_outline,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: '',
+          title: 'Empty ID 2',
+          icon: Icons.help_outline,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'valid_id',
+          title: 'Valid Action',
+          icon: Icons.check,
+          onTap: () {},
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Empty ID 1'), findsNothing);
+      expect(find.text('Empty ID 2'), findsNothing);
+      expect(find.text('Valid Action'), findsOneWidget);
+    });
+
+    testWidgets('TEST-03G-2-10: Original caller action list remains unmutated',
+        (tester) async {
+      final item1 = LearningHomeActionItem(
+        id: 'dup_item',
+        title: 'Item 1',
+        icon: Icons.looks_one,
+        onTap: () {},
+      );
+      final item2 = LearningHomeActionItem(
+        id: 'dup_item',
+        title: 'Item 2',
+        icon: Icons.looks_two,
+        onTap: () {},
+      );
+      final item3 = LearningHomeActionItem(
+        id: 'unique_item',
+        title: 'Item 3',
+        icon: Icons.looks_3,
+        onTap: () {},
+      );
+
+      final actions = <LearningHomeActionItem>[item1, item2, item3];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Original caller list must remain completely unmodified
+      expect(actions.length, equals(3));
+      expect(identical(actions[0], item1), isTrue);
+      expect(identical(actions[1], item2), isTrue);
+      expect(identical(actions[2], item3), isTrue);
+    });
+
+    testWidgets(
+        'TEST-03G-2-11: No duplicates means no filtering and all items interactive',
+        (tester) async {
+      int count1 = 0;
+      int count2 = 0;
+
+      final actions = [
+        LearningHomeActionItem(
+          id: 'clean_1',
+          title: 'Clean Action 1',
+          icon: Icons.star,
+          onTap: () => count1++,
+        ),
+        LearningHomeActionItem(
+          id: 'clean_2',
+          title: 'Clean Action 2',
+          icon: Icons.favorite,
+          onTap: () => count2++,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actions),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Clean Action 1'), findsOneWidget);
+      expect(find.text('Clean Action 2'), findsOneWidget);
+
+      await tester.tap(find.text('Clean Action 1'));
+      await tester.pump();
+      await tester.tap(find.text('Clean Action 2'));
+      await tester.pump();
+
+      expect(count1, equals(1));
+      expect(count2, equals(1));
+    });
+
+    testWidgets(
+        'TEST-03G-2-12: Rebuild changes conflict set and updates rendered actions dynamically',
+        (tester) async {
+      // Initial list has duplicate A, so only B renders
+      final actionsInitial = [
+        LearningHomeActionItem(
+          id: 'id_a',
+          title: 'Action A1',
+          icon: Icons.looks_one,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'id_a',
+          title: 'Action A2',
+          icon: Icons.looks_two,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'id_b',
+          title: 'Action B',
+          icon: Icons.star,
+          onTap: () {},
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actionsInitial),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Action A1'), findsNothing);
+      expect(find.text('Action A2'), findsNothing);
+      expect(find.text('Action B'), findsOneWidget);
+
+      // Rebuild with unique A, B, C
+      final actionsUpdated = [
+        LearningHomeActionItem(
+          id: 'id_a',
+          title: 'Action A Unified',
+          icon: Icons.looks_one,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'id_b',
+          title: 'Action B',
+          icon: Icons.star,
+          onTap: () {},
+        ),
+        LearningHomeActionItem(
+          id: 'id_c',
+          title: 'Action C',
+          icon: Icons.looks_3,
+          onTap: () {},
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildActionGridHarness(
+          child: LearningHomeActionGrid(actions: actionsUpdated),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Action A Unified'), findsOneWidget);
+      expect(find.text('Action B'), findsOneWidget);
+      expect(find.text('Action C'), findsOneWidget);
+      expect(find.byType(InkWell), findsNWidgets(3));
     });
   });
 }
