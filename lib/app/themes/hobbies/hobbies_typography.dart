@@ -79,18 +79,36 @@ abstract final class HobbiesTypography {
   /// Builds a Material 3 [TextTheme] mapped to the Hobbies typography hierarchy.
   ///
   /// Merges default typography metrics with Hobbies-specific roles and accessible colors.
+  ///
+  /// Accessibility notes:
+  /// - [labelColor] defaults to prototype reference dark text `const Color(0xFF0F2530)`.
+  ///   This guarantees a WCAG AA compliant contrast ratio (4.80:1 >= 4.5:1) when
+  ///   rendered on the approved Hobbies primary green `#16A34A`, as well as on
+  ///   surface backgrounds (`#FFFFFF` and `#ECFDF5`).
+  /// - Note: The dark label color is drawn from the existing prototype reference,
+  ///   not a newly approved brand decision.
+  /// - [onPrimaryColor] is preserved as an optional named parameter for backward
+  ///   compatibility. If explicitly provided (e.g. `Colors.white`), callers must
+  ///   ensure it is used on a sufficiently dark surface such as `#064E3B`
+  ///   (`primaryDark`, 9.72:1 contrast). Pure white text on `#16A34A` yields only
+  ///   ~3.30:1, failing normal-text WCAG AA.
+  /// - Note: This factory configures [TextTheme.labelLarge]; actual Flutter button
+  ///   component foreground colors must be fully reviewed and styled in the
+  ///   subsequent ThemeData checkpoint.
   static TextTheme createTextTheme({
     Color headingColor = const Color(0xFF0F2530),
     Color bodyColor = const Color(0xFF0F2530),
     Color secondaryColor = const Color(0xFF64748B),
-    Color onPrimaryColor = Colors.white,
+    Color labelColor = const Color(0xFF0F2530),
+    Color? onPrimaryColor,
   }) {
+    final Color effectiveLabelColor = onPrimaryColor ?? labelColor;
     return TextTheme(
       headlineMedium: screenTitle.copyWith(color: headingColor),
       titleLarge: sectionTitle.copyWith(color: headingColor),
       bodyLarge: bodyText.copyWith(color: bodyColor),
       bodyMedium: secondaryText.copyWith(color: secondaryColor),
-      labelLarge: buttonLabel.copyWith(color: onPrimaryColor),
+      labelLarge: buttonLabel.copyWith(color: effectiveLabelColor),
       bodySmall: caption.copyWith(color: secondaryColor),
     );
   }

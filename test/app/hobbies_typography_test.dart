@@ -118,6 +118,49 @@ void main() {
     });
 
     test(
+        'createTextTheme defaults labelLarge to accessible dark text meeting WCAG AA on Hobbies green',
+        () {
+      final TextTheme theme = HobbiesTypography.createTextTheme();
+
+      // 1. Default labelLarge uses accessible dark text #0F2530
+      expect(theme.labelLarge!.color, const Color(0xFF0F2530));
+
+      // 2. Dark text on approved Hobbies green (#16A34A) passes WCAG AA for normal text (>= 4.5:1)
+      final double darkOnPrimary =
+          _contrastRatio(theme.labelLarge!.color!, HobbiesColors.primary);
+      expect(darkOnPrimary, greaterThanOrEqualTo(4.5));
+    });
+
+    test(
+        'white text on Hobbies green fails normal-text WCAG AA but passes large-text threshold',
+        () {
+      // 3. White text on Hobbies green fails normal-text WCAG AA (< 4.5:1)
+      final double whiteOnPrimary =
+          _contrastRatio(Colors.white, HobbiesColors.primary);
+      expect(whiteOnPrimary, lessThan(4.5));
+      expect(whiteOnPrimary, greaterThanOrEqualTo(3.0));
+    });
+
+    test('explicit white labels can be used on a verified dark surface', () {
+      // 4. Explicit white labels can be used on a verified dark surface (#064E3B)
+      final TextTheme themeWithWhiteLabel =
+          HobbiesTypography.createTextTheme(labelColor: Colors.white);
+      expect(themeWithWhiteLabel.labelLarge!.color, Colors.white);
+
+      const Color primaryDarkCta = Color(0xFF064E3B);
+      final double whiteOnDarkCta = _contrastRatio(
+          themeWithWhiteLabel.labelLarge!.color!, primaryDarkCta);
+      expect(whiteOnDarkCta, greaterThanOrEqualTo(7.0));
+    });
+
+    test('onPrimaryColor named parameter remains compatible', () {
+      // 5. The onPrimaryColor named parameter remains compatible
+      final TextTheme legacyTheme =
+          HobbiesTypography.createTextTheme(onPrimaryColor: Colors.white);
+      expect(legacyTheme.labelLarge!.color, Colors.white);
+    });
+
+    test(
         'createTextTheme applies accessible colors without foreign module bleed',
         () {
       final TextTheme theme = HobbiesTypography.createTextTheme();
@@ -131,12 +174,6 @@ void main() {
       final double secondaryContrast =
           _contrastRatio(theme.bodyMedium!.color!, HobbiesColors.background);
       expect(secondaryContrast, greaterThanOrEqualTo(4.5));
-
-      // Button label on primary dark CTA green meets WCAG AAA (>= 7.0:1)
-      const Color primaryDarkCta = Color(0xFF064E3B);
-      final double buttonContrast =
-          _contrastRatio(theme.labelLarge!.color!, primaryDarkCta);
-      expect(buttonContrast, greaterThanOrEqualTo(7.0));
 
       // Does not contain Learning module primary (#2563EB) or heading (#090D2B)
       const Color learningPrimary = Color(0xFF2563EB);
