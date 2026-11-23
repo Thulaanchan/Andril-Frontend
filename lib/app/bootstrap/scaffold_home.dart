@@ -20,13 +20,15 @@ class ScaffoldHome extends StatelessWidget {
                 const SizedBox(height: 20),
                 const Text('Flutter folder structure scaffold',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 const Text('Learning  •  Hobbies  •  Social',
                     textAlign: TextAlign.center),
                 const SizedBox(height: 12),
-                const Text('No authentication, profiles, APIs, or product features '
-                    'are implemented in this starter.',
+                const Text(
+                    'Authentication foundation only. Product screens, '
+                    'profiles, APIs and module access are not implemented.',
                     textAlign: TextAlign.center),
               ],
             ),
