@@ -91,26 +91,83 @@ void main() {
     });
 
     test(
-        '6. ensures accessible button foreground/background contrast (WCAG AA >= 4.5:1)',
+        '6. ensures accessible button foreground/background contrast across all interactive states (WCAG AA >= 4.5:1)',
         () {
       final buttonStyle = theme.elevatedButtonTheme.style;
       expect(buttonStyle, isNotNull);
 
-      final Color? bgColor = buttonStyle?.backgroundColor?.resolve({});
-      final Color? fgColor = buttonStyle?.foregroundColor?.resolve({});
+      // A. Default Enabled State
+      final Color? defaultBg = buttonStyle?.backgroundColor?.resolve({});
+      final Color? defaultFg = buttonStyle?.foregroundColor?.resolve({});
+      expect(defaultBg, HobbiesColors.primary);
+      expect(defaultFg, HobbiesTheme.textDark);
 
-      expect(bgColor, HobbiesColors.primary);
-      expect(fgColor, HobbiesTheme.textDark);
+      // Default state contrast: #0F2530 on #16A34A meets normal-text WCAG AA (>= 4.5:1)
+      final double defaultRatio = _contrastRatio(defaultFg!, defaultBg!);
+      expect(defaultRatio, greaterThanOrEqualTo(4.5));
+      expect(defaultRatio, closeTo(4.80, 0.05));
 
-      // Verify actual contrast ratio meets normal-text WCAG AA (>= 4.5:1)
-      final double ratio = _contrastRatio(fgColor!, bgColor!);
-      expect(ratio, greaterThanOrEqualTo(4.5));
-      expect(ratio, closeTo(4.80, 0.05));
-
-      // Verify that white on #16A34A would fail normal-text AA
-      final double whiteRatio =
+      // Confirm white on #16A34A would fail normal-text AA (~3.30:1 < 4.5:1)
+      final double whiteOnPrimary =
           _contrastRatio(Colors.white, HobbiesColors.primary);
-      expect(whiteRatio, lessThan(4.5));
+      expect(whiteOnPrimary, lessThan(4.5));
+
+      // B. Hovered State
+      const Set<WidgetState> hoveredStates = {WidgetState.hovered};
+      final Color? hoveredBg =
+          buttonStyle?.backgroundColor?.resolve(hoveredStates);
+      final Color? hoveredFg =
+          buttonStyle?.foregroundColor?.resolve(hoveredStates);
+      expect(hoveredBg, const Color(0xFF15803D));
+      expect(hoveredFg, Colors.white);
+
+      // Hovered state contrast: Colors.white on #15803D meets WCAG AA (>= 4.5:1)
+      final double hoveredRatio = _contrastRatio(hoveredFg!, hoveredBg!);
+      expect(hoveredRatio, greaterThanOrEqualTo(4.5));
+      expect(hoveredRatio, closeTo(5.02, 0.05));
+
+      // Confirm dark text #0F2530 on darker green #15803D would fail AA (~3.15:1 < 4.5:1)
+      final double darkOnHovered =
+          _contrastRatio(HobbiesTheme.textDark, hoveredBg);
+      expect(darkOnHovered, lessThan(4.5));
+
+      // C. Focused State
+      const Set<WidgetState> focusedStates = {WidgetState.focused};
+      final Color? focusedBg =
+          buttonStyle?.backgroundColor?.resolve(focusedStates);
+      final Color? focusedFg =
+          buttonStyle?.foregroundColor?.resolve(focusedStates);
+      expect(focusedBg, const Color(0xFF15803D));
+      expect(focusedFg, Colors.white);
+
+      // Focused state contrast: Colors.white on #15803D meets WCAG AA (>= 4.5:1)
+      final double focusedRatio = _contrastRatio(focusedFg!, focusedBg!);
+      expect(focusedRatio, greaterThanOrEqualTo(4.5));
+      expect(focusedRatio, closeTo(5.02, 0.05));
+
+      // D. Simultaneously Hovered and Focused State
+      const Set<WidgetState> hoveredFocusedStates = {
+        WidgetState.hovered,
+        WidgetState.focused,
+      };
+      final Color? hfBg =
+          buttonStyle?.backgroundColor?.resolve(hoveredFocusedStates);
+      final Color? hfFg =
+          buttonStyle?.foregroundColor?.resolve(hoveredFocusedStates);
+      expect(hfBg, const Color(0xFF15803D));
+      expect(hfFg, Colors.white);
+      final double hfRatio = _contrastRatio(hfFg!, hfBg!);
+      expect(hfRatio, greaterThanOrEqualTo(4.5));
+      expect(hfRatio, closeTo(5.02, 0.05));
+
+      // E. Disabled State
+      const Set<WidgetState> disabledStates = {WidgetState.disabled};
+      final Color? disabledBg =
+          buttonStyle?.backgroundColor?.resolve(disabledStates);
+      final Color? disabledFg =
+          buttonStyle?.foregroundColor?.resolve(disabledStates);
+      expect(disabledBg, const Color(0xFFE2E8F0));
+      expect(disabledFg, const Color(0xFF94A3B8));
     });
 
     test('7. configures AppBarTheme to match background canvas', () {

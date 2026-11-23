@@ -90,7 +90,17 @@ abstract final class HobbiesTheme {
             if (states.contains(WidgetState.disabled)) {
               return const Color(0xFF94A3B8);
             }
-            // Accessible dark text #0F2530 (4.80:1 on #16A34A, passing normal-text WCAG AA)
+            // Accessibility state pairing:
+            // - Focused / Hovered background darkens to #15803D. On this darker green,
+            //   white text achieves ~5.02:1 contrast (meeting WCAG AA >= 4.5:1), whereas
+            //   dark text #0F2530 drops to ~3.15:1 (failing normal-text WCAG AA).
+            if (states.contains(WidgetState.focused) ||
+                states.contains(WidgetState.hovered)) {
+              return Colors.white;
+            }
+            // - Default enabled background is approved HobbiesColors.primary (#16A34A).
+            //   On this green, dark text #0F2530 achieves 4.80:1 contrast (meeting WCAG AA >= 4.5:1),
+            //   whereas white text achieves only ~3.30:1 (failing normal-text WCAG AA).
             return textDark;
           }),
           elevation: WidgetStateProperty.resolveWith((states) {
