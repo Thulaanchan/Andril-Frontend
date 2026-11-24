@@ -161,6 +161,25 @@ class HobbiesGalleryScreen extends StatelessWidget {
   /// Whether the upload button is enabled (defaults to false for presentation checkpoint).
   final bool isUploadEnabled;
 
+  /// Whether the upload action is authorized to execute in the current presentation state.
+  ///
+  /// Enforces fail-closed privacy rules: when the gallery is in [HobbiesGalleryStatus.denied],
+  /// [HobbiesGalleryStatus.loading], or [HobbiesGalleryStatus.error], the upload action
+  /// cannot be invoked even if [isUploadEnabled] is true.
+  bool get canUpload =>
+      isUploadEnabled &&
+      (status == HobbiesGalleryStatus.populated ||
+          status == HobbiesGalleryStatus.empty);
+
+  /// Whether the gallery metrics card is authorized to be displayed.
+  ///
+  /// Enforces fail-closed privacy rules: only [HobbiesGalleryStatus.populated] and
+  /// [HobbiesGalleryStatus.empty] states are authorized to display Gallery metrics.
+  /// Denied, loading, and error states must never expose private metrics or item counts.
+  bool get showMetrics =>
+      status == HobbiesGalleryStatus.populated ||
+      status == HobbiesGalleryStatus.empty;
+
   /// Creates a [HobbiesGalleryScreen].
   const HobbiesGalleryScreen({
     super.key,
@@ -268,15 +287,42 @@ class HobbiesGalleryScreen extends StatelessWidget {
     );
   }
 
-  /// Builds the dual metric cards and upload action row with responsive adaptation.
+  /// Builds the dual metric cards and upload action row with responsive adaptation
+  /// and fail-closed privacy protections.
   Widget _buildMetricsAndUploadRow(BuildContext context) {
-    final int totalCount = items.length;
+    // Fail-closed metric counts: Empty state strictly displays zero metrics even if
+    // stale items are supplied. Denied, loading, and error states do not show metrics.
+    final int totalCount =
+        status == HobbiesGalleryStatus.populated ? items.length : 0;
     final int visibleCount =
-        status == HobbiesGalleryStatus.populated ? totalCount : 0;
+        status == HobbiesGalleryStatus.populated ? items.length : 0;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool isCompact = constraints.maxWidth < 420;
+
+        final Widget uploadButton = Tooltip(
+          message: uploadUnavailableNotice,
+          child: SizedBox(
+            width: (isCompact || !showMetrics) ? double.infinity : null,
+            child: ElevatedButton.icon(
+              key: const Key('gallery_upload_button'),
+              onPressed: canUpload ? onUploadPressed : null,
+              icon: const Icon(Icons.cloud_upload_outlined, size: 18.0),
+              label: const Text('Add Media'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14.0,
+                  vertical: 12.0,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        if (!showMetrics) {
+          return uploadButton;
+        }
 
         final Widget metricsCard = Container(
           padding: const EdgeInsets.symmetric(
@@ -350,25 +396,6 @@ class HobbiesGalleryScreen extends StatelessWidget {
           ),
         );
 
-        final Widget uploadButton = Tooltip(
-          message: uploadUnavailableNotice,
-          child: SizedBox(
-            width: isCompact ? double.infinity : null,
-            child: ElevatedButton.icon(
-              key: const Key('gallery_upload_button'),
-              onPressed: isUploadEnabled ? onUploadPressed : null,
-              icon: const Icon(Icons.cloud_upload_outlined, size: 18.0),
-              label: const Text('Add Media'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14.0,
-                  vertical: 12.0,
-                ),
-              ),
-            ),
-          ),
-        );
-
         if (isCompact) {
           return Column(
             children: <Widget>[
@@ -406,7 +433,7 @@ class HobbiesGalleryScreen extends StatelessWidget {
           SliverFillRemaining(
             hasScrollBody: false,
             child: _GalleryEmptyState(
-              onAddMedia: isUploadEnabled ? onUploadPressed : null,
+              onAddMedia: canUpload ? onUploadPressed : null,
             ),
           ),
         ];

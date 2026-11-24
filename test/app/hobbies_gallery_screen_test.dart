@@ -407,4 +407,326 @@ void main() {
       expect(find.textContaining('bearer_token'), findsNothing);
     });
   });
+
+  group('HobbiesGalleryScreen — Privacy State Hardening (M3-CP-02A-R01)', () {
+    // 1. Denied status with a nonempty items list does not display private counts or media information
+    testWidgets(
+        '1. Denied status with a nonempty items list does not display private counts or media information',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.denied,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+          ),
+        ),
+      );
+
+      // Verify no metrics card is displayed
+      expect(find.text('Total Media'), findsNothing);
+      expect(find.text('Visible Media'), findsNothing);
+      expect(find.text('4'), findsNothing);
+
+      // Verify no private item titles, captions, or tags are exposed
+      expect(find.text('Ceramic Glazing Workshop'), findsNothing);
+      expect(find.text('Macro Orchid Bloom'), findsNothing);
+      expect(find.text('Handmade Leather Journal'), findsNothing);
+      expect(find.text('Sourdough Country Loaf'), findsNothing);
+      expect(find.text('Pottery'), findsNothing);
+      expect(find.text('Gardening'), findsNothing);
+
+      // Verify denied UI renders cleanly
+      expect(find.text('Access Denied'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 2. Loading status with retained items does not expose their metadata
+    testWidgets(
+        '2. Loading status with retained items does not expose their metadata',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.loading,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+          ),
+        ),
+      );
+
+      // Verify no metrics card is displayed
+      expect(find.text('Total Media'), findsNothing);
+      expect(find.text('Visible Media'), findsNothing);
+      expect(find.text('4'), findsNothing);
+
+      // Verify no private item metadata is exposed
+      expect(find.text('Ceramic Glazing Workshop'), findsNothing);
+      expect(find.text('Pottery'), findsNothing);
+      expect(find.text('Loading media gallery...'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 3. Error status with retained items does not expose their metadata
+    testWidgets(
+        '3. Error status with retained items does not expose their metadata',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.error,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+          ),
+        ),
+      );
+
+      // Verify no metrics card is displayed
+      expect(find.text('Total Media'), findsNothing);
+      expect(find.text('Visible Media'), findsNothing);
+      expect(find.text('4'), findsNothing);
+
+      // Verify no private item metadata is exposed
+      expect(find.text('Ceramic Glazing Workshop'), findsNothing);
+      expect(find.text('Pottery'), findsNothing);
+      expect(find.text('Unable to Load Media'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 4. Empty status with stale items displays zero metrics
+    testWidgets('4. Empty status with stale items displays zero metrics',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.empty,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+          ),
+        ),
+      );
+
+      // Verify metrics card is displayed but strictly shows 0
+      expect(find.text('Total Media'), findsOneWidget);
+      expect(find.text('Visible Media'), findsOneWidget);
+      expect(find.text('0'), findsNWidgets(2));
+      expect(find.text('4'), findsNothing);
+
+      // Verify no private item content is rendered in grid
+      expect(find.text('Ceramic Glazing Workshop'), findsNothing);
+      expect(find.text('No Hobby Moments Yet'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 5. Populated status still displays correct metrics and media
+    testWidgets('5. Populated status still displays correct metrics and media',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.populated,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+          ),
+        ),
+      );
+
+      // Verify metrics card displays item count (4 total, 4 visible)
+      expect(find.text('Total Media'), findsOneWidget);
+      expect(find.text('Visible Media'), findsOneWidget);
+      expect(find.text('4'), findsNWidgets(2));
+
+      // Verify media items render
+      expect(find.text('Ceramic Glazing Workshop'), findsOneWidget);
+      expect(find.text('Macro Orchid Bloom'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // 6. Upload callback cannot execute while denied
+    testWidgets('6. Upload callback cannot execute while denied',
+        (WidgetTester tester) async {
+      bool uploadInvoked = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.denied,
+            isUploadEnabled: true,
+            onUploadPressed: () => uploadInvoked = true,
+          ),
+        ),
+      );
+
+      final ElevatedButton button = tester.widget<ElevatedButton>(
+        find.byKey(const Key('gallery_upload_button')),
+      );
+      expect(button.onPressed, isNull);
+
+      await tester.tap(find.byKey(const Key('gallery_upload_button')));
+      await tester.pump();
+      expect(uploadInvoked, isFalse);
+    });
+
+    // 7. Upload callback cannot execute while loading
+    testWidgets('7. Upload callback cannot execute while loading',
+        (WidgetTester tester) async {
+      bool uploadInvoked = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.loading,
+            isUploadEnabled: true,
+            onUploadPressed: () => uploadInvoked = true,
+          ),
+        ),
+      );
+
+      final ElevatedButton button = tester.widget<ElevatedButton>(
+        find.byKey(const Key('gallery_upload_button')),
+      );
+      expect(button.onPressed, isNull);
+
+      await tester.tap(find.byKey(const Key('gallery_upload_button')));
+      await tester.pump();
+      expect(uploadInvoked, isFalse);
+    });
+
+    // 8. Upload callback cannot execute while error
+    testWidgets('8. Upload callback cannot execute while error',
+        (WidgetTester tester) async {
+      bool uploadInvoked = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.error,
+            isUploadEnabled: true,
+            onUploadPressed: () => uploadInvoked = true,
+          ),
+        ),
+      );
+
+      final ElevatedButton button = tester.widget<ElevatedButton>(
+        find.byKey(const Key('gallery_upload_button')),
+      );
+      expect(button.onPressed, isNull);
+
+      await tester.tap(find.byKey(const Key('gallery_upload_button')));
+      await tester.pump();
+      expect(uploadInvoked, isFalse);
+    });
+
+    // 9. Authorized presentation states preserve the previous callback contract
+    testWidgets(
+        '9. Authorized presentation states preserve the previous callback contract',
+        (WidgetTester tester) async {
+      bool uploadInvoked = false;
+
+      // Part A: Populated state with upload enabled invokes callback
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.populated,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+            isUploadEnabled: true,
+            onUploadPressed: () => uploadInvoked = true,
+          ),
+        ),
+      );
+
+      final ElevatedButton populatedButton = tester.widget<ElevatedButton>(
+        find.byKey(const Key('gallery_upload_button')),
+      );
+      expect(populatedButton.onPressed, isNotNull);
+      await tester.tap(find.byKey(const Key('gallery_upload_button')));
+      await tester.pump();
+      expect(uploadInvoked, isTrue);
+
+      // Part B: Empty state with upload enabled invokes callback
+      uploadInvoked = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.empty,
+            isUploadEnabled: true,
+            onUploadPressed: () => uploadInvoked = true,
+          ),
+        ),
+      );
+
+      final ElevatedButton emptyButton = tester.widget<ElevatedButton>(
+        find.byKey(const Key('gallery_upload_button')),
+      );
+      expect(emptyButton.onPressed, isNotNull);
+      await tester.tap(find.byKey(const Key('gallery_upload_button')));
+      await tester.pump();
+      expect(uploadInvoked, isTrue);
+
+      // Empty state action button also connects to onUploadPressed
+      uploadInvoked = false;
+      final ElevatedButton emptyAddButton = tester.widget<ElevatedButton>(
+        find.byKey(const Key('gallery_empty_add_button')),
+      );
+      expect(emptyAddButton.onPressed, isNotNull);
+      await tester.tap(find.byKey(const Key('gallery_empty_add_button')));
+      await tester.pump();
+      expect(uploadInvoked, isTrue);
+    });
+
+    // 10. Compact viewport does not overflow after the correction
+    testWidgets('10. Compact viewport does not overflow after the correction',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      // Test denied with retained items
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.denied,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+            isUploadEnabled: true,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+
+      // Test loading with retained items
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.loading,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+            isUploadEnabled: true,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+
+      // Test error with retained items
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.error,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+            isUploadEnabled: true,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+
+      // Test empty with retained items
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HobbiesGalleryScreen(
+            status: HobbiesGalleryStatus.empty,
+            items: HobbiesGalleryMockFixtures.sampleItems,
+            isUploadEnabled: true,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
