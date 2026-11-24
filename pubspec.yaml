@@ -56,6 +56,12 @@ flutter:
   generate: true
   assets:
     - assets/branding/andril_black_logo.png
+    - assets/gifts/
+    - assets/gifts/learning/
+    - assets/gifts/hobbies/
+    - assets/gifts/social/
+    - assets/profile/
+    - assets/stickers/
     - assets/images/learning/profile/welcome_study_desk.webp
     - assets/images/learning/profile/welcome_learner_01.webp
     - assets/images/learning/profile/welcome_learner_02.webp
