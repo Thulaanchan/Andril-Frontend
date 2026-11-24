@@ -20,7 +20,7 @@ void main() {
     final source = FakeSessionSource();
     final controller = SessionController(source);
     var calls = 0;
-    await tester.pumpWidget(AndrilApp(initialize: () async {
+    await tester.pumpWidget(AndrilApp.starterShell(initialize: () async {
       calls++;
       await controller.start();
       return controller;

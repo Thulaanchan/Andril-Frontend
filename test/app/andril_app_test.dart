@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/app/andril_app.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import 'package:andril_mobile/shared_core/onboarding/presentation/screens/onboarding_flow_coordinator.dart';
 
 import '../shared_core/authentication/foundation_fakes.dart';
 
@@ -13,12 +14,26 @@ void main() {
     final source = FakeSessionSource();
     final controller = SessionController(source);
     await controller.start();
-    await tester.pumpWidget(AndrilApp(initialize: () async => controller));
+    await tester.pumpWidget(
+        AndrilApp.starterShell(initialize: () async => controller));
     await tester.pumpAndSettle();
     expect(find.text('Learning  •  Hobbies  •  Social'), findsOneWidget);
     expect(find.text('ANDRIL'), findsOneWidget);
     expect(find.text('Flutter folder structure scaffold'), findsOneWidget);
     expect(controller.moduleHomeAuthorized, false);
+    await tester.pumpWidget(const SizedBox());
+    await source.signals.close();
+  });
+
+  testWidgets(
+      'default AndrilApp unauthenticated flow displays onboarding coordinator',
+      (tester) async {
+    final source = FakeSessionSource();
+    final controller = SessionController(source);
+    await controller.start();
+    await tester.pumpWidget(AndrilApp(initialize: () async => controller));
+    await tester.pump();
+    expect(find.byType(OnboardingFlowCoordinator), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await source.signals.close();
   });
@@ -34,7 +49,8 @@ void main() {
   testWidgets('bootstrap shows loading until initialization completes',
       (tester) async {
     final pending = Completer<SessionController>();
-    await tester.pumpWidget(AndrilApp(initialize: () => pending.future));
+    await tester.pumpWidget(
+        AndrilApp.starterShell(initialize: () => pending.future));
     expect(find.bySemanticsLabel('Restoring authentication'), findsOneWidget);
     final source = FakeSessionSource();
     final controller = SessionController(source);

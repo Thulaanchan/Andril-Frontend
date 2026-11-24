@@ -5,22 +5,34 @@ import '../core/constants/app_config.dart';
 import '../core/network/api_client/andril_api_client.dart';
 import '../core/security/session/session_controller.dart';
 import '../shared_core/account/account_handoff_controller.dart';
+import '../shared_core/onboarding/presentation/screens/onboarding_flow_coordinator.dart';
 import 'bootstrap/scaffold_home.dart';
 import 'dependencies/supabase_bootstrap.dart';
 import 'themes/learning/learning_theme.dart';
 
-/// Hosts the starter scaffold or a caller-supplied router after auth startup.
+/// Hosts the onboarding flow, starter scaffold, or a caller-supplied router after auth startup.
 class AndrilApp extends StatefulWidget {
   const AndrilApp({
     super.key,
     this.routerConfig,
     this.initialize = initializeAuthFoundation,
     this.createHandoff = _createAccountHandoff,
+    this.unauthenticatedHome = const OnboardingFlowCoordinator(),
+  });
+
+  /// Starter shell constructor preserving access to [ScaffoldHome] for technical scaffolding verification.
+  const AndrilApp.starterShell({
+    super.key,
+    this.routerConfig,
+    this.initialize = initializeAuthFoundation,
+    this.createHandoff = _createAccountHandoff,
+    this.unauthenticatedHome = const ScaffoldHome(),
   });
 
   final RouterConfig<Object>? routerConfig;
   final Future<SessionController> Function() initialize;
   final AccountHandoffController? Function(SessionController) createHandoff;
+  final Widget unauthenticatedHome;
 
   @override
   State<AndrilApp> createState() => _AndrilAppState();
@@ -96,7 +108,7 @@ class _AndrilAppState extends State<AndrilApp> {
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF364B66)),
           useMaterial3: true,
         ),
-        home: const ScaffoldHome(),
+        home: widget.unauthenticatedHome,
         builder: _gate,
       );
     } else {
