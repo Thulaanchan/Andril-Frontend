@@ -54,6 +54,9 @@ void main() {
       await tester.pumpWidget(_buildRouterApp(router));
       await tester.pumpAndSettle();
 
+      expect(
+          router.routeInformationProvider.value.uri.path, '/learning/welcome');
+      expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
       expect(find.byType(LearningWelcomeScreen), findsOneWidget);
     });
 
@@ -82,6 +85,9 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path, path);
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
         expect(find.text(title), findsOneWidget);
       }
     });
@@ -97,6 +103,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Protected route /learning/home must fail closed and redirect to Welcome
+      expect(
+          router.routeInformationProvider.value.uri.path, '/learning/welcome');
+      expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
       expect(find.byType(LearningWelcomeScreen), findsOneWidget);
       expect(find.text('Learning Home'), findsNothing);
     });
@@ -117,6 +126,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Authenticated but non-activated identity must redirect to access-denied
+      expect(router.routeInformationProvider.value.uri.path,
+          '/learning/access-denied');
+      expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
       expect(find.text('Access Restricted'), findsOneWidget);
       expect(find.text('Learning Home'), findsNothing);
     });
@@ -135,6 +147,9 @@ void main() {
       await tester.pumpWidget(_buildRouterApp(router));
       await tester.pumpAndSettle();
 
+      expect(
+          router.routeInformationProvider.value.uri.path, '/learning/welcome');
+      expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
       expect(find.byType(LearningWelcomeScreen), findsOneWidget);
       expect(find.text('Learning Classrooms'), findsNothing);
     });
@@ -153,18 +168,27 @@ void main() {
       await tester.pumpWidget(_buildRouterApp(router));
       await tester.pumpAndSettle();
 
+      expect(router.routeInformationProvider.value.uri.path, '/learning/home');
+      expect(find.byType(LearningWelcomeScreen), findsNothing);
+      expect(find.text('Access Restricted'), findsNothing);
       expect(find.text('Learning Home'), findsOneWidget);
 
       // Tap on Classrooms tab
       await tester.tap(find.text('Classrooms'));
       await tester.pumpAndSettle();
 
+      expect(router.routeInformationProvider.value.uri.path,
+          '/learning/classrooms');
+      expect(router.routeInformationProvider.value.uri.path, '/learning/classrooms');
       expect(find.text('Learning Classrooms'), findsOneWidget);
 
       // Tap on Explore tab
       await tester.tap(find.text('Explore'));
       await tester.pumpAndSettle();
 
+      expect(
+          router.routeInformationProvider.value.uri.path, '/learning/explore');
+      expect(router.routeInformationProvider.value.uri.path, '/learning/explore');
       expect(find.text('Learning Explore'), findsOneWidget);
     });
 
@@ -204,6 +228,7 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path, path);
         expect(tester.takeException(), isNull);
       }
     });
@@ -223,6 +248,7 @@ void main() {
       await tester.pumpWidget(_buildRouterApp(router));
       await tester.pumpAndSettle();
 
+      expect(router.routeInformationProvider.value.uri.path, '/learning/chat');
       expect(find.text('Learning Chat'), findsOneWidget);
       expect(
         find.text(
@@ -248,6 +274,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Non-learning route redirected safely to welcome
+      expect(
+          router.routeInformationProvider.value.uri.path, '/learning/welcome');
+      expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
       expect(find.byType(LearningWelcomeScreen), findsOneWidget);
     });
 
@@ -270,6 +299,9 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -297,6 +329,9 @@ void main() {
           await tester.pumpWidget(_buildRouterApp(router));
           await tester.pumpAndSettle();
 
+          expect(router.routeInformationProvider.value.uri.path,
+              '/learning/welcome');
+          expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
           expect(find.byType(LearningWelcomeScreen), findsOneWidget);
           expect(find.text(title), findsNothing);
         }
@@ -319,7 +354,8 @@ void main() {
 
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
 
-        final continueButton = find.widgetWithText(ElevatedButton, 'Continue');
+        final continueButton =
+            find.widgetWithText(ElevatedButton, 'Continue');
         expect(continueButton, findsOneWidget);
 
         await tester.ensureVisible(continueButton);
@@ -330,6 +366,9 @@ void main() {
         await tester.tap(continueButton.hitTestable());
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/access-denied');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
         expect(find.text('Access Restricted'), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -352,6 +391,9 @@ void main() {
         router.go('/learning/home');
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -376,6 +418,9 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/access-denied');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
         expect(find.text('Access Restricted'), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -403,6 +448,9 @@ void main() {
           await tester.pumpWidget(_buildRouterApp(router));
           await tester.pumpAndSettle();
 
+          expect(router.routeInformationProvider.value.uri.path,
+              '/learning/access-denied');
+          expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
           expect(find.text('Access Restricted'), findsOneWidget);
           expect(find.text(title), findsNothing);
         }
@@ -425,7 +473,8 @@ void main() {
 
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
 
-        final continueButton = find.widgetWithText(ElevatedButton, 'Continue');
+        final continueButton =
+            find.widgetWithText(ElevatedButton, 'Continue');
         expect(continueButton, findsOneWidget);
 
         await tester.ensureVisible(continueButton);
@@ -436,6 +485,9 @@ void main() {
         await tester.tap(continueButton.hitTestable());
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/access-denied');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
         expect(find.text('Access Restricted'), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -458,6 +510,9 @@ void main() {
         router.go('/learning/explore');
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/access-denied');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
         expect(find.text('Access Restricted'), findsOneWidget);
         expect(find.text('Learning Explore'), findsNothing);
       });
@@ -483,6 +538,9 @@ void main() {
         await tester.pumpAndSettle();
 
         // Must fail closed because identity is unauthenticated
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -502,6 +560,9 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Classrooms'), findsNothing);
       });
@@ -523,7 +584,8 @@ void main() {
 
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
 
-        final continueButton = find.widgetWithText(ElevatedButton, 'Continue');
+        final continueButton =
+            find.widgetWithText(ElevatedButton, 'Continue');
         expect(continueButton, findsOneWidget);
 
         await tester.ensureVisible(continueButton);
@@ -534,6 +596,9 @@ void main() {
         await tester.tap(continueButton.hitTestable());
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/access-denied');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
         expect(find.text('Access Restricted'), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -560,7 +625,8 @@ void main() {
 
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
 
-        final continueButton = find.widgetWithText(ElevatedButton, 'Continue');
+        final continueButton =
+            find.widgetWithText(ElevatedButton, 'Continue');
         expect(continueButton, findsOneWidget);
 
         await tester.ensureVisible(continueButton);
@@ -571,9 +637,14 @@ void main() {
         await tester.tap(continueButton.hitTestable());
         await tester.pumpAndSettle();
 
-        expect(find.text('Learning Home'), findsOneWidget);
-        expect(find.text('Access Restricted'), findsNothing);
+        expect(
+            router.routeInformationProvider.value.uri.path, '/learning/home');
         expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
+        expect(router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
+        expect(find.text('Learning Home'), findsOneWidget);
       });
 
       testWidgets(
@@ -600,9 +671,10 @@ void main() {
           await tester.pumpWidget(_buildRouterApp(router));
           await tester.pumpAndSettle();
 
-          expect(find.text(title), findsOneWidget);
+          expect(router.routeInformationProvider.value.uri.path, path);
           expect(find.byType(LearningWelcomeScreen), findsNothing);
           expect(find.text('Access Restricted'), findsNothing);
+          expect(find.text(title), findsOneWidget);
         }
       });
 
@@ -621,19 +693,27 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(
+            router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
+        expect(router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
         expect(find.text('Learning Home'), findsOneWidget);
 
         final tabs = [
-          ('Classrooms', 'Learning Classrooms'),
-          ('Explore', 'Learning Explore'),
-          ('Chat', 'Learning Chat'),
-          ('Profile', 'Learning Profile'),
-          ('Home', 'Learning Home'),
+          ('Classrooms', '/learning/classrooms', 'Learning Classrooms'),
+          ('Explore', '/learning/explore', 'Learning Explore'),
+          ('Chat', '/learning/chat', 'Learning Chat'),
+          ('Profile', '/learning/profile', 'Learning Profile'),
+          ('Home', '/learning/home', 'Learning Home'),
         ];
 
-        for (final (tabLabel, expectedTitle) in tabs) {
+        for (final (tabLabel, expectedPath, expectedTitle) in tabs) {
           await tester.tap(find.text(tabLabel));
           await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, expectedPath);
           expect(find.text(expectedTitle), findsOneWidget);
         }
       });
@@ -658,6 +738,9 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -677,6 +760,9 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/access-denied');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
         expect(find.text('Access Restricted'), findsOneWidget);
         expect(find.text('Learning Profile'), findsNothing);
       });
@@ -699,6 +785,9 @@ void main() {
         router.go('/learning/chat');
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Chat'), findsNothing);
       });
@@ -708,8 +797,7 @@ void main() {
     // TEST GROUP 6: PRODUCTION FAIL-CLOSED DEFAULTS
     // -------------------------------------------------------------------------
     group('Test Group 6 - Production Fail-Closed Defaults', () {
-      test(
-          'TEST-03H2B-PROD-01: ProductionLearningAccessPolicy default instance has false for both flags',
+      test('TEST-03H2B-PROD-01: ProductionLearningAccessPolicy default instance has false for both flags',
           () {
         const policy = ProductionLearningAccessPolicy();
         expect(policy.isAuthenticated, isFalse);
@@ -726,6 +814,9 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -740,6 +831,9 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Profile'), findsNothing);
       });
@@ -756,7 +850,8 @@ void main() {
 
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
 
-        final continueButton = find.widgetWithText(ElevatedButton, 'Continue');
+        final continueButton =
+            find.widgetWithText(ElevatedButton, 'Continue');
         expect(continueButton, findsOneWidget);
 
         await tester.ensureVisible(continueButton);
@@ -767,6 +862,9 @@ void main() {
         await tester.tap(continueButton.hitTestable());
         await tester.pumpAndSettle();
 
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/access-denied');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
         expect(find.text('Access Restricted'), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
@@ -791,6 +889,13 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(
+            router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
+        expect(router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
         expect(find.text('Learning Home'), findsOneWidget);
 
         // Identity session revoked
@@ -801,6 +906,9 @@ void main() {
         await tester.pumpAndSettle();
 
         // Must fail closed to Welcome screen
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Classrooms'), findsNothing);
       });
@@ -820,6 +928,13 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(
+            router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
+        expect(router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
         expect(find.text('Learning Home'), findsOneWidget);
 
         // Module deactivation
@@ -830,6 +945,9 @@ void main() {
         await tester.pumpAndSettle();
 
         // Must redirect to Access Restricted
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/access-denied');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/access-denied');
         expect(find.text('Access Restricted'), findsOneWidget);
         expect(find.text('Learning Classrooms'), findsNothing);
       });
@@ -849,6 +967,13 @@ void main() {
         await tester.pumpWidget(_buildRouterApp(router));
         await tester.pumpAndSettle();
 
+        expect(
+            router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
+        expect(router.routeInformationProvider.value.uri.path, '/learning/home');
+        expect(find.byType(LearningWelcomeScreen), findsNothing);
+        expect(find.text('Access Restricted'), findsNothing);
         expect(find.text('Learning Home'), findsOneWidget);
 
         // Revoke authentication while currently mounted on protected route
@@ -857,6 +982,9 @@ void main() {
         await tester.pumpAndSettle();
 
         // Refresh triggers re-evaluation, failing closed to Welcome
+        expect(router.routeInformationProvider.value.uri.path,
+            '/learning/welcome');
+        expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
         expect(find.text('Learning Home'), findsNothing);
       });
