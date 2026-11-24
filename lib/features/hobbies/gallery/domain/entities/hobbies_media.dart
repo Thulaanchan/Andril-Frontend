@@ -10,6 +10,7 @@
 /// - Offline presentation-aligned domain model; does not assume permanently public URLs or storage-specific logic.
 /// - Zero external packages, HTTP, or Flutter UI/widget dependencies.
 /// - Diagnostic [toString] emits only class-level identification to prevent accidental privacy leakage.
+/// - Contradiction exceptions avoid embedding private media attributes in exception payloads or messages.
 class HobbiesMedia {
   /// Unique identifier for the media item.
   final String id;
@@ -47,7 +48,8 @@ class HobbiesMedia {
   /// - Omitting both preserves the existing value.
   ///
   /// Throws an [ArgumentError] if a replacement value and a clear flag are provided
-  /// simultaneously for the same field.
+  /// simultaneously for the same field. To prevent privacy leakage, the exception
+  /// identifies the parameter name without storing or embedding the private value.
   HobbiesMedia copyWith({
     String? id,
     String? title,
@@ -61,31 +63,27 @@ class HobbiesMedia {
     bool clearCreatedAt = false,
   }) {
     if (caption != null && clearCaption) {
-      throw ArgumentError.value(
-        caption,
-        'caption',
+      throw ArgumentError(
         'Cannot provide a new caption and set clearCaption to true simultaneously.',
+        'caption',
       );
     }
     if (mediaUrl != null && clearMediaUrl) {
-      throw ArgumentError.value(
-        mediaUrl,
-        'mediaUrl',
+      throw ArgumentError(
         'Cannot provide a new mediaUrl and set clearMediaUrl to true simultaneously.',
+        'mediaUrl',
       );
     }
     if (hobbyTag != null && clearHobbyTag) {
-      throw ArgumentError.value(
-        hobbyTag,
-        'hobbyTag',
+      throw ArgumentError(
         'Cannot provide a new hobbyTag and set clearHobbyTag to true simultaneously.',
+        'hobbyTag',
       );
     }
     if (createdAt != null && clearCreatedAt) {
-      throw ArgumentError.value(
-        createdAt,
-        'createdAt',
+      throw ArgumentError(
         'Cannot provide a new createdAt and set clearCreatedAt to true simultaneously.',
+        'createdAt',
       );
     }
 

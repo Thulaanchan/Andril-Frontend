@@ -273,7 +273,6 @@ void main() {
     });
 
     test('8. Contradictory replacement and clearing rejected', () {
-      // Contradictory caption
       expect(
         () => initialMedia.copyWith(
           caption: 'Contradiction',
@@ -282,7 +281,6 @@ void main() {
         throwsA(isA<ArgumentError>()),
       );
 
-      // Contradictory mediaUrl
       expect(
         () => initialMedia.copyWith(
           mediaUrl: 'https://storage.test/contradiction.jpg',
@@ -291,7 +289,6 @@ void main() {
         throwsA(isA<ArgumentError>()),
       );
 
-      // Contradictory hobbyTag
       expect(
         () => initialMedia.copyWith(
           hobbyTag: 'Tag',
@@ -300,7 +297,6 @@ void main() {
         throwsA(isA<ArgumentError>()),
       );
 
-      // Contradictory createdAt
       expect(
         () => initialMedia.copyWith(
           createdAt: DateTime.now(),
@@ -370,6 +366,218 @@ void main() {
         expect(clearedCaption.caption, isNull);
         expect(clearedCaption.title, equals(fixture.title));
       }
+    });
+  });
+
+  group('HobbiesMedia Exception Privacy Hardening (M3-CP-02C-01-R02)', () {
+    const sentinelCaption = 'SECRET_CONFIDENTIAL_CAPTION_98765';
+    const sentinelMediaUrl =
+        'https://storage.private.test/vault/secret_file_12345.jpg';
+    const sentinelHobbyTag = 'SECRET_STEALTH_TAG_777';
+    final sentinelCreatedAt = DateTime(2026, 12, 31, 23, 59, 59, 999);
+
+    const baseMedia = HobbiesMedia(
+      id: 'media-privacy-guard-01',
+      title: 'Private Craft Prototype',
+      caption: 'Initial private note.',
+      mediaUrl: 'https://storage.test/base.jpg',
+      hobbyTag: 'Woodworking',
+    );
+
+    test('1. Caption contradiction throws without exposing the caption', () {
+      try {
+        baseMedia.copyWith(
+          caption: sentinelCaption,
+          clearCaption: true,
+        );
+        fail('Expected ArgumentError was not thrown');
+      } on ArgumentError catch (err) {
+        expect(err.name, equals('caption'));
+        expect(err.invalidValue, isNull);
+        expect(err.message, contains('caption'));
+        expect(err.message.toString().contains(sentinelCaption), isFalse);
+        expect(err.toString().contains(sentinelCaption), isFalse);
+      }
+    });
+
+    test('2. Media URL contradiction throws without exposing the URL', () {
+      try {
+        baseMedia.copyWith(
+          mediaUrl: sentinelMediaUrl,
+          clearMediaUrl: true,
+        );
+        fail('Expected ArgumentError was not thrown');
+      } on ArgumentError catch (err) {
+        expect(err.name, equals('mediaUrl'));
+        expect(err.invalidValue, isNull);
+        expect(err.message, contains('mediaUrl'));
+        expect(err.message.toString().contains(sentinelMediaUrl), isFalse);
+        expect(err.toString().contains(sentinelMediaUrl), isFalse);
+      }
+    });
+
+    test('3. Hobby tag contradiction throws without exposing the tag', () {
+      try {
+        baseMedia.copyWith(
+          hobbyTag: sentinelHobbyTag,
+          clearHobbyTag: true,
+        );
+        fail('Expected ArgumentError was not thrown');
+      } on ArgumentError catch (err) {
+        expect(err.name, equals('hobbyTag'));
+        expect(err.invalidValue, isNull);
+        expect(err.message, contains('hobbyTag'));
+        expect(err.message.toString().contains(sentinelHobbyTag), isFalse);
+        expect(err.toString().contains(sentinelHobbyTag), isFalse);
+      }
+    });
+
+    test('4. Timestamp contradiction throws without exposing the timestamp',
+        () {
+      try {
+        baseMedia.copyWith(
+          createdAt: sentinelCreatedAt,
+          clearCreatedAt: true,
+        );
+        fail('Expected ArgumentError was not thrown');
+      } on ArgumentError catch (err) {
+        expect(err.name, equals('createdAt'));
+        expect(err.invalidValue, isNull);
+        expect(err.message, contains('createdAt'));
+        expect(err.message.toString().contains('2026-12-31'), isFalse);
+        expect(err.toString().contains('2026-12-31'), isFalse);
+        expect(err.toString().contains('23:59:59'), isFalse);
+      }
+    });
+
+    test('5. Exception messages retain safe parameter identification', () {
+      final guards = <String, ArgumentError>{
+        'caption': () {
+          try {
+            baseMedia.copyWith(caption: 'test', clearCaption: true);
+            throw StateError('unreachable');
+          } on ArgumentError catch (e) {
+            return e;
+          }
+        }(),
+        'mediaUrl': () {
+          try {
+            baseMedia.copyWith(mediaUrl: 'test', clearMediaUrl: true);
+            throw StateError('unreachable');
+          } on ArgumentError catch (e) {
+            return e;
+          }
+        }(),
+        'hobbyTag': () {
+          try {
+            baseMedia.copyWith(hobbyTag: 'test', clearHobbyTag: true);
+            throw StateError('unreachable');
+          } on ArgumentError catch (e) {
+            return e;
+          }
+        }(),
+        'createdAt': () {
+          try {
+            baseMedia.copyWith(createdAt: DateTime.now(), clearCreatedAt: true);
+            throw StateError('unreachable');
+          } on ArgumentError catch (e) {
+            return e;
+          }
+        }(),
+      };
+
+      for (final entry in guards.entries) {
+        expect(entry.value.name, equals(entry.key));
+        expect(entry.value.message.toString(), contains(entry.key));
+        expect(entry.value.toString(), contains('(${entry.key})'));
+      }
+    });
+
+    test('6. ArgumentError.invalidValue does not retain the private payload',
+        () {
+      try {
+        baseMedia.copyWith(caption: sentinelCaption, clearCaption: true);
+      } on ArgumentError catch (err) {
+        expect(err.invalidValue, isNull);
+      }
+
+      try {
+        baseMedia.copyWith(mediaUrl: sentinelMediaUrl, clearMediaUrl: true);
+      } on ArgumentError catch (err) {
+        expect(err.invalidValue, isNull);
+      }
+
+      try {
+        baseMedia.copyWith(hobbyTag: sentinelHobbyTag, clearHobbyTag: true);
+      } on ArgumentError catch (err) {
+        expect(err.invalidValue, isNull);
+      }
+
+      try {
+        baseMedia.copyWith(createdAt: sentinelCreatedAt, clearCreatedAt: true);
+      } on ArgumentError catch (err) {
+        expect(err.invalidValue, isNull);
+      }
+    });
+
+    test('7. Clearing optional fields still works', () {
+      final cleared = baseMedia.copyWith(
+        clearCaption: true,
+        clearMediaUrl: true,
+        clearHobbyTag: true,
+        clearCreatedAt: true,
+      );
+
+      expect(cleared.caption, isNull);
+      expect(cleared.mediaUrl, isNull);
+      expect(cleared.hobbyTag, isNull);
+      expect(cleared.createdAt, isNull);
+      expect(cleared.id, equals(baseMedia.id));
+      expect(cleared.title, equals(baseMedia.title));
+    });
+
+    test('8. Replacing optional fields still works', () {
+      final updated = baseMedia.copyWith(
+        caption: 'Public replaced caption',
+        mediaUrl: 'https://storage.test/public_replaced.jpg',
+        hobbyTag: 'Sculpting',
+        createdAt: DateTime(2026, 11, 24, 13, 0, 0),
+      );
+
+      expect(updated.caption, equals('Public replaced caption'));
+      expect(
+          updated.mediaUrl, equals('https://storage.test/public_replaced.jpg'));
+      expect(updated.hobbyTag, equals('Sculpting'));
+      expect(updated.createdAt, equals(DateTime(2026, 11, 24, 13, 0, 0)));
+    });
+
+    test('9. HobbiesMedia.toString() remains privacy-safe', () {
+      expect(baseMedia.toString(), equals('HobbiesMedia'));
+      expect(baseMedia.toString().contains(baseMedia.id), isFalse);
+      expect(baseMedia.toString().contains(baseMedia.title), isFalse);
+    });
+
+    test(
+        '10. Equality, hashCode, immutability and constructor compatibility are unchanged',
+        () {
+      const constMedia1 = HobbiesMedia(
+        id: 'comp-1',
+        title: 'Compatibility Check',
+        caption: 'Note',
+      );
+      const constMedia2 = HobbiesMedia(
+        id: 'comp-1',
+        title: 'Compatibility Check',
+        caption: 'Note',
+      );
+
+      expect(identical(constMedia1, constMedia2), isTrue);
+      expect(constMedia1 == constMedia2, isTrue);
+      expect(constMedia1.hashCode, equals(constMedia2.hashCode));
+
+      final nonConstCopy = constMedia1.copyWith();
+      expect(nonConstCopy, equals(constMedia1));
+      expect(nonConstCopy.hashCode, equals(constMedia1.hashCode));
     });
   });
 }
