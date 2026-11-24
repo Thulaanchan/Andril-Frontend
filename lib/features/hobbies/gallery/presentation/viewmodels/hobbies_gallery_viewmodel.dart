@@ -7,14 +7,14 @@ import '../../domain/usecases/get_hobbies_gallery_media_usecase.dart';
 ///
 /// Thrown only by explicit authorization checks or session evaluators,
 /// never inferred from arbitrary exception message strings.
+///
+/// Uses a fixed diagnostic representation without caller-controlled messages
+/// to prevent private metadata leakage in diagnostics or logs.
 class HobbiesGalleryAccessDeniedException implements Exception {
-  final String message;
-  const HobbiesGalleryAccessDeniedException([
-    this.message = 'Access to Hobbies Gallery was denied.',
-  ]);
+  const HobbiesGalleryAccessDeniedException();
 
   @override
-  String toString() => 'HobbiesGalleryAccessDeniedException: $message';
+  String toString() => 'HobbiesGalleryAccessDeniedException';
 }
 
 /// ViewModel coordinating state management and presentation mapping for Hobbies Gallery.
@@ -29,6 +29,9 @@ class HobbiesGalleryAccessDeniedException implements Exception {
 ///   [HobbiesGalleryStatus.denied], or [HobbiesGalleryStatus.error] states.
 /// - Fail-Closed Revocation: Once an authoritative denial signal is received, the ViewModel
 ///   fails closed, clears all private media, and blocks further [load] attempts.
+/// - Denial Priority: An authoritative denial revokes access even if returned by an older
+///   asynchronous request, immediately clearing existing data and preventing newer in-flight
+///   responses from restoring media.
 /// - Defending Collections: Exposes media items through unmodifiable views to prevent external mutation.
 /// - Race Condition Protection: Uses request tracking to prevent out-of-order asynchronous
 ///   completions from overwriting newer state or restoring revoked media.
@@ -88,7 +91,8 @@ class HobbiesGalleryViewModel extends ChangeNotifier {
   /// - Sets [HobbiesGalleryStatus.empty] when zero items are retrieved.
   /// - Sets [HobbiesGalleryStatus.populated] when one or more items are retrieved.
   /// - Sets [HobbiesGalleryStatus.error] on recoverable failures.
-  /// - Ignores out-of-order responses if a newer request has started.
+  /// - Revokes access immediately on [HobbiesGalleryAccessDeniedException], even if from an older request.
+  /// - Ignores out-of-order ordinary responses if a newer request has started.
   /// - Blocks execution if access has been revoked.
   Future<void> load() async {
     if (_isDisposed || _isRevoked) {
@@ -127,17 +131,24 @@ class HobbiesGalleryViewModel extends ChangeNotifier {
           : HobbiesGalleryStatus.populated;
       _notifySafely();
     } catch (e) {
-      if (_isDisposed || _isRevoked || requestId != _activeRequestId) {
+      if (_isDisposed || _isRevoked) {
+        return;
+      }
+
+      // Authoritative access denial must revoke access immediately,
+      // even if the request that returned it is older than the newest in-flight request.
+      if (e is HobbiesGalleryAccessDeniedException) {
+        handleAccessDenied();
+        return;
+      }
+
+      // Stale ordinary failures do not overwrite newer requests
+      if (requestId != _activeRequestId) {
         return;
       }
 
       _items = const [];
-      if (e is HobbiesGalleryAccessDeniedException) {
-        _isRevoked = true;
-        _status = HobbiesGalleryStatus.denied;
-      } else {
-        _status = HobbiesGalleryStatus.error;
-      }
+      _status = HobbiesGalleryStatus.error;
       _notifySafely();
     }
   }

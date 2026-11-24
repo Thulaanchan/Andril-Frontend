@@ -34,7 +34,7 @@ class _FakeHobbiesGalleryRepository implements HobbiesGalleryRepository {
 }
 
 void main() {
-  group('HobbiesGalleryViewModel Unit Tests (M3-CP-02C-04)', () {
+  group('HobbiesGalleryViewModel Unit Tests (M3-CP-02C-04-R01)', () {
     final testDate = DateTime(2026, 11, 24, 13, 0, 0);
 
     final sampleMediaItems = <HobbiesMedia>[
@@ -330,12 +330,14 @@ void main() {
       expect(viewModel.items, isEmpty);
     });
 
-    test('18. No arbitrary identity or module arguments', () {
+    test('18. No arbitrary identity or module arguments (reliably awaited)',
+        () async {
       final mockUseCase = _MockGetHobbiesGalleryMediaUseCase();
       final viewModel = HobbiesGalleryViewModel(mockUseCase);
 
-      // Verify zero-argument load() signature
-      expect(() => viewModel.load(), returnsNormally);
+      // Verify zero-argument load() signature and reliably await its execution
+      await expectLater(viewModel.load(), completes);
+      expect(viewModel.status, equals(HobbiesGalleryStatus.empty));
     });
 
     test('19. No sensitive metadata included in errors', () async {
@@ -368,6 +370,147 @@ void main() {
 
       expect(screen.status, equals(HobbiesGalleryStatus.populated));
       expect(screen.items.length, equals(2));
+    });
+
+    test(
+        '21. Single request returning typed denial transitions to denied and revokes access',
+        () async {
+      final mockUseCase = _MockGetHobbiesGalleryMediaUseCase()
+        ..handler =
+            () => Future.error(const HobbiesGalleryAccessDeniedException());
+      final viewModel = HobbiesGalleryViewModel(mockUseCase);
+
+      await viewModel.load();
+
+      expect(viewModel.status, equals(HobbiesGalleryStatus.denied));
+      expect(viewModel.items, isEmpty);
+      expect(viewModel.isRevoked, isTrue);
+    });
+
+    test(
+        '22. An older request\'s denial revokes access even while a newer request is pending',
+        () async {
+      final completer1 = Completer<List<HobbiesMedia>>();
+      final completer2 = Completer<List<HobbiesMedia>>();
+
+      final mockUseCase = _MockGetHobbiesGalleryMediaUseCase();
+      final viewModel = HobbiesGalleryViewModel(mockUseCase);
+
+      // Start Request 1 (older)
+      mockUseCase.handler = () => completer1.future;
+      final future1 = viewModel.load();
+
+      // Start Request 2 (newer)
+      mockUseCase.handler = () => completer2.future;
+      final future2 = viewModel.load();
+
+      // Complete Request 1 with explicit denial while Request 2 is still pending
+      completer1.completeError(const HobbiesGalleryAccessDeniedException());
+      await future1;
+
+      expect(viewModel.status, equals(HobbiesGalleryStatus.denied));
+      expect(viewModel.isRevoked, isTrue);
+      expect(viewModel.items, isEmpty);
+
+      // Now complete Request 2 with media
+      completer2.complete(sampleMediaItems);
+      await future2;
+
+      // Newer response MUST NOT restore media or overwrite denial
+      expect(viewModel.status, equals(HobbiesGalleryStatus.denied));
+      expect(viewModel.isRevoked, isTrue);
+      expect(viewModel.items, isEmpty);
+    });
+
+    test('23. An older denial clears data already returned by a newer request',
+        () async {
+      final completer1 = Completer<List<HobbiesMedia>>();
+      final completer2 = Completer<List<HobbiesMedia>>();
+
+      final mockUseCase = _MockGetHobbiesGalleryMediaUseCase();
+      final viewModel = HobbiesGalleryViewModel(mockUseCase);
+
+      // Start Request 1 (older)
+      mockUseCase.handler = () => completer1.future;
+      final future1 = viewModel.load();
+
+      // Start Request 2 (newer)
+      mockUseCase.handler = () => completer2.future;
+      final future2 = viewModel.load();
+
+      // Request 2 completes first with media
+      completer2.complete(sampleMediaItems);
+      await future2;
+
+      expect(viewModel.status, equals(HobbiesGalleryStatus.populated));
+      expect(viewModel.items.length, equals(2));
+
+      // Now older Request 1 returns late with authoritative denial
+      completer1.completeError(const HobbiesGalleryAccessDeniedException());
+      await future1;
+
+      // Older denial MUST clear already-displayed data and transition to denied!
+      expect(viewModel.status, equals(HobbiesGalleryStatus.denied));
+      expect(viewModel.isRevoked, isTrue);
+      expect(viewModel.items, isEmpty);
+    });
+
+    test(
+        '24. Outdated generic errors do not overwrite newer successful results',
+        () async {
+      final completer1 = Completer<List<HobbiesMedia>>();
+      final completer2 = Completer<List<HobbiesMedia>>();
+
+      final mockUseCase = _MockGetHobbiesGalleryMediaUseCase();
+      final viewModel = HobbiesGalleryViewModel(mockUseCase);
+
+      // Start Request 1
+      mockUseCase.handler = () => completer1.future;
+      final future1 = viewModel.load();
+
+      // Start Request 2
+      mockUseCase.handler = () => completer2.future;
+      final future2 = viewModel.load();
+
+      // Request 2 completes successfully with media
+      completer2.complete(sampleMediaItems);
+      await future2;
+
+      expect(viewModel.status, equals(HobbiesGalleryStatus.populated));
+      expect(viewModel.items.length, equals(2));
+
+      // Now Request 1 completes late with a generic error
+      completer1.completeError(Exception('Timeout on older request'));
+      await future1;
+
+      // Generic error from older request MUST NOT overwrite newer success
+      expect(viewModel.status, equals(HobbiesGalleryStatus.populated));
+      expect(viewModel.items.length, equals(2));
+    });
+
+    test('25. Denial diagnostics do not reveal private metadata', () {
+      const exception = HobbiesGalleryAccessDeniedException();
+      final diagnostic = exception.toString();
+
+      expect(diagnostic, equals('HobbiesGalleryAccessDeniedException'));
+      expect(diagnostic.contains('http'), isFalse);
+      expect(diagnostic.contains('id'), isFalse);
+      expect(diagnostic.contains('key'), isFalse);
+    });
+
+    test(
+        '26. No arbitrary error message is interpreted as authorization denial',
+        () async {
+      final mockUseCase = _MockGetHobbiesGalleryMediaUseCase()
+        ..handler = () =>
+            Future.error(Exception('403 Forbidden: access denied by firewall'));
+      final viewModel = HobbiesGalleryViewModel(mockUseCase);
+
+      await viewModel.load();
+
+      // Must be generic error, NEVER inferred as denied without typed signal!
+      expect(viewModel.status, equals(HobbiesGalleryStatus.error));
+      expect(viewModel.isRevoked, isFalse);
     });
   });
 }
