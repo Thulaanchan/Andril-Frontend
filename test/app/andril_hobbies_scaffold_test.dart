@@ -1,9 +1,36 @@
+import 'dart:math' as math;
+
 import 'package:andril_mobile/app/themes/hobbies/hobbies_colors.dart';
 import 'package:andril_mobile/app/themes/hobbies/hobbies_theme.dart';
 import 'package:andril_mobile/app/themes/hobbies/painters/teal_wave_painter.dart';
 import 'package:andril_mobile/features/hobbies/presentation/widgets/andril_hobbies_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// Calculates the WCAG 2.1 relative luminance of a [Color].
+double _relativeLuminance(Color color) {
+  double channelLuminance(int channelValue) {
+    final double sRGB = channelValue / 255.0;
+    return sRGB <= 0.04045
+        ? sRGB / 12.92
+        : math.pow((sRGB + 0.055) / 1.055, 2.4).toDouble();
+  }
+
+  final double r = channelLuminance((color.r * 255).round());
+  final double g = channelLuminance((color.g * 255).round());
+  final double b = channelLuminance((color.b * 255).round());
+
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/// Calculates the contrast ratio between two [Color] instances.
+double _contrastRatio(Color c1, Color c2) {
+  final double lum1 = _relativeLuminance(c1);
+  final double lum2 = _relativeLuminance(c2);
+  final double lighter = math.max(lum1, lum2);
+  final double darker = math.min(lum1, lum2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
 
 void main() {
   group('AndrilHobbiesScaffold Rendering & Structure', () {
@@ -74,23 +101,64 @@ void main() {
     });
   });
 
-  group('AndrilHobbiesScaffold Header, Title & Actions', () {
-    testWidgets('5. AppBar title is displayed when provided',
+  group('AndrilHobbiesScaffold Header Contrast & Predictable Surface', () {
+    testWidgets(
+        '5. AppBar title and icon contrast with wave enabled meets WCAG AAA (>= 7.0:1)',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: AndrilHobbiesScaffold(
             title: 'Hobbies Dashboard',
+            showWave: true,
+            actions: [
+              Icon(Icons.search, key: Key('app_bar_icon')),
+            ],
             body: SizedBox(),
           ),
         ),
       );
 
-      expect(find.text('Hobbies Dashboard'), findsOneWidget);
-      expect(find.byType(AppBar), findsOneWidget);
+      final AppBar appBar = tester.widget<AppBar>(find.byType(AppBar));
+      final Color surfaceColor =
+          appBar.backgroundColor ?? HobbiesColors.background;
+      expect(surfaceColor, HobbiesColors.background);
+
+      final Text titleText =
+          tester.widget<Text>(find.text('Hobbies Dashboard'));
+      final Color titleColor = titleText.style?.color ?? HobbiesTheme.textDark;
+      expect(titleColor, HobbiesTheme.textDark);
+
+      // Contrast of title on predictable AppBar surface meets WCAG AAA
+      final double contrast = _contrastRatio(titleColor, surfaceColor);
+      expect(contrast, greaterThanOrEqualTo(7.0));
+      expect(contrast, greaterThanOrEqualTo(14.0));
     });
 
-    testWidgets('6. AppBar actions are rendered when provided',
+    testWidgets('6. AppBar contrast with wave disabled meets WCAG AAA',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: AndrilHobbiesScaffold(
+            title: 'Plain Header',
+            showWave: false,
+            body: SizedBox(),
+          ),
+        ),
+      );
+
+      final AppBar appBar = tester.widget<AppBar>(find.byType(AppBar));
+      final Color surfaceColor =
+          appBar.backgroundColor ?? HobbiesColors.background;
+      expect(surfaceColor, HobbiesColors.background);
+
+      final Text titleText = tester.widget<Text>(find.text('Plain Header'));
+      final Color titleColor = titleText.style?.color ?? HobbiesTheme.textDark;
+
+      final double contrast = _contrastRatio(titleColor, surfaceColor);
+      expect(contrast, greaterThanOrEqualTo(7.0));
+    });
+
+    testWidgets('7. AppBar actions are rendered and interactive',
         (WidgetTester tester) async {
       bool actionTapped = false;
 
@@ -117,8 +185,74 @@ void main() {
     });
   });
 
+  group('AndrilHobbiesScaffold Body Geometry & SafeArea Protection', () {
+    testWidgets(
+        '8. body starts strictly below AppBar with zero overlap when AppBar is supplied',
+        (WidgetTester tester) async {
+      const double simulatedTopPadding = 44.0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              padding: EdgeInsets.only(top: simulatedTopPadding),
+            ),
+            child: AndrilHobbiesScaffold(
+              title: 'Geometry Test',
+              showWave: true,
+              body: Container(
+                key: const Key('top_body_container'),
+                height: 100,
+                color: Colors.amber,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final Rect appBarRect = tester.getRect(find.byType(AppBar));
+      final Rect bodyRect =
+          tester.getRect(find.byKey(const Key('top_body_container')));
+
+      // Body top must be exactly at or below the bottom of the AppBar (zero vertical collision)
+      expect(bodyRect.top, greaterThanOrEqualTo(appBarRect.bottom));
+      expect(appBarRect.bottom, simulatedTopPadding + kToolbarHeight);
+      expect(bodyRect.top, simulatedTopPadding + kToolbarHeight);
+    });
+
+    testWidgets(
+        '9. body respects status-bar safe-area when no AppBar is supplied',
+        (WidgetTester tester) async {
+      const double simulatedTopPadding = 44.0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              padding: EdgeInsets.only(top: simulatedTopPadding),
+            ),
+            child: AndrilHobbiesScaffold(
+              showWave: true,
+              body: Container(
+                key: const Key('top_no_appbar_container'),
+                height: 100,
+                color: Colors.blue,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final Rect bodyRect =
+          tester.getRect(find.byKey(const Key('top_no_appbar_container')));
+
+      // Body top must be positioned at or below the simulated status-bar inset
+      expect(bodyRect.top, greaterThanOrEqualTo(simulatedTopPadding));
+    });
+  });
+
   group('AndrilHobbiesScaffold Wave Integration & Interactivity', () {
-    testWidgets('7. wave painter is present when showWave == true',
+    testWidgets('10. wave painter is present when showWave == true',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -137,7 +271,7 @@ void main() {
       );
     });
 
-    testWidgets('8. wave painter is absent when showWave == false',
+    testWidgets('11. wave painter is absent when showWave == false',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -156,7 +290,7 @@ void main() {
       );
     });
 
-    testWidgets('9. decorative wave does not intercept interactive taps',
+    testWidgets('12. decorative wave does not intercept interactive taps',
         (WidgetTester tester) async {
       bool buttonTapped = false;
 
@@ -184,7 +318,7 @@ void main() {
   });
 
   group('AndrilHobbiesScaffold Responsive Layouts & Text Scaling', () {
-    testWidgets('10. screen renders at a compact mobile width (320 x 568)',
+    testWidgets('13. screen renders at a compact mobile width (320 x 568)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1.0;
@@ -208,7 +342,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('11. screen renders at a standard mobile width (390 x 844)',
+    testWidgets('14. screen renders at a standard mobile width (390 x 844)',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
@@ -229,12 +363,15 @@ void main() {
     });
 
     testWidgets(
-        '12. text scaling does not produce layout exceptions in representative cases',
+        '15. text scaling does not produce layout exceptions with realistic insets',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: MediaQuery(
-            data: MediaQueryData(textScaler: TextScaler.linear(2.0)),
+            data: MediaQueryData(
+              padding: EdgeInsets.only(top: 44.0),
+              textScaler: TextScaler.linear(2.0),
+            ),
             child: AndrilHobbiesScaffold(
               title: 'Scaled Header',
               body: SingleChildScrollView(
@@ -255,9 +392,11 @@ void main() {
     });
   });
 
-  group('AndrilHobbiesScaffold Content Placeholders & Isolation', () {
+  group(
+      'AndrilHobbiesScaffold Content Placeholders, API Compatibility & Isolation',
+      () {
     testWidgets(
-        '13. caller-provided empty/loading/error placeholders render without scaffold exceptions',
+        '16. caller-provided empty/loading/error placeholders render without scaffold exceptions',
         (WidgetTester tester) async {
       // Loading State
       await tester.pumpWidget(
@@ -304,13 +443,25 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    test('14. existing approved colors remain unchanged', () {
+    test('17. existing public constructor compatibility is preserved', () {
+      const scaffold = AndrilHobbiesScaffold(
+        body: SizedBox(),
+        title: 'Title',
+        showWave: true,
+        actions: [],
+        waveHeight: 220.0,
+      );
+      expect(scaffold.title, 'Title');
+      expect(scaffold.showWave, isTrue);
+      expect(scaffold.waveHeight, 220.0);
+    });
+
+    test('18. existing approved colors remain unchanged', () {
       expect(HobbiesColors.primary, const Color(0xFF16A34A));
       expect(HobbiesColors.background, const Color(0xFFECFDF5));
     });
 
-    test('15. no foreign module dependencies are introduced', () {
-      // Verify scaffold theme does not leak Learning, Dating or Shared Core colors
+    test('19. no foreign module dependencies are introduced', () {
       final ThemeData scaffoldTheme = HobbiesTheme.lightTheme;
       const Color learningPrimary = Color(0xFF2563EB);
       const Color sharedCorePrimary = Color(0xFF006D77);

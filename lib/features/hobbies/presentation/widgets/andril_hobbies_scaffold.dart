@@ -55,7 +55,7 @@ class AndrilHobbiesScaffold extends StatelessWidget {
 
           return Scaffold(
             backgroundColor: theme.scaffoldBackgroundColor,
-            extendBodyBehindAppBar: showWave,
+            extendBodyBehindAppBar: false,
             appBar: hasAppBar
                 ? AppBar(
                     title: title != null
@@ -68,9 +68,7 @@ class AndrilHobbiesScaffold extends StatelessWidget {
                           )
                         : null,
                     actions: actions,
-                    backgroundColor: showWave
-                        ? Colors.transparent
-                        : theme.appBarTheme.backgroundColor,
+                    backgroundColor: theme.appBarTheme.backgroundColor,
                     elevation: 0,
                     scrolledUnderElevation: 0,
                   )
@@ -94,15 +92,10 @@ class AndrilHobbiesScaffold extends StatelessWidget {
                     ),
                   ),
 
-                // Main screen content area with SafeArea support
+                // Main screen content area using built-in Scaffold & SafeArea geometry
                 SafeArea(
-                  top: !showWave || !hasAppBar,
-                  child: hasAppBar && showWave
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: kToolbarHeight),
-                          child: body,
-                        )
-                      : body,
+                  top: !hasAppBar,
+                  child: body,
                 ),
               ],
             ),
