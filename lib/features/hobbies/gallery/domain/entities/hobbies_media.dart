@@ -9,6 +9,7 @@
 /// - Excludes Hobbies Photo Portfolios (which are permanently excluded per BRD v2.4-R1).
 /// - Offline presentation-aligned domain model; does not assume permanently public URLs or storage-specific logic.
 /// - Zero external packages, HTTP, or Flutter UI/widget dependencies.
+/// - Diagnostic [toString] emits only class-level identification to prevent accidental privacy leakage.
 class HobbiesMedia {
   /// Unique identifier for the media item.
   final String id;
@@ -38,7 +39,15 @@ class HobbiesMedia {
     this.createdAt,
   });
 
-  /// Creates a copy of this [HobbiesMedia] with the given fields replaced.
+  /// Creates a copy of this [HobbiesMedia] with the given fields replaced or cleared.
+  ///
+  /// For optional fields ([caption], [mediaUrl], [hobbyTag], [createdAt]):
+  /// - Passing a non-null value replaces the existing value.
+  /// - Setting the respective clear flag to `true` explicitly resets the value to `null`.
+  /// - Omitting both preserves the existing value.
+  ///
+  /// Throws an [ArgumentError] if a replacement value and a clear flag are provided
+  /// simultaneously for the same field.
   HobbiesMedia copyWith({
     String? id,
     String? title,
@@ -46,14 +55,47 @@ class HobbiesMedia {
     String? mediaUrl,
     String? hobbyTag,
     DateTime? createdAt,
+    bool clearCaption = false,
+    bool clearMediaUrl = false,
+    bool clearHobbyTag = false,
+    bool clearCreatedAt = false,
   }) {
+    if (caption != null && clearCaption) {
+      throw ArgumentError.value(
+        caption,
+        'caption',
+        'Cannot provide a new caption and set clearCaption to true simultaneously.',
+      );
+    }
+    if (mediaUrl != null && clearMediaUrl) {
+      throw ArgumentError.value(
+        mediaUrl,
+        'mediaUrl',
+        'Cannot provide a new mediaUrl and set clearMediaUrl to true simultaneously.',
+      );
+    }
+    if (hobbyTag != null && clearHobbyTag) {
+      throw ArgumentError.value(
+        hobbyTag,
+        'hobbyTag',
+        'Cannot provide a new hobbyTag and set clearHobbyTag to true simultaneously.',
+      );
+    }
+    if (createdAt != null && clearCreatedAt) {
+      throw ArgumentError.value(
+        createdAt,
+        'createdAt',
+        'Cannot provide a new createdAt and set clearCreatedAt to true simultaneously.',
+      );
+    }
+
     return HobbiesMedia(
       id: id ?? this.id,
       title: title ?? this.title,
-      caption: caption ?? this.caption,
-      mediaUrl: mediaUrl ?? this.mediaUrl,
-      hobbyTag: hobbyTag ?? this.hobbyTag,
-      createdAt: createdAt ?? this.createdAt,
+      caption: clearCaption ? null : (caption ?? this.caption),
+      mediaUrl: clearMediaUrl ? null : (mediaUrl ?? this.mediaUrl),
+      hobbyTag: clearHobbyTag ? null : (hobbyTag ?? this.hobbyTag),
+      createdAt: clearCreatedAt ? null : (createdAt ?? this.createdAt),
     );
   }
 
@@ -82,13 +124,5 @@ class HobbiesMedia {
   }
 
   @override
-  String toString() {
-    return 'HobbiesMedia('
-        'id: $id, '
-        'title: $title, '
-        'caption: $caption, '
-        'mediaUrl: $mediaUrl, '
-        'hobbyTag: $hobbyTag, '
-        'createdAt: $createdAt)';
-  }
+  String toString() => 'HobbiesMedia';
 }
