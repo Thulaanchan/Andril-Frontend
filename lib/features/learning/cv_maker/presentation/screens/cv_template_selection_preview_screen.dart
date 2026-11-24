@@ -82,7 +82,7 @@ enum CvTemplate {
   }
 }
 
-/// Experience entry in a CV draft.
+/// Experience entry in a CV draft (Section 2).
 @immutable
 class CvExperienceItem {
   final String jobTitle;
@@ -98,7 +98,7 @@ class CvExperienceItem {
   });
 }
 
-/// Education entry in a CV draft.
+/// Education entry in a CV draft (Section 3).
 @immutable
 class CvEducationItem {
   final String degree;
@@ -112,10 +112,54 @@ class CvEducationItem {
   });
 }
 
+/// Certification entry in a CV draft (Section 5).
+@immutable
+class CvCertificationItem {
+  final String name;
+  final String issuer;
+  final String year;
+  final String? credentialId;
+
+  const CvCertificationItem({
+    required this.name,
+    required this.issuer,
+    required this.year,
+    this.credentialId,
+  });
+}
+
+/// Project entry in a CV draft (Section 6).
+@immutable
+class CvProjectItem {
+  final String name;
+  final String? role;
+  final String? description;
+  final String? link;
+
+  const CvProjectItem({
+    required this.name,
+    this.role,
+    this.description,
+    this.link,
+  });
+}
+
+/// Link entry in a CV draft (Section 7).
+@immutable
+class CvLinkItem {
+  final String label;
+  final String url;
+
+  const CvLinkItem({
+    required this.label,
+    required this.url,
+  });
+}
+
 /// Immutable draft model capturing all CV content independently from template styling.
 ///
 /// Satisfies CV-02 (Lossless Template Switching): switching [selectedTemplate] does
-/// not drop, mutate or corrupt any user-entered content.
+/// not drop, mutate or corrupt any user-entered content across all seven sections.
 @immutable
 class CvDraftData {
   final String id;
@@ -126,13 +170,18 @@ class CvDraftData {
   final String? email;
   final String? phone;
   final String? location;
+  final String? website;
   final String summary;
   final List<String> skills;
   final List<CvExperienceItem> experiences;
   final List<CvEducationItem> education;
+  final List<CvCertificationItem> certifications;
+  final List<CvProjectItem> projects;
+  final List<CvLinkItem> links;
   final bool showEmail;
   final bool showPhone;
   final bool showLocation;
+  final bool showWebsite;
   final DateTime updatedAt;
 
   const CvDraftData({
@@ -144,13 +193,18 @@ class CvDraftData {
     this.email,
     this.phone,
     this.location,
+    this.website,
     required this.summary,
     required this.skills,
     required this.experiences,
     required this.education,
+    this.certifications = const [],
+    this.projects = const [],
+    this.links = const [],
     this.showEmail = true,
     this.showPhone = true,
     this.showLocation = true,
+    this.showWebsite = false,
     required this.updatedAt,
   });
 
@@ -164,13 +218,18 @@ class CvDraftData {
     String? email,
     String? phone,
     String? location,
+    String? website,
     String? summary,
     List<String>? skills,
     List<CvExperienceItem>? experiences,
     List<CvEducationItem>? education,
+    List<CvCertificationItem>? certifications,
+    List<CvProjectItem>? projects,
+    List<CvLinkItem>? links,
     bool? showEmail,
     bool? showPhone,
     bool? showLocation,
+    bool? showWebsite,
     DateTime? updatedAt,
   }) {
     return CvDraftData(
@@ -182,14 +241,61 @@ class CvDraftData {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       location: location ?? this.location,
+      website: website ?? this.website,
       summary: summary ?? this.summary,
       skills: skills ?? this.skills,
       experiences: experiences ?? this.experiences,
       education: education ?? this.education,
+      certifications: certifications ?? this.certifications,
+      projects: projects ?? this.projects,
+      links: links ?? this.links,
       showEmail: showEmail ?? this.showEmail,
       showPhone: showPhone ?? this.showPhone,
       showLocation: showLocation ?? this.showLocation,
+      showWebsite: showWebsite ?? this.showWebsite,
       updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  /// Validates the CV draft title according to approved rules.
+  /// Title must be non-empty and at most 60 characters.
+  static String? validateTitle(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter a title for this CV';
+    }
+    if (value.trim().length > 60) {
+      return 'Title must be 60 characters or fewer';
+    }
+    return null;
+  }
+
+  /// Creates an empty initial draft for Create Mode.
+  factory CvDraftData.empty({
+    String title = 'My Professional CV',
+    CvTemplate template = CvTemplate.modern,
+  }) {
+    return CvDraftData(
+      id: 'cv_empty_${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      selectedTemplate: template,
+      fullName: '',
+      headline: '',
+      email: '',
+      phone: '',
+      location: '',
+      website: '',
+      summary: '',
+      skills: const [],
+      experiences: const [],
+      education: const [],
+      certifications: const [],
+      projects: const [],
+      links: const [],
+      showEmail: false, // Default-off per CV-03
+      showPhone: false, // Default-off per CV-03
+      showLocation: false,
+      showWebsite: false,
+      updatedAt: DateTime.now(),
     );
   }
 
@@ -209,6 +315,7 @@ class CvDraftData {
       email: 'thusha.sample@andril.local',
       phone: '+94 77 123 4567',
       location: 'Jaffna, Sri Lanka',
+      website: 'https://thusha.dev',
       summary:
           'Passionate frontend developer specializing in accessible Flutter applications, multi-module architecture, and robust cross-platform user experiences.',
       skills: const [
@@ -242,9 +349,37 @@ class CvDraftData {
           year: '2019 - 2023',
         ),
       ],
+      certifications: const [
+        CvCertificationItem(
+          name: 'Professional Flutter Developer',
+          issuer: 'Google Developers',
+          year: '2023',
+          credentialId: 'GDEV-FLUTTER-892',
+        ),
+      ],
+      projects: const [
+        CvProjectItem(
+          name: 'ANDRIL Mobile Learning Suite',
+          role: 'Lead Architect',
+          description:
+              'Cross-platform learning environment with offline draft synchronization.',
+          link: 'https://github.com/andril/learning-mobile',
+        ),
+      ],
+      links: const [
+        CvLinkItem(
+          label: 'GitHub',
+          url: 'https://github.com/thusha-andril',
+        ),
+        CvLinkItem(
+          label: 'LinkedIn',
+          url: 'https://linkedin.com/in/thusha-andril',
+        ),
+      ],
       showEmail: true,
       showPhone: true,
       showLocation: true,
+      showWebsite: true,
       updatedAt: DateTime(2026, 11, 24),
     );
   }
@@ -329,20 +464,8 @@ class _CvTemplateSelectionPreviewScreenState
     widget.onTemplateChanged?.call(template);
   }
 
-  /// Validates the CV draft title according to approved rules.
-  /// Title must be non-empty and at most 60 characters.
-  static String? validateCvTitle(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Please enter a title for this CV';
-    }
-    if (value.trim().length > 60) {
-      return 'Title must be 60 characters or fewer';
-    }
-    return null;
-  }
-
   bool _isDraftValid(CvDraftData draft) {
-    return validateCvTitle(draft.title) == null;
+    return CvDraftData.validateTitle(draft.title) == null;
   }
 
   void _togglePreview(bool enablePreview) {
@@ -604,7 +727,7 @@ class _CvTemplateSelectionPreviewScreenState
               color: LearningColors.heading,
               fontWeight: FontWeight.w600,
             ),
-            validator: validateCvTitle,
+            validator: CvDraftData.validateTitle,
           ),
         ],
       ),
