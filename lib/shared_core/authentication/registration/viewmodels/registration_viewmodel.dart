@@ -1,15 +1,15 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/auth_result.dart';
 import '../../domain/entities/auth_user.dart';
-import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/onboarding_auth_repository.dart';
 
 /// ViewModel managing state and operations for Screen 04 (Email Registration).
 class RegistrationViewModel extends ChangeNotifier {
   RegistrationViewModel({
-    required AuthRepository repository,
+    required OnboardingAuthRepository repository,
   }) : _repository = repository;
 
-  final AuthRepository _repository;
+  final OnboardingAuthRepository _repository;
 
   String _email = '';
   String _password = '';

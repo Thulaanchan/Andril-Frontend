@@ -5,7 +5,7 @@ import '../../../../app/themes/shared_core/components/m2_buttons.dart';
 import '../../../../app/themes/shared_core/spacing/m2_spacing.dart';
 import '../../../../app/themes/shared_core/typography/m2_typography.dart';
 import '../../domain/entities/auth_user.dart';
-import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/onboarding_auth_repository.dart';
 import '../../widgets/auth_header.dart';
 import '../../widgets/auth_info_banner.dart';
 import '../../widgets/auth_otp_input.dart';
@@ -34,7 +34,7 @@ class AccountVerificationScreen extends StatefulWidget {
 
   final String email;
   final VerificationViewModel? viewModel;
-  final AuthRepository? authRepository;
+  final OnboardingAuthRepository? authRepository;
   final VoidCallback? onBack;
   final ValueChanged<AuthUser>? onVerificationSuccess;
 

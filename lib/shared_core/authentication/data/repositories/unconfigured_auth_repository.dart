@@ -1,14 +1,14 @@
 import '../../domain/entities/auth_result.dart';
 import '../../domain/entities/auth_user.dart';
-import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/onboarding_auth_repository.dart';
 
-/// Default runtime implementation of [AuthRepository] when live Supabase configuration is absent.
+/// Default runtime implementation of [OnboardingAuthRepository] when live Supabase configuration is absent.
 ///
 /// Ensures production security:
 /// - The default ANDRIL application CANNOT authenticate a user using mock credentials.
 /// - Unconfigured operations consistently return [AuthFailureType.serviceUnavailable].
 /// - Production authentication never silently falls back to mock behavior.
-class UnconfiguredAuthRepository implements AuthRepository {
+class UnconfiguredAuthRepository implements OnboardingAuthRepository {
   const UnconfiguredAuthRepository();
 
   static const _serviceUnavailableFailure = AuthResult.failure(

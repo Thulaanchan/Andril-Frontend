@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/auth_result.dart';
-import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/onboarding_auth_repository.dart';
 
 /// ViewModel managing state and operations for the Password Recovery screen (Screen 07).
 class PasswordRecoveryViewModel extends ChangeNotifier {
-  final AuthRepository _repository;
+  final OnboardingAuthRepository _repository;
 
-  PasswordRecoveryViewModel({required AuthRepository repository})
+  PasswordRecoveryViewModel({required OnboardingAuthRepository repository})
       : _repository = repository;
 
   String _email = '';

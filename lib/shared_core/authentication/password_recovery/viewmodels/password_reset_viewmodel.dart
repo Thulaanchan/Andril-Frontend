@@ -1,16 +1,16 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/auth_result.dart';
-import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/onboarding_auth_repository.dart';
 
 /// ViewModel managing state and validation for Screen 08 (Create New Password).
 class PasswordResetViewModel extends ChangeNotifier {
   PasswordResetViewModel({
-    required AuthRepository repository,
+    required OnboardingAuthRepository repository,
     String? recoveryToken,
   })  : _repository = repository,
         _recoveryToken = recoveryToken;
 
-  final AuthRepository _repository;
+  final OnboardingAuthRepository _repository;
   final String? _recoveryToken;
 
   String _newPassword = '';

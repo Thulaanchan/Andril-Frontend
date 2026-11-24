@@ -1,12 +1,12 @@
 import 'package:andril_mobile/shared_core/authentication/domain/entities/auth_result.dart';
 import 'package:andril_mobile/shared_core/authentication/domain/entities/auth_user.dart';
-import 'package:andril_mobile/shared_core/authentication/domain/repositories/auth_repository.dart';
+import 'package:andril_mobile/shared_core/authentication/domain/repositories/onboarding_auth_repository.dart';
 
-/// Test double implementation of [AuthRepository] for isolated unit and widget tests.
+/// Test double implementation of [OnboardingAuthRepository] for isolated unit and widget tests.
 ///
 /// Restricted to test and isolated preview contexts. Never used as a silent fallback
 /// in the default application runtime.
-class MockAuthRepository implements AuthRepository {
+class MockAuthRepository implements OnboardingAuthRepository {
   MockAuthRepository({
     this.defaultOtpCode = '123456',
     this.hasActiveRecovery = true,

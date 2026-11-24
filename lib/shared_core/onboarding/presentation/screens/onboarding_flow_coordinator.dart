@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../authentication/data/repositories/unconfigured_auth_repository.dart';
 import '../../../authentication/domain/entities/auth_user.dart';
-import '../../../authentication/domain/repositories/auth_repository.dart';
+import '../../../authentication/domain/repositories/onboarding_auth_repository.dart';
 import '../../../authentication/login/screens/login_screen.dart';
 import '../../../authentication/password_recovery/screens/password_recovery_screen.dart';
 import '../../../authentication/password_recovery/screens/password_reset_screen.dart';
@@ -75,7 +75,7 @@ class OnboardingFlowCoordinator extends StatefulWidget {
   final ValueChanged<String>? onOnboardingCompleted;
   final Duration splashDuration;
   final LanguagePreferenceRepository? languageRepository;
-  final AuthRepository? authRepository;
+  final OnboardingAuthRepository? authRepository;
   final EligibilityRepository? eligibilityRepository;
   final StarterModuleRepository? starterModuleRepository;
   final String? initialVerificationEmail;
@@ -90,7 +90,7 @@ class OnboardingFlowCoordinator extends StatefulWidget {
 class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
   late int _currentStep;
   late final LanguagePreferenceRepository _languageRepository;
-  late final AuthRepository _authRepository;
+  late final OnboardingAuthRepository _authRepository;
   late final EligibilityRepository _eligibilityRepository;
   late final StarterModuleRepository _starterModuleRepository;
 

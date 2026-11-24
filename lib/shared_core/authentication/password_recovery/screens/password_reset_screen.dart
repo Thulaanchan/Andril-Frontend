@@ -4,7 +4,7 @@ import '../../../../app/themes/shared_core/components/m2_background_scaffold.dar
 import '../../../../app/themes/shared_core/components/m2_buttons.dart';
 import '../../../../app/themes/shared_core/spacing/m2_spacing.dart';
 import '../../../../app/themes/shared_core/typography/m2_typography.dart';
-import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/onboarding_auth_repository.dart';
 import '../../widgets/auth_header.dart';
 import '../../widgets/auth_info_banner.dart';
 import '../../widgets/auth_text_field.dart';
@@ -31,7 +31,7 @@ class PasswordResetScreen extends StatefulWidget {
   });
 
   final PasswordResetViewModel? viewModel;
-  final AuthRepository? authRepository;
+  final OnboardingAuthRepository? authRepository;
   final String? recoveryToken;
   final VoidCallback? onBackToLogin;
   final VoidCallback? onPasswordResetSuccess;
