@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:andril_mobile/app/themes/learning/learning_colors.dart';
 import 'package:andril_mobile/features/shared/presentation/widgets/andril_module_app_bar.dart';
 import 'package:andril_mobile/features/learning/portfolio_maker/domain/models/portfolio_models.dart';
+import 'package:andril_mobile/features/learning/portfolio_maker/presentation/screens/portfolio_template_selection_preview_screen.dart';
 
 /// Learning Portfolio Creation & Editing Screen.
 ///
@@ -33,6 +34,9 @@ class PortfolioEditorScreen extends StatefulWidget {
   /// Optional callback invoked when the user saves the portfolio draft.
   final ValueChanged<LearningPortfolio>? onSavePortfolio;
 
+  /// Optional callback invoked when user navigates to choose template and preview.
+  final ValueChanged<LearningPortfolio>? onPreviewPortfolio;
+
   /// Optional custom app bar. Defaults to [AndrilModuleAppBar] with Portfolio Maker branding.
   final PreferredSizeWidget? appBar;
 
@@ -44,6 +48,7 @@ class PortfolioEditorScreen extends StatefulWidget {
     this.isLoading = false,
     this.isAccessDenied = false,
     this.onSavePortfolio,
+    this.onPreviewPortfolio,
     this.appBar,
   });
 
@@ -135,6 +140,24 @@ class _PortfolioEditorScreenState extends State<PortfolioEditorScreen> {
     });
 
     widget.onSavePortfolio?.call(updated);
+  }
+
+  void _handlePreview() {
+    if (!_validatePortfolioTitle()) return;
+
+    final updated = _buildCurrentPortfolio();
+    if (widget.onPreviewPortfolio != null) {
+      widget.onPreviewPortfolio!(updated);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PortfolioTemplateSelectionPreviewScreen(
+            initialPortfolio: updated,
+            currentUserId: widget.currentUserId,
+          ),
+        ),
+      );
+    }
   }
 
   // Project CRUD Actions
@@ -1109,25 +1132,48 @@ class _PortfolioEditorScreenState extends State<PortfolioEditorScreen> {
   }
 
   Widget _buildActionButtons() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        key: const Key('save_portfolio_button'),
-        icon: const Icon(Icons.save_outlined),
-        label: const Text(
-          'Save Portfolio Draft',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: LearningColors.primary,
-          foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(50),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12.0),
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            key: const Key('preview_template_button'),
+            icon: const Icon(Icons.palette_outlined),
+            label: const Text(
+              'Choose Template & Preview',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: LearningColors.primary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
+              ),
+            ),
+            onPressed: _handlePreview,
           ),
         ),
-        onPressed: _handleSavePortfolio,
-      ),
+        const SizedBox(height: 10.0),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            key: const Key('save_portfolio_button'),
+            icon: const Icon(Icons.save_outlined),
+            label: const Text(
+              'Save Portfolio Draft',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
+              ),
+            ),
+            onPressed: _handleSavePortfolio,
+          ),
+        ),
+      ],
     );
   }
 }
