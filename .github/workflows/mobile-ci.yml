@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 defaults:
   run:
     shell: pwsh
@@ -17,30 +21,486 @@ defaults:
 jobs:
   android:
     runs-on: windows-latest
+    timeout-minutes: 40
+
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - name: Checkout repository
+        id: checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java JDK (Temurin 25.0.3)
+        id: setup_java
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25.0.3'
-      - uses: subosito/flutter-action@v2
+
+      - name: Setup Flutter SDK
+        id: setup_flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: '3.47.5'
+          cache: true
+          pub-cache: true
+
+      - name: Classify change scope
+        id: classifier
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHECKOUT_SHA: ${{ github.sha }}
+        run: |
+          $eventName = $env:EVENT_NAME
+          $baseRef = $env:BASE_REF
+          $refName = $env:REF_NAME
+          $prBaseSha = $env:PR_BASE_SHA
+          $prHeadSha = $env:PR_HEAD_SHA
+          $checkoutSha = $env:CHECKOUT_SHA
+
+          Write-Host "================ CHANGE CLASSIFICATION ================"
+          Write-Host "Event Name   : $eventName"
+          Write-Host "Base Ref     : $baseRef"
+          Write-Host "Ref Name     : $refName"
+          Write-Host "PR Base SHA  : $prBaseSha"
+          Write-Host "PR Head SHA  : $prHeadSha"
+          Write-Host "Checkout SHA : $checkoutSha"
+          Write-Host "========================================================"
+
+          $requireBuild = $true
+          $decision = "BUILD"
+          $reasonCode = "DEFAULT_BUILD"
+
+          if ($eventName -eq 'push') {
+              $requireBuild = $true
+              $reasonCode = if ($refName -eq 'main') { "PUSH_MAIN" } else { "PUSH_DEVELOP" }
+          } elseif ($eventName -eq 'workflow_dispatch') {
+              $requireBuild = $true
+              $reasonCode = "WORKFLOW_DISPATCH"
+          } elseif ($eventName -eq 'pull_request') {
+              if ($baseRef -ne 'Develop') {
+                  $requireBuild = $true
+                  $reasonCode = "PR_TARGETING_NON_DEVELOP"
+              } else {
+                  $shaRegex = '^[0-9a-f]{40}$'
+                  if (-not ($checkoutSha -match $shaRegex -and $prBaseSha -match $shaRegex -and $prHeadSha -match $shaRegex)) {
+                      $requireBuild = $true
+                      $reasonCode = "MISSING_OR_INVALID_PR_COMMITS_CONTEXT"
+                  } else {
+                      try {
+                          & git cat-file -e "$($checkoutSha)^{commit}" 2>$null
+                          $checkoutExists = ($LASTEXITCODE -eq 0)
+
+                          & git cat-file -e "$($prBaseSha)^{commit}" 2>$null
+                          $baseExists = ($LASTEXITCODE -eq 0)
+
+                          & git cat-file -e "$($prHeadSha)^{commit}" 2>$null
+                          $headExists = ($LASTEXITCODE -eq 0)
+
+                          if (-not ($checkoutExists -and $baseExists -and $headExists)) {
+                              $requireBuild = $true
+                              $reasonCode = "COMMIT_OBJECTS_NOT_FOUND"
+                          } else {
+                              $actualHead = (& git rev-parse HEAD 2>$null)
+                              if ($LASTEXITCODE -ne 0 -or -not $actualHead) {
+                                  throw "Failed to resolve current HEAD revision."
+                              }
+                              $actualHead = $actualHead.Trim()
+
+                              if ($actualHead -ne $checkoutSha.Trim()) {
+                                  $requireBuild = $true
+                                  $reasonCode = "HEAD_DIFFERS_FROM_CHECKOUT_SHA"
+                              } else {
+                                  $rawParents = & git rev-parse "HEAD^@" 2>$null
+                                  if ($LASTEXITCODE -ne 0) {
+                                      throw "Failed to query commit parents."
+                                  }
+
+                                  $parentsList = @()
+                                  if ($rawParents) {
+                                      if ($rawParents -is [array]) {
+                                          $parentsList = @($rawParents | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+                                      } else {
+                                          $trimmed = $rawParents.Trim()
+                                          if ($trimmed) { $parentsList = @($trimmed) }
+                                      }
+                                  }
+
+                                  if ($parentsList.Count -ne 2) {
+                                      $requireBuild = $true
+                                      $reasonCode = "UNEXPECTED_NUMBER_OF_MERGE_PARENTS"
+                                  } elseif ($parentsList[0] -ne $prBaseSha.Trim()) {
+                                      $requireBuild = $true
+                                      $reasonCode = "INCORRECT_FIRST_PARENT"
+                                  } elseif ($parentsList[1] -ne $prHeadSha.Trim()) {
+                                      $requireBuild = $true
+                                      $reasonCode = "INCORRECT_SECOND_PARENT"
+                                  } else {
+                                      $diffBase = $parentsList[0]
+                                      $diffTarget = $actualHead
+
+                                      Write-Host "Comparing verified immutable revisions: $diffBase -> $diffTarget"
+
+                                      $pinfo = New-Object System.Diagnostics.ProcessStartInfo
+                                      $pinfo.FileName = "git"
+                                      $pinfo.Arguments = "diff --raw -z $diffBase $diffTarget"
+                                      $pinfo.RedirectStandardOutput = $true
+                                      $pinfo.RedirectStandardError = $true
+                                      $pinfo.UseShellExecute = $false
+
+                                      $proc = [System.Diagnostics.Process]::Start($pinfo)
+                                      $ms = New-Object System.IO.MemoryStream
+                                      $proc.StandardOutput.BaseStream.CopyTo($ms)
+                                      $stderr = $proc.StandardError.ReadToEnd()
+                                      $proc.WaitForExit()
+
+                                      if ($proc.ExitCode -ne 0) {
+                                          throw "git diff --raw -z failed with exit code $($proc.ExitCode): $stderr"
+                                      }
+
+                                      $rawBytes = $ms.ToArray()
+                                      if (-not $rawBytes -or $rawBytes.Length -eq 0) {
+                                          $requireBuild = $true
+                                          $reasonCode = "EMPTY_DIFF"
+                                      } else {
+                                          $rawString = [System.Text.Encoding]::UTF8.GetString($rawBytes)
+                                          $tokens = $rawString.Split([char]0)
+                                          if ($tokens.Count -gt 0 -and [string]::IsNullOrEmpty($tokens[-1])) {
+                                              $tokens = $tokens[0..($tokens.Count - 2)]
+                                          }
+
+                                          if ($tokens.Count -eq 0) {
+                                              $requireBuild = $true
+                                              $reasonCode = "EMPTY_DIFF_TOKENS"
+                                          } else {
+                                              $buildTriggerReason = $null
+                                              $idx = 0
+                                              $fileCount = 0
+
+                                              $safeRegex = '^((docs/.*\.md)|(docs/.*\.txt)|(README\.md)|([A-Za-z0-9_-]+\.md)|(test/.*\.dart)|(lib/app/themes/(learning|hobbies|social|common)/.*\.dart)|(lib/features/(learning|hobbies|social|common|shared)(/[A-Za-z0-9_]+)*(/(presentation/)?(screens|widgets|scaffolds)/[A-Za-z0-9_ -]+\.dart)))$'
+
+                                              while ($idx -lt $tokens.Count) {
+                                                  $meta = $tokens[$idx]
+                                                  $idx++
+
+                                                  if (-not ($meta -match '^:([0-9]{6})\s+([0-9]{6})\s+([0-9a-f]+)\s+([0-9a-f]+)\s+(\S+)$')) {
+                                                      $buildTriggerReason = "MALFORMED_DIFF_METADATA"
+                                                      break
+                                                  }
+
+                                                  $oldMode = $matches[1]
+                                                  $newMode = $matches[2]
+                                                  $status = $matches[5]
+
+                                                  if ($status -eq 'M') {
+                                                      if ($oldMode -ne $newMode) {
+                                                          $buildTriggerReason = "FILE_MODE_CHANGED"
+                                                          break
+                                                      }
+                                                      if ($newMode -ne '100644') {
+                                                          $buildTriggerReason = "NON_REGULAR_OR_EXEC_FILE"
+                                                          break
+                                                      }
+                                                  } elseif ($status -eq 'A') {
+                                                      if ($oldMode -ne '000000') {
+                                                          $buildTriggerReason = "MALFORMED_ADDITION_MODE"
+                                                          break
+                                                      }
+                                                      if ($newMode -ne '100644') {
+                                                          $buildTriggerReason = "NON_REGULAR_FILE"
+                                                          break
+                                                      }
+                                                  } elseif ($status -eq 'D') {
+                                                      if ($idx -lt $tokens.Count) { $idx++ }
+                                                      $buildTriggerReason = "DELETED_FILE"
+                                                      break
+                                                  } elseif ($status -match '^R') {
+                                                      if ($idx -lt $tokens.Count) { $idx++ }
+                                                      if ($idx -lt $tokens.Count) { $idx++ }
+                                                      $buildTriggerReason = "RENAMED_FILE"
+                                                      break
+                                                  } elseif ($status -match '^C') {
+                                                      if ($idx -lt $tokens.Count) { $idx++ }
+                                                      if ($idx -lt $tokens.Count) { $idx++ }
+                                                      $buildTriggerReason = "COPIED_FILE"
+                                                      break
+                                                  } elseif ($status -eq 'T') {
+                                                      if ($idx -lt $tokens.Count) { $idx++ }
+                                                      $buildTriggerReason = "TYPE_CHANGED_FILE"
+                                                      break
+                                                  } elseif ($status -eq 'U') {
+                                                      if ($idx -lt $tokens.Count) { $idx++ }
+                                                      $buildTriggerReason = "UNMERGED_CONFLICT_FILE"
+                                                      break
+                                                  } else {
+                                                      if ($idx -lt $tokens.Count) { $idx++ }
+                                                      $buildTriggerReason = "UNKNOWN_OR_MALFORMED_STATUS"
+                                                      break
+                                                  }
+
+                                                  if ($idx -ge $tokens.Count) {
+                                                      $buildTriggerReason = "MALFORMED_DIFF_MISSING_PATH"
+                                                      break
+                                                  }
+
+                                                  $filePath = $tokens[$idx].Replace('\', '/')
+                                                  $idx++
+
+                                                  if ([string]::IsNullOrWhiteSpace($filePath)) {
+                                                      $buildTriggerReason = "EMPTY_FILENAME"
+                                                      break
+                                                  }
+
+                                                  if ($filePath -match '[\x00-\x1f\x7f]') {
+                                                      $buildTriggerReason = "AMBIGUOUS_OR_CONTROL_CHARS"
+                                                      break
+                                                  }
+
+                                                  if ($filePath.StartsWith('"') -or $filePath.EndsWith('"')) {
+                                                      $buildTriggerReason = "AMBIGUOUS_QUOTED_PATH"
+                                                      break
+                                                  }
+
+                                                  $fileCount++
+
+                                                  if ($filePath -like 'android/*' -or
+                                                      $filePath -eq 'pubspec.yaml' -or
+                                                      $filePath -eq 'pubspec.lock' -or
+                                                      $filePath -like '.github/*' -or
+                                                      $filePath -like 'assets/*' -or
+                                                      $filePath -eq 'l10n.yaml' -or
+                                                      $filePath -like 'lib/l10n/*' -or
+                                                      $filePath -eq 'lib/main.dart' -or
+                                                      $filePath -like 'lib/app/bootstrap/*' -or
+                                                      $filePath -eq 'lib/app/andril_app.dart' -or
+                                                      $filePath -like 'lib/app/dependencies/*' -or
+                                                      $filePath -like 'lib/app/router/*' -or
+                                                      $filePath -match 'router|route' -or
+                                                      $filePath -like 'scripts/*' -or
+                                                      $filePath -like '.env*' -or
+                                                      $filePath -eq '.metadata' -or
+                                                      $filePath -eq 'analysis_options.yaml' -or
+                                                      $filePath -like '*.g.dart' -or
+                                                      $filePath -like '*.freezed.dart' -or
+                                                      $filePath -like 'lib/core/*' -or
+                                                      $filePath -like 'lib/shared_core/*') {
+                                                      $buildTriggerReason = "BUILD_SENSITIVE_FILE"
+                                                      break
+                                                  }
+
+                                                  if ($filePath -notmatch $safeRegex) {
+                                                      $buildTriggerReason = "FILE_OUTSIDE_ALLOWLIST"
+                                                      break
+                                                  }
+                                              }
+
+                                              if ($buildTriggerReason) {
+                                                  $requireBuild = $true
+                                                  $reasonCode = $buildTriggerReason
+                                              } elseif ($idx -ne $tokens.Count) {
+                                                  $requireBuild = $true
+                                                  $reasonCode = "PARTIAL_OR_UNCONSUMED_DIFF_RECORDS"
+                                              } elseif ($fileCount -lt 1) {
+                                                  $requireBuild = $true
+                                                  $reasonCode = "NO_CLASSIFIED_FILES"
+                                              } else {
+                                                  $requireBuild = $false
+                                                  $reasonCode = "VERIFIED_SAFE_CHANGES"
+                                                  Write-Host "Verified all $fileCount changed file(s) against safe allowlist."
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      } catch {
+                          $requireBuild = $true
+                          $reasonCode = "CLASSIFIER_EXCEPTION"
+                          Write-Host "Exception: $($_.Exception.Message)"
+                      }
+                  }
+              }
+          } else {
+              $requireBuild = $true
+              $reasonCode = "UNRECOGNIZED_EVENT"
+          }
+
+          $decision = if ($requireBuild) { "BUILD" } else { "SKIP" }
+          Write-Host "================ CLASSIFICATION DECISION ================"
+          Write-Host "Decision             : $decision"
+          Write-Host "Require Android Build: $requireBuild"
+          Write-Host "Reason Code          : $reasonCode"
+          Write-Host "========================================================="
+
+          "require_android_build=$($requireBuild.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "reason_code=$reasonCode" >> $env:GITHUB_OUTPUT
+          "decision=$decision" >> $env:GITHUB_OUTPUT
+
       - name: Flutter version
+        id: flutter_version
         run: flutter --version
+
+      - name: Resolve locked dependencies
+        id: pub_get
+        run: flutter pub get --enforce-lockfile
+
+      - name: Generate localization
+        id: gen_l10n
+        run: flutter gen-l10n
+
+      - name: Analyze
+        id: analyze
+        run: flutter analyze
+
+      - name: Test
+        id: test
+        run: flutter test
+
+      - name: Setup Gradle Build Cache
+        id: setup_gradle
+        if: steps.classifier.outputs.require_android_build == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name != 'push' || (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/Develop') }}
+
       - name: Android SDK packages
+        id: android_sdk
+        if: steps.classifier.outputs.require_android_build == 'true'
         run: |
           $sdkManager = Join-Path $env:ANDROID_HOME 'cmdline-tools/latest/bin/sdkmanager.bat'
           & $sdkManager --install 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Resolve locked dependencies
-        run: flutter pub get --enforce-lockfile
-      - name: Generate localization
-        run: flutter gen-l10n
-      - name: Analyze
-        run: flutter analyze
-      - name: Test
-        run: flutter test
+
       - name: Build Android debug APK
+        id: build_apk
+        if: steps.classifier.outputs.require_android_build == 'true'
         run: flutter build apk --debug --no-pub
+
+      - name: Verify pipeline outcome
+        id: verify_gate
+        if: always()
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          DECISION: ${{ steps.classifier.outputs.decision }}
+          REQUIRE_BUILD: ${{ steps.classifier.outputs.require_android_build }}
+          REASON_CODE: ${{ steps.classifier.outputs.reason_code }}
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          SETUP_JAVA_OUTCOME: ${{ steps.setup_java.outcome }}
+          SETUP_FLUTTER_OUTCOME: ${{ steps.setup_flutter.outcome }}
+          CLASSIFIER_OUTCOME: ${{ steps.classifier.outcome }}
+          FLUTTER_VERSION_OUTCOME: ${{ steps.flutter_version.outcome }}
+          PUB_GET_OUTCOME: ${{ steps.pub_get.outcome }}
+          GEN_L10N_OUTCOME: ${{ steps.gen_l10n.outcome }}
+          ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
+          TEST_OUTCOME: ${{ steps.test.outcome }}
+          SETUP_GRADLE_OUTCOME: ${{ steps.setup_gradle.outcome }}
+          ANDROID_SDK_OUTCOME: ${{ steps.android_sdk.outcome }}
+          BUILD_APK_OUTCOME: ${{ steps.build_apk.outcome }}
+        run: |
+          Write-Host "================ CI VERIFICATION GATE ================"
+          Write-Host "Event Name              : $env:EVENT_NAME"
+          Write-Host "Base Ref                : $env:BASE_REF"
+          Write-Host "Classifier Decision     : $env:DECISION"
+          Write-Host "Require Android Build   : $env:REQUIRE_BUILD"
+          Write-Host "Reason Code             : $env:REASON_CODE"
+          Write-Host "Step Outcomes           :"
+          Write-Host "  - Checkout            : $env:CHECKOUT_OUTCOME"
+          Write-Host "  - Setup Java          : $env:SETUP_JAVA_OUTCOME"
+          Write-Host "  - Setup Flutter       : $env:SETUP_FLUTTER_OUTCOME"
+          Write-Host "  - Classifier          : $env:CLASSIFIER_OUTCOME"
+          Write-Host "  - Flutter Version     : $env:FLUTTER_VERSION_OUTCOME"
+          Write-Host "  - Pub Get             : $env:PUB_GET_OUTCOME"
+          Write-Host "  - Gen L10n            : $env:GEN_L10N_OUTCOME"
+          Write-Host "  - Analyze             : $env:ANALYZE_OUTCOME"
+          Write-Host "  - Test                : $env:TEST_OUTCOME"
+          Write-Host "  - Setup Gradle        : $env:SETUP_GRADLE_OUTCOME"
+          Write-Host "  - Android SDK         : $env:ANDROID_SDK_OUTCOME"
+          Write-Host "  - Build APK           : $env:BUILD_APK_OUTCOME"
+          Write-Host "======================================================"
+
+          if ($env:CHECKOUT_OUTCOME -ne 'success') {
+              Write-Error "Gate failure: Repository checkout step did not complete successfully (outcome: '$env:CHECKOUT_OUTCOME')."
+              exit 1
+          }
+
+          if ($env:CLASSIFIER_OUTCOME -ne 'success') {
+              Write-Error "Gate failure: Classifier step did not complete successfully (outcome: '$env:CLASSIFIER_OUTCOME')."
+              exit 1
+          }
+
+          $validSkip = ($env:DECISION -eq 'SKIP') -and ($env:REQUIRE_BUILD -eq 'false')
+          $validBuild = ($env:DECISION -eq 'BUILD') -and ($env:REQUIRE_BUILD -eq 'true')
+          if (-not ($validSkip -or $validBuild)) {
+              Write-Error "Gate failure: Inconsistent or invalid classifier outputs (decision: '$env:DECISION', require_build: '$env:REQUIRE_BUILD')."
+              exit 1
+          }
+
+          $mandatorySteps = @(
+              @{ Name = "Setup Java"; Outcome = $env:SETUP_JAVA_OUTCOME },
+              @{ Name = "Setup Flutter"; Outcome = $env:SETUP_FLUTTER_OUTCOME },
+              @{ Name = "Flutter Version"; Outcome = $env:FLUTTER_VERSION_OUTCOME },
+              @{ Name = "Pub Get"; Outcome = $env:PUB_GET_OUTCOME },
+              @{ Name = "Gen L10n"; Outcome = $env:GEN_L10N_OUTCOME },
+              @{ Name = "Analyze"; Outcome = $env:ANALYZE_OUTCOME },
+              @{ Name = "Test"; Outcome = $env:TEST_OUTCOME }
+          )
+
+          foreach ($step in $mandatorySteps) {
+              if ($step.Outcome -ne 'success') {
+                  Write-Error "Gate failure: Mandatory quality verification step '$($step.Name)' did not succeed (outcome: '$($step.Outcome)')."
+                  exit 1
+              }
+          }
+
+          if ($env:DECISION -eq 'SKIP') {
+              if ($env:EVENT_NAME -ne 'pull_request') {
+                  Write-Error "Gate failure: SKIP decision is only permitted on pull_request events (current: '$env:EVENT_NAME')."
+                  exit 1
+              }
+
+              if ($env:BASE_REF -ne 'Develop') {
+                  Write-Error "Gate failure: SKIP decision is only permitted targeting Develop branch (current: '$env:BASE_REF')."
+                  exit 1
+              }
+
+              if ($env:REASON_CODE -ne 'VERIFIED_SAFE_CHANGES') {
+                  Write-Error "Gate failure: SKIP decision requires reason code 'VERIFIED_SAFE_CHANGES' (current: '$env:REASON_CODE')."
+                  exit 1
+              }
+
+              $conditionalBuildSteps = @(
+                  @{ Name = "Setup Gradle"; Outcome = $env:SETUP_GRADLE_OUTCOME },
+                  @{ Name = "Android SDK"; Outcome = $env:ANDROID_SDK_OUTCOME },
+                  @{ Name = "Build APK"; Outcome = $env:BUILD_APK_OUTCOME }
+              )
+
+              foreach ($step in $conditionalBuildSteps) {
+                  if ($step.Outcome -ne 'skipped') {
+                      Write-Error "Gate failure: Android build step '$($step.Name)' was expected to be skipped for safe PR verification (outcome: '$($step.Outcome)')."
+                      exit 1
+                  }
+              }
+
+              Write-Host "Gate success: All mandatory quality checks succeeded. Fast PR verification safely omitted Android compilation."
+          } elseif ($env:DECISION -eq 'BUILD') {
+              $buildSteps = @(
+                  @{ Name = "Setup Gradle"; Outcome = $env:SETUP_GRADLE_OUTCOME },
+                  @{ Name = "Android SDK"; Outcome = $env:ANDROID_SDK_OUTCOME },
+                  @{ Name = "Build APK"; Outcome = $env:BUILD_APK_OUTCOME }
+              )
+
+              foreach ($step in $buildSteps) {
+                  if ($step.Outcome -ne 'success') {
+                      Write-Error "Gate failure: Mandatory Android build step '$($step.Name)' did not succeed (outcome: '$($step.Outcome)')."
+                      exit 1
+                  }
+              }
+
+              Write-Host "Gate success: All mandatory quality checks and required Android compilation succeeded."
+          }
