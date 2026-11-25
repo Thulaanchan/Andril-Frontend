@@ -57,6 +57,7 @@ class ChatListPreviewScope extends InheritedWidget {
   final ChatListPreviewStatus status;
   final List<ConversationItem> conversations;
   final VoidCallback? onRetry;
+  final ValueChanged<ConversationItem>? onOpenConversation;
 
   ChatListPreviewScope({
     super.key,
@@ -64,6 +65,7 @@ class ChatListPreviewScope extends InheritedWidget {
     required this.status,
     List<ConversationItem> conversations = const [],
     this.onRetry,
+    this.onOpenConversation,
     required super.child,
   }) : conversations = status == ChatListPreviewStatus.content
             ? List.unmodifiable(conversations)
@@ -83,7 +85,8 @@ class ChatListPreviewScope extends InheritedWidget {
       moduleType != oldWidget.moduleType ||
       status != oldWidget.status ||
       !listEquals(conversations, oldWidget.conversations) ||
-      onRetry != oldWidget.onRetry;
+      onRetry != oldWidget.onRetry ||
+      onOpenConversation != oldWidget.onOpenConversation;
 }
 
 /// Reusable, module-scoped All Chats screen.
@@ -94,10 +97,12 @@ class ChatListPreviewScope extends InheritedWidget {
 /// - Displays module-specific header, gradient, theme, and profile assets.
 class AndrilChatsListScreen extends StatefulWidget {
   final AndrilModuleConfig moduleConfig;
+  final ValueChanged<ConversationItem>? onOpenConversation;
 
   const AndrilChatsListScreen({
     super.key,
     required this.moduleConfig,
+    this.onOpenConversation,
   });
 
   @override
@@ -250,6 +255,15 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
     if (_status != ChatListPreviewStatus.content ||
         item.partner.moduleType != widget.moduleConfig.type ||
         !_filteredConversations.contains(item)) return;
+    if (widget.onOpenConversation != null) {
+      widget.onOpenConversation!(item);
+      return;
+    }
+    final previewCallback = _preview?.onOpenConversation;
+    if (previewCallback != null) {
+      previewCallback(item);
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AndrilChatScreen(
