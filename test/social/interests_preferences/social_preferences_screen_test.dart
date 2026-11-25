@@ -32,9 +32,9 @@ void main() {
     });
   }
 
-  group('SocialPreferencesModel Unit Tests (M5-FE-S03-QA-01)', () {
+  group('SocialPreferencesModel Unit & Immutability Tests (M5-FE-S03-SEC-03)', () {
     test('default preferences model enforces valid defaults', () {
-      const model = SocialPreferencesModel();
+      final model = SocialPreferencesModel();
       expect(model.minAge, 18);
       expect(model.maxAge, 99);
       expect(model.maxDistanceKm, 50);
@@ -46,7 +46,7 @@ void main() {
     });
 
     test('toggleInterest adds and removes interest IDs without duplicates', () {
-      var model = const SocialPreferencesModel();
+      var model = SocialPreferencesModel();
       model = model.toggleInterest('music');
       expect(model.selectedInterests, contains('music'));
       expect(model.selectedInterests.length, 1);
@@ -68,7 +68,7 @@ void main() {
     });
 
     test('toggleRelationshipGoal and toggleLanguage operate immutably', () {
-      var model = const SocialPreferencesModel(
+      var model = SocialPreferencesModel(
         relationshipGoals: ['Friendship'],
         languages: ['English'],
       );
@@ -84,7 +84,7 @@ void main() {
     });
 
     test('enforces defensive collection immutability for goals, languages, and interests', () {
-      const model = SocialPreferencesModel();
+      final model = SocialPreferencesModel();
       expect(
         () => model.relationshipGoals.add('InvalidGoal'),
         throwsA(isA<UnsupportedError>()),
@@ -111,16 +111,45 @@ void main() {
       );
     });
 
-    test('equality and hashcode operate on set and list content', () {
-      final model1 = const SocialPreferencesModel()
-          .withInterest('music')
-          .copyWith(minAge: 21);
-      final model2 = const SocialPreferencesModel()
-          .withInterest('music')
-          .copyWith(minAge: 21);
-      final model3 = const SocialPreferencesModel()
-          .withInterest('books')
-          .copyWith(minAge: 21);
+    test('mutating caller-owned input collections does not alter model state', () {
+      final mutableInterests = {'music', 'coffee'};
+      final mutableGoals = ['Friendship', 'Networking'];
+      final mutableLangs = ['English', 'Tamil'];
+
+      final model = SocialPreferencesModel(
+        selectedInterests: mutableInterests,
+        relationshipGoals: mutableGoals,
+        languages: mutableLangs,
+      );
+
+      expect(model.selectedInterests, containsAll(['music', 'coffee']));
+      expect(model.relationshipGoals, containsAll(['Friendship', 'Networking']));
+      expect(model.languages, containsAll(['English', 'Tamil']));
+
+      // Mutate the original caller collections
+      mutableInterests.add('gaming');
+      mutableGoals.add('Casual Chat');
+      mutableLangs.add('Sinhala');
+
+      // Model state MUST remain unchanged!
+      expect(model.selectedInterests, isNot(contains('gaming')));
+      expect(model.relationshipGoals, isNot(contains('Casual Chat')));
+      expect(model.languages, isNot(contains('Sinhala')));
+    });
+
+    test('equal sets with different insertion orders produce equal hash codes and equality', () {
+      final model1 = SocialPreferencesModel(
+        selectedInterests: {'music', 'coffee'},
+        minAge: 21,
+      );
+      final model2 = SocialPreferencesModel(
+        selectedInterests: {'coffee', 'music'},
+        minAge: 21,
+      );
+      final model3 = SocialPreferencesModel(
+        selectedInterests: {'books', 'music'},
+        minAge: 21,
+      );
 
       expect(model1, equals(model2));
       expect(model1.hashCode, equals(model2.hashCode));
@@ -128,7 +157,7 @@ void main() {
     });
 
     test('toString excludes sensitive diagnostic disclosure', () {
-      final model = const SocialPreferencesModel().withInterest('music');
+      final model = SocialPreferencesModel().withInterest('music');
       final desc = model.toString();
       expect(desc, contains('selectedCount: 1'));
       expect(desc, contains('minAge: 18'));
@@ -136,7 +165,7 @@ void main() {
     });
   });
 
-  group('SocialPreferencesScreen Widget Tests (M5-FE-S03-QA-01)', () {
+  group('SocialPreferencesScreen Widget Tests (M5-FE-S03-SEC-03)', () {
     testWidgets('renders all discovery sections and initial controls without overflow',
         (tester) async {
       setViewport(tester);
@@ -229,15 +258,19 @@ void main() {
       expect(resultModel!.selectedInterests.length, 1);
     });
 
-    testWidgets('shows loading spinner when onSave is executing',
+    testWidgets('shows loading spinner when onSave is executing and rejects repeated taps',
         (tester) async {
       setViewport(tester);
       final completer = Completer<bool>();
+      var saveCount = 0;
 
       await tester.pumpWidget(createTestWidget(
         initialPreferences:
-            const SocialPreferencesModel().withInterest('tech'),
-        onSave: (_) => completer.future,
+            SocialPreferencesModel().withInterest('tech'),
+        onSave: (_) {
+          saveCount++;
+          return completer.future;
+        },
       ));
 
       final continueButton = find.byKey(const Key('continueButton'));
@@ -246,6 +279,12 @@ void main() {
       await tester.pump(); // Enter loading
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(saveCount, 1);
+
+      // Second tap while loading should be ignored
+      await tester.tap(continueButton);
+      await tester.pump();
+      expect(saveCount, 1);
 
       completer.complete(true);
       await tester.pump();
@@ -256,7 +295,7 @@ void main() {
       setViewport(tester);
       await tester.pumpWidget(createTestWidget(
         initialPreferences:
-            const SocialPreferencesModel().withInterest('art'),
+            SocialPreferencesModel().withInterest('art'),
         onSave: (_) async => false,
       ));
 
@@ -291,7 +330,7 @@ void main() {
 
       await tester.pumpWidget(createTestWidget(
         initialPreferences:
-            const SocialPreferencesModel().withInterest('fitness'),
+            SocialPreferencesModel().withInterest('fitness'),
         onContinue: (prefs) => resultModel = prefs,
       ));
 
@@ -310,4 +349,3 @@ void main() {
     });
   });
 }
-

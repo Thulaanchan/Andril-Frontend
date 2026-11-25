@@ -4,15 +4,14 @@ import 'package:flutter/material.dart';
 
 /// Screen S03: Social Interests & Preferences.
 ///
-/// Follows M5-FE-S03-UI-01 and approved Social UI specifications:
+/// Follows M5-FE-S03-SEC-03 and approved Social UI specifications:
 /// - Social theme with [SocialWaveBackground] and approved palette tokens:
 ///   Royal Purple (#330099), Copper (#C47A44), Cream (#FAF7F2).
 /// - Interests selection from approved catalog with duplicate prevention.
 /// - Discovery criteria: age range (18–99), maximum distance, relationship goals, languages, and showMe.
-/// - Responsive wrapping and scrolling layout.
-/// - Accessible controls with semantic labels.
-/// - Does not persist to Learning or Hobbies.
-/// - Does not grant onboarding completion without backend verification.
+/// - Defensively immutable preference state updates.
+/// - Guards against repeated or stale asynchronous submissions.
+/// - Distinguishes local draft progression from verified persistence.
 /// - Excludes Personality Test controls.
 class SocialPreferencesScreen extends StatefulWidget {
   final SocialPreferencesModel? initialPreferences;
@@ -52,13 +51,14 @@ class SocialPreferencesScreen extends StatefulWidget {
 class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
   late SocialPreferencesModel _preferences;
   bool _isLoading = false;
+  int _submitGeneration = 0;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _preferences =
-        widget.initialPreferences ?? const SocialPreferencesModel();
+        widget.initialPreferences ?? SocialPreferencesModel();
   }
 
   List<SocialInterestItem> get _catalog =>
@@ -120,10 +120,14 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
         _isLoading = true;
         _errorMessage = null;
       });
+      final currentGen = ++_submitGeneration;
       try {
         final success = await widget.onSave!(_preferences);
-        if (!mounted) return;
+        if (!mounted || currentGen != _submitGeneration) return;
         if (success) {
+          setState(() {
+            _isLoading = false;
+          });
           widget.onContinue?.call(_preferences);
         } else {
           setState(() {
@@ -131,8 +135,8 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
             _errorMessage = 'Failed to save preferences. Please try again.';
           });
         }
-      } catch (e) {
-        if (!mounted) return;
+      } catch (_) {
+        if (!mounted || currentGen != _submitGeneration) return;
         setState(() {
           _isLoading = false;
           _errorMessage = 'An unexpected error occurred.';
@@ -141,6 +145,12 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
     } else {
       widget.onContinue?.call(_preferences);
     }
+  }
+
+  @override
+  void dispose() {
+    _submitGeneration++;
+    super.dispose();
   }
 
   @override
@@ -357,103 +367,83 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
   }
 
   Widget _buildAgeSection() {
-    final minAge = _preferences.minAge;
-    final maxAge = _preferences.maxAge;
-
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: AndrilSocialColors.canvasCream,
-        borderRadius: BorderRadius.circular(16.0),
-        border: Border.all(color: AndrilSocialColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Preferred Age Range',
-                style: TextStyle(
-                  fontSize: 14.0,
-                  fontWeight: FontWeight.w700,
-                  color: AndrilSocialColors.ink,
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Preferred Age Range',
+              style: TextStyle(
+                fontSize: 15.0,
+                fontWeight: FontWeight.w800,
+                color: AndrilSocialColors.ink,
               ),
-              Text(
-                '$minAge – $maxAge years',
-                style: const TextStyle(
-                  fontSize: 13.0,
-                  fontWeight: FontWeight.w700,
-                  color: AndrilSocialColors.copper,
-                ),
+            ),
+            Text(
+              '${_preferences.minAge} – ${_preferences.maxAge} years',
+              style: const TextStyle(
+                fontSize: 13.0,
+                fontWeight: FontWeight.w600,
+                color: AndrilSocialColors.royalPurple,
               ),
-            ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+        RangeSlider(
+          values: RangeValues(
+            _preferences.minAge.toDouble(),
+            _preferences.maxAge.toDouble(),
           ),
-          const SizedBox(height: 8.0),
-          RangeSlider(
-            key: const Key('ageRangeSlider'),
-            values: RangeValues(minAge.toDouble(), maxAge.toDouble()),
-            min: 18.0,
-            max: 99.0,
-            divisions: 81,
-            activeColor: AndrilSocialColors.royalPurple,
-            inactiveColor: AndrilSocialColors.faintPurple,
-            onChanged: _updateAgeRange,
-          ),
-        ],
-      ),
+          min: 18.0,
+          max: 99.0,
+          divisions: 81,
+          activeColor: AndrilSocialColors.royalPurple,
+          inactiveColor: AndrilSocialColors.border,
+          onChanged: _isLoading ? null : _updateAgeRange,
+        ),
+      ],
     );
   }
 
   Widget _buildDistanceSection() {
-    final dist = _preferences.maxDistanceKm;
-
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: AndrilSocialColors.canvasCream,
-        borderRadius: BorderRadius.circular(16.0),
-        border: Border.all(color: AndrilSocialColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Maximum Distance',
-                style: TextStyle(
-                  fontSize: 14.0,
-                  fontWeight: FontWeight.w700,
-                  color: AndrilSocialColors.ink,
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Maximum Distance',
+              style: TextStyle(
+                fontSize: 15.0,
+                fontWeight: FontWeight.w800,
+                color: AndrilSocialColors.ink,
               ),
-              Text(
-                'Up to $dist km',
-                style: const TextStyle(
-                  fontSize: 13.0,
-                  fontWeight: FontWeight.w700,
-                  color: AndrilSocialColors.copper,
-                ),
+            ),
+            Text(
+              'Up to ${_preferences.maxDistanceKm} km',
+              style: const TextStyle(
+                fontSize: 13.0,
+                fontWeight: FontWeight.w600,
+                color: AndrilSocialColors.royalPurple,
               ),
-            ],
-          ),
-          const SizedBox(height: 8.0),
-          Slider(
-            key: const Key('distanceSlider'),
-            value: dist.toDouble(),
-            min: 5.0,
-            max: 150.0,
-            divisions: 29,
-            activeColor: AndrilSocialColors.copper,
-            inactiveColor: AndrilSocialColors.faintPurple,
-            onChanged: _updateDistance,
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+        Slider(
+          value: _preferences.maxDistanceKm.toDouble(),
+          min: 5.0,
+          max: 200.0,
+          divisions: 39,
+          activeColor: AndrilSocialColors.royalPurple,
+          inactiveColor: AndrilSocialColors.border,
+          onChanged: _isLoading ? null : _updateDistance,
+        ),
+      ],
     );
   }
 
@@ -464,8 +454,8 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
         const Text(
           'Relationship Goals',
           style: TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w700,
+            fontSize: 15.0,
+            fontWeight: FontWeight.w800,
             color: AndrilSocialColors.ink,
           ),
         ),
@@ -474,18 +464,17 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
           spacing: 8.0,
           runSpacing: 8.0,
           children: SocialPreferencesModel.defaultRelationshipGoals.map((goal) {
-            final isSelected =
-                _preferences.relationshipGoals.contains(goal);
+            final isSelected = _preferences.relationshipGoals.contains(goal);
             return FilterChip(
               key: Key('goalChip_$goal'),
               label: Text(goal),
               selected: isSelected,
               onSelected: (_) => _toggleGoal(goal),
-              selectedColor: AndrilSocialColors.copper,
+              selectedColor: AndrilSocialColors.royalPurple,
               backgroundColor: AndrilSocialColors.canvasCream,
               checkmarkColor: Colors.white,
               labelStyle: TextStyle(
-                fontSize: 12.5,
+                fontSize: 13.0,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected ? Colors.white : AndrilSocialColors.ink,
               ),
@@ -493,7 +482,7 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
                 borderRadius: BorderRadius.circular(20.0),
                 side: BorderSide(
                   color: isSelected
-                      ? AndrilSocialColors.copper
+                      ? AndrilSocialColors.royalPurple
                       : AndrilSocialColors.border,
                 ),
               ),
@@ -511,8 +500,8 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
         const Text(
           'Preferred Languages',
           style: TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w700,
+            fontSize: 15.0,
+            fontWeight: FontWeight.w800,
             color: AndrilSocialColors.ink,
           ),
         ),
@@ -531,7 +520,7 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
               backgroundColor: AndrilSocialColors.canvasCream,
               checkmarkColor: Colors.white,
               labelStyle: TextStyle(
-                fontSize: 12.5,
+                fontSize: 13.0,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected ? Colors.white : AndrilSocialColors.ink,
               ),
@@ -557,38 +546,34 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
         const Text(
           'Show Me',
           style: TextStyle(
-            fontSize: 14.0,
-            fontWeight: FontWeight.w700,
+            fontSize: 15.0,
+            fontWeight: FontWeight.w800,
             color: AndrilSocialColors.ink,
           ),
         ),
         const SizedBox(height: 8.0),
-        Row(
-          children: SocialPreferencesModel.defaultShowMeOptions.map((opt) {
-            final isSelected = _preferences.showMe == opt;
-            return Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                child: ChoiceChip(
-                  key: Key('showMeChip_$opt'),
-                  label: Center(child: Text(opt)),
-                  selected: isSelected,
-                  onSelected: (_) => _updateShowMe(opt),
-                  selectedColor: AndrilSocialColors.royalPurple,
-                  backgroundColor: AndrilSocialColors.canvasCream,
-                  labelStyle: TextStyle(
-                    fontSize: 13.0,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? Colors.white : AndrilSocialColors.ink,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14.0),
-                    side: BorderSide(
-                      color: isSelected
-                          ? AndrilSocialColors.royalPurple
-                          : AndrilSocialColors.border,
-                    ),
-                  ),
+        Wrap(
+          spacing: 8.0,
+          children: SocialPreferencesModel.defaultShowMeOptions.map((option) {
+            final isSelected = _preferences.showMe == option;
+            return ChoiceChip(
+              key: Key('showMeChip_$option'),
+              label: Text(option),
+              selected: isSelected,
+              onSelected: (_) => _updateShowMe(option),
+              selectedColor: AndrilSocialColors.royalPurple,
+              backgroundColor: AndrilSocialColors.canvasCream,
+              labelStyle: TextStyle(
+                fontSize: 13.0,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? Colors.white : AndrilSocialColors.ink,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20.0),
+                side: BorderSide(
+                  color: isSelected
+                      ? AndrilSocialColors.royalPurple
+                      : AndrilSocialColors.border,
                 ),
               ),
             );
@@ -599,45 +584,36 @@ class _SocialPreferencesScreenState extends State<SocialPreferencesScreen> {
   }
 
   Widget _buildContinueButton(bool canSubmit) {
-    return Semantics(
-      button: true,
-      enabled: canSubmit,
-      label: 'Continue',
-      child: SizedBox(
-        height: 52.0,
-        child: ElevatedButton(
-          key: const Key('continueButton'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AndrilSocialColors.royalPurple,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor:
-                AndrilSocialColors.royalPurple.withValues(alpha: 0.35),
-            disabledForegroundColor: Colors.white70,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16.0),
-            ),
-            elevation: canSubmit ? 2.0 : 0.0,
-          ),
-          onPressed: canSubmit ? _handleContinue : null,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 24.0,
-                  height: 24.0,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text(
-                  'Continue',
-                  style: TextStyle(
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                  ),
-                ),
+    return ElevatedButton(
+      key: const Key('continueButton'),
+      onPressed: canSubmit ? _handleContinue : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AndrilSocialColors.royalPurple,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: AndrilSocialColors.border,
+        disabledForegroundColor: Colors.black26,
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24.0),
         ),
+        elevation: 0,
       ),
+      child: _isLoading
+          ? const SizedBox(
+              width: 20.0,
+              height: 20.0,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.0,
+                color: Colors.white,
+              ),
+            )
+          : const Text(
+              'Save & Continue',
+              style: TextStyle(
+                fontSize: 16.0,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
     );
   }
 }
