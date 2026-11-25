@@ -27,23 +27,40 @@ jobs:
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: Develop
+          ref: refs/heads/Develop
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Record checked-out Develop revision
         id: record_revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
-          $sha = (& git rev-parse HEAD).Trim()
-          Write-Host "================ NIGHTLY EXECUTION CONTEXT ================"
-          Write-Host "Triggered Event     : ${{ github.event_name }}"
-          Write-Host "Default Branch Ref  : ${{ github.ref }}"
-          Write-Host "Target Checkout Ref : Develop"
-          Write-Host "Checked-out SHA     : $sha"
-          Write-Host "=========================================================="
-          if (-not $sha -or $sha.Length -ne 40) {
-              Write-Error "Failed to verify valid 40-character commit SHA for Develop."
+          $sha = (& git rev-parse HEAD 2>$null)
+          if ($LASTEXITCODE -ne 0 -or -not $sha) {
+              Write-Error "Failed to execute git rev-parse HEAD."
               exit 1
           }
+          $sha = $sha.Trim()
+          $shaRegex = '^[0-9a-f]{40}$'
+          if (-not ($sha -match $shaRegex)) {
+              Write-Error "Resolved revision '$sha' is not a valid 40-character hexadecimal SHA."
+              exit 1
+          }
+
+          & git cat-file -e "$($sha)^{commit}" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Resolved commit object '$sha' does not exist in local repository."
+              exit 1
+          }
+
+          Write-Host "================ NIGHTLY EXECUTION CONTEXT ================"
+          Write-Host "Triggered Event         : $env:EVENT_NAME"
+          Write-Host "Workflow Definition Ref : $env:GITHUB_REF"
+          Write-Host "Target Checkout Ref     : refs/heads/Develop"
+          Write-Host "Checked-out Develop SHA : $sha"
+          Write-Host "=========================================================="
 
       - name: Setup Java JDK (Temurin 25.0.3)
         id: setup_java
@@ -67,7 +84,7 @@ jobs:
 
       - name: Resolve locked dependencies
         id: pub_get
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Generate localization
         id: gen_l10n
@@ -147,7 +164,7 @@ jobs:
           )
 
           foreach ($step in $mandatorySteps) {
-              if ($step.Outcome -ne 'success') {
+              if (-not $step.Outcome -or $step.Outcome -ne 'success') {
                   Write-Error "Nightly Gate failure: Mandatory verification step '$($step.Name)' did not succeed (outcome: '$($step.Outcome)')."
                   exit 1
               }
