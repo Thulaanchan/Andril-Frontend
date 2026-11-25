@@ -52,6 +52,49 @@ void main() {
         expect(SocialProfileDraft.validateDisplayName('Abc'), isNull);
       });
 
+      test('trims whitespace before evaluating display name length boundaries', () {
+        // "  Jo  " has length 6 untrimmed, but trimmed length is 2 -> invalid (< 3)
+        expect(
+          SocialProfileDraft.validateDisplayName('  Jo  '),
+          'Display name must be at least 3 characters.',
+        );
+        // "  Bob  " has length 7 untrimmed, but trimmed length is 3 -> valid
+        expect(SocialProfileDraft.validateDisplayName('  Bob  '), isNull);
+        // Trimmed string exceeding max length
+        final spacesWith31 = '  ${'A' * 31}  ';
+        expect(
+          SocialProfileDraft.validateDisplayName(spacesWith31),
+          'Display name must not exceed 30 characters.',
+        );
+      });
+
+      test('rejects reserved administrative display names case-insensitively', () {
+        const reserved = [
+          'andril',
+          'admin',
+          'ADMIN',
+          'Administrator',
+          'moderator',
+          'MODERATOR',
+          'support',
+          'Support',
+          'system',
+          'official',
+          'andriladmin',
+          'Andril_Support',
+          'Andril-Team',
+        ];
+        for (final name in reserved) {
+          expect(
+            SocialProfileDraft.validateDisplayName(name),
+            'Display name is reserved and cannot be used.',
+            reason: 'Expected $name to be rejected as reserved',
+          );
+        }
+        // Non-reserved names should be allowed if valid
+        expect(SocialProfileDraft.validateDisplayName('Thulaanchan'), isNull);
+      });
+
       test('validates maximum length boundary (30 grapheme clusters)', () {
         final exactly30 = 'A' * 30;
         final exactly31 = 'A' * 31;
@@ -153,6 +196,42 @@ void main() {
         expect(updated.profilePhotoPath, '/tmp/photo.jpg');
         expect(updated.visibility, 'private');
         expect(original.displayName, 'Initial');
+      });
+
+      test('copyWith allows explicitly clearing nullable bio and profilePhotoPath', () {
+        const original = SocialProfileDraft(
+          displayName: 'Initial',
+          bio: 'Some Bio',
+          profilePhotoPath: '/path/to/photo.jpg',
+        );
+
+        final clearedBio = original.copyWith(clearBio: true);
+        expect(clearedBio.bio, isNull);
+        expect(clearedBio.profilePhotoPath, '/path/to/photo.jpg');
+
+        final clearedPhoto = original.copyWith(clearProfilePhoto: true);
+        expect(clearedPhoto.bio, 'Some Bio');
+        expect(clearedPhoto.profilePhotoPath, isNull);
+
+        final clearedBoth = original.copyWith(
+          clearBio: true,
+          clearProfilePhoto: true,
+        );
+        expect(clearedBoth.bio, isNull);
+        expect(clearedBoth.profilePhotoPath, isNull);
+      });
+
+      test('constructor enforces private visibility boundary', () {
+        expect(
+          () => SocialProfileDraft(visibility: 'public'),
+          throwsA(isA<AssertionError>()),
+        );
+        expect(
+          () => SocialProfileDraft(visibility: 'unapproved_state'),
+          throwsA(isA<AssertionError>()),
+        );
+        const validExplicit = SocialProfileDraft(visibility: 'private');
+        expect(validExplicit.visibility, 'private');
       });
 
       test('operator == and hashCode operate correctly', () {
