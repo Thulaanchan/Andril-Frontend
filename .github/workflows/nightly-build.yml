@@ -1,0 +1,190 @@
+name: ANDRIL Nightly Android Verification
+
+on:
+  schedule:
+    - cron: '30 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  nightly_android:
+    name: Nightly Android Verification (Develop)
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Develop repository
+        id: checkout
+        uses: actions/checkout@v7
+        with:
+          ref: refs/heads/Develop
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record and verify checked-out Develop revision
+        id: record_revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_DEFINITION_REF: ${{ github.workflow_ref }}
+          TRIGGER_REF: ${{ github.ref }}
+          EXPECTED_CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
+        run: |
+          $expectedSha = $env:EXPECTED_CHECKOUT_SHA
+          $actualSha = (& git rev-parse HEAD 2>$null)
+          if ($LASTEXITCODE -ne 0 -or -not $actualSha) {
+              Write-Error "Failed to execute git rev-parse HEAD."
+              exit 1
+          }
+          $actualSha = $actualSha.Trim()
+          $shaRegex = '^[0-9a-f]{40}$'
+
+          if (-not $expectedSha -or -not ($expectedSha -match $shaRegex)) {
+              Write-Error "Expected checkout SHA from checkout action is missing or invalid: '$expectedSha'."
+              exit 1
+          }
+
+          if (-not ($actualSha -match $shaRegex)) {
+              Write-Error "Resolved Git HEAD revision '$actualSha' is not a valid 40-character hexadecimal SHA."
+              exit 1
+          }
+
+          if ($actualSha -ne $expectedSha) {
+              Write-Error "Checkout revision mismatch! Actual Git HEAD ($actualSha) does not match expected checkout commit ($expectedSha)."
+              exit 1
+          }
+
+          & git cat-file -e "$($actualSha)^{commit}" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Resolved commit object '$actualSha' does not exist in local repository."
+              exit 1
+          }
+
+          Write-Host "================ NIGHTLY EXECUTION CONTEXT ================"
+          Write-Host "Triggered Event         : $env:EVENT_NAME"
+          Write-Host "Workflow Definition Ref : $env:WORKFLOW_DEFINITION_REF"
+          Write-Host "Triggering Ref          : $env:TRIGGER_REF"
+          Write-Host "Target Checkout Ref     : refs/heads/Develop"
+          Write-Host "Expected Checkout SHA   : $expectedSha"
+          Write-Host "Actual Develop HEAD SHA : $actualSha"
+          Write-Host "Identity Equality Check : MATCH (Equality Verified)"
+          Write-Host "=========================================================="
+
+      - name: Setup Java JDK (Temurin 25.0.3)
+        id: setup_java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.3'
+
+      - name: Setup Flutter SDK
+        id: setup_flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.5'
+          cache: true
+          pub-cache: true
+
+      - name: Flutter version
+        id: flutter_version
+        run: flutter --version
+
+      - name: Resolve locked dependencies
+        id: pub_get
+        run: flutter pub get --enforce-lockfile
+
+      - name: Generate localization
+        id: gen_l10n
+        run: flutter gen-l10n
+
+      - name: Analyze
+        id: analyze
+        run: flutter analyze
+
+      - name: Test
+        id: test
+        run: flutter test
+
+      - name: Setup Gradle Build Cache
+        id: setup_gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Android SDK packages
+        id: android_sdk
+        run: |
+          $sdkManager = Join-Path $env:ANDROID_HOME 'cmdline-tools/latest/bin/sdkmanager.bat'
+          & $sdkManager --install 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build Android debug APK
+        id: build_apk
+        run: flutter build apk --debug --no-pub
+
+      - name: Verify nightly pipeline outcome
+        id: verify_gate
+        if: always()
+        env:
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          RECORD_REVISION_OUTCOME: ${{ steps.record_revision.outcome }}
+          SETUP_JAVA_OUTCOME: ${{ steps.setup_java.outcome }}
+          SETUP_FLUTTER_OUTCOME: ${{ steps.setup_flutter.outcome }}
+          FLUTTER_VERSION_OUTCOME: ${{ steps.flutter_version.outcome }}
+          PUB_GET_OUTCOME: ${{ steps.pub_get.outcome }}
+          GEN_L10N_OUTCOME: ${{ steps.gen_l10n.outcome }}
+          ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
+          TEST_OUTCOME: ${{ steps.test.outcome }}
+          SETUP_GRADLE_OUTCOME: ${{ steps.setup_gradle.outcome }}
+          ANDROID_SDK_OUTCOME: ${{ steps.android_sdk.outcome }}
+          BUILD_APK_OUTCOME: ${{ steps.build_apk.outcome }}
+        run: |
+          Write-Host "================ NIGHTLY VERIFICATION GATE ================"
+          Write-Host "Step Outcomes:"
+          Write-Host "  - Checkout Develop    : $env:CHECKOUT_OUTCOME"
+          Write-Host "  - Record Revision     : $env:RECORD_REVISION_OUTCOME"
+          Write-Host "  - Setup Java          : $env:SETUP_JAVA_OUTCOME"
+          Write-Host "  - Setup Flutter       : $env:SETUP_FLUTTER_OUTCOME"
+          Write-Host "  - Flutter Version     : $env:FLUTTER_VERSION_OUTCOME"
+          Write-Host "  - Pub Get             : $env:PUB_GET_OUTCOME"
+          Write-Host "  - Gen L10n            : $env:GEN_L10N_OUTCOME"
+          Write-Host "  - Analyze             : $env:ANALYZE_OUTCOME"
+          Write-Host "  - Test                : $env:TEST_OUTCOME"
+          Write-Host "  - Setup Gradle        : $env:SETUP_GRADLE_OUTCOME"
+          Write-Host "  - Android SDK         : $env:ANDROID_SDK_OUTCOME"
+          Write-Host "  - Build APK           : $env:BUILD_APK_OUTCOME"
+          Write-Host "==========================================================="
+
+          $mandatorySteps = @(
+              @{ Name = "Checkout Develop"; Outcome = $env:CHECKOUT_OUTCOME },
+              @{ Name = "Record Revision"; Outcome = $env:RECORD_REVISION_OUTCOME },
+              @{ Name = "Setup Java"; Outcome = $env:SETUP_JAVA_OUTCOME },
+              @{ Name = "Setup Flutter"; Outcome = $env:SETUP_FLUTTER_OUTCOME },
+              @{ Name = "Flutter Version"; Outcome = $env:FLUTTER_VERSION_OUTCOME },
+              @{ Name = "Pub Get"; Outcome = $env:PUB_GET_OUTCOME },
+              @{ Name = "Gen L10n"; Outcome = $env:GEN_L10N_OUTCOME },
+              @{ Name = "Analyze"; Outcome = $env:ANALYZE_OUTCOME },
+              @{ Name = "Test"; Outcome = $env:TEST_OUTCOME },
+              @{ Name = "Setup Gradle"; Outcome = $env:SETUP_GRADLE_OUTCOME },
+              @{ Name = "Android SDK"; Outcome = $env:ANDROID_SDK_OUTCOME },
+              @{ Name = "Build APK"; Outcome = $env:BUILD_APK_OUTCOME }
+          )
+
+          foreach ($step in $mandatorySteps) {
+              if (-not $step.Outcome -or $step.Outcome -ne 'success') {
+                  Write-Error "Nightly Gate failure: Mandatory verification step '$($step.Name)' did not succeed (outcome: '$($step.Outcome)')."
+                  exit 1
+              }
+          }
+
+          Write-Host "Nightly Gate Success: Complete Flutter quality verification and Android debug APK compilation succeeded on Develop."
