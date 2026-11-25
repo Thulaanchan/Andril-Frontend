@@ -3,9 +3,10 @@ import 'package:characters/characters.dart';
 /// Immutable presentation draft representing Social-specific profile input.
 ///
 /// Follows M5-FE-S02-DOM-01 and confirmed backend contract boundaries:
-/// - Display name: 3–30 Unicode grapheme clusters.
+/// - Display name: 3–30 Unicode grapheme clusters (evaluated after trimming).
 /// - Bio: optional, up to 300 Unicode grapheme clusters.
 /// - Visibility: restricted to the approved private state ('private').
+/// - Reserved administrative display names are rejected.
 /// - Client cannot set or mutate ownership, eligibility, or completion flags.
 class SocialProfileDraft {
   /// Approved draft visibility is strictly private.
@@ -24,6 +25,22 @@ class SocialProfileDraft {
   static final RegExp _disallowedControlRegex =
       RegExp(r'[\u0000-\u001F\u007F-\u009F]');
 
+  /// Reserved administrative display names matching backend contracts.
+  static const Set<String> _reservedNames = {
+    'andril',
+    'admin',
+    'administrator',
+    'moderator',
+    'support',
+    'system',
+    'official',
+    'andriladmin',
+    'andrilmoderator',
+    'andrilsupport',
+    'andrilofficial',
+    'andrilteam',
+  };
+
   /// The draft display name entered by the user.
   final String displayName;
 
@@ -40,41 +57,68 @@ class SocialProfileDraft {
     this.displayName = '',
     this.bio,
     this.profilePhotoPath,
-    this.visibility = privateVisibility,
-  });
+    String? visibility,
+  })  : assert(
+          visibility == null || visibility == privateVisibility,
+          'Draft visibility must be private',
+        ),
+        visibility = privateVisibility;
 
   /// Creates a copy of this draft with the given fields replaced.
   ///
   /// Visibility remains strictly [privateVisibility].
+  /// Pass [clearBio] or [clearProfilePhoto] to explicitly reset nullable fields.
   SocialProfileDraft copyWith({
     String? displayName,
     String? bio,
     String? profilePhotoPath,
+    bool clearBio = false,
+    bool clearProfilePhoto = false,
   }) {
     return SocialProfileDraft(
       displayName: displayName ?? this.displayName,
-      bio: bio ?? this.bio,
-      profilePhotoPath: profilePhotoPath ?? this.profilePhotoPath,
+      bio: clearBio ? null : (bio ?? this.bio),
+      profilePhotoPath:
+          clearProfilePhoto ? null : (profilePhotoPath ?? this.profilePhotoPath),
       visibility: privateVisibility,
     );
   }
 
+  /// Checks if a normalized string matches any backend reserved display name.
+  static bool _isReservedDisplayName(String value) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < value.length; i++) {
+      final char = value[i];
+      if (char == ' ' || char == '_' || char == '-') continue;
+      buffer.write(char.toLowerCase());
+    }
+    return _reservedNames.contains(buffer.toString());
+  }
+
   /// Validates the display name against approved boundaries.
   ///
+  /// Evaluates trimmed text element length and rejects reserved administrative names.
   /// Returns a validation error description, or null if valid.
   static String? validateDisplayName(String? value) {
-    if (value == null || value.trim().isEmpty) {
+    if (value == null) {
+      return 'Display name cannot be empty.';
+    }
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
       return 'Display name cannot be empty.';
     }
     if (_disallowedControlRegex.hasMatch(value)) {
       return 'Display name contains invalid characters.';
     }
-    final graphemeCount = value.characters.length;
+    final graphemeCount = trimmed.characters.length;
     if (graphemeCount < minDisplayNameLength) {
       return 'Display name must be at least $minDisplayNameLength characters.';
     }
     if (graphemeCount > maxDisplayNameLength) {
       return 'Display name must not exceed $maxDisplayNameLength characters.';
+    }
+    if (_isReservedDisplayName(trimmed)) {
+      return 'Display name is reserved and cannot be used.';
     }
     return null;
   }
