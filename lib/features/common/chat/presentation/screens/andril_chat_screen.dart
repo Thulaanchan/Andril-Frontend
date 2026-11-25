@@ -26,6 +26,7 @@ class AndrilChatScreen extends StatefulWidget {
   final String? conversationId;
   final int initialBalance; // Test-only MOCK coin balance
   final bool initialBlocked;
+  final VoidCallback? onBackPressed;
 
   const AndrilChatScreen({
     super.key,
@@ -34,6 +35,7 @@ class AndrilChatScreen extends StatefulWidget {
     this.conversationId,
     this.initialBalance = 40,
     this.initialBlocked = false,
+    this.onBackPressed,
   });
 
   /// Factory constructor for Learning module chat.
@@ -1088,6 +1090,10 @@ class _AndrilChatScreenState extends State<AndrilChatScreen> {
                     key: const Key('back_button'),
                     tooltip: 'Back to chats',
                     onPressed: () {
+                      if (widget.onBackPressed != null) {
+                        widget.onBackPressed!();
+                        return;
+                      }
                       if (Navigator.of(context).canPop()) {
                         Navigator.of(context).pop();
                       } else {
