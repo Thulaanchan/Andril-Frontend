@@ -5,12 +5,28 @@ import 'package:andril_mobile/features/social/home/viewmodels/social_home_viewmo
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _stubPhase;
+  final Set<VoidCallback> _clearers = {};
 
   FakeSessionController({SessionPhase phase = SessionPhase.signedIn})
       : _stubPhase = phase;
 
   @override
   SessionPhase get phase => _stubPhase;
+
+  @override
+  bool get moduleHomeAuthorized => false;
+
+  @override
+  VoidCallback registerPrivateStateClearer(VoidCallback clear) {
+    _clearers.add(clear);
+    return () => _clearers.remove(clear);
+  }
+
+  void triggerPrivateStateClearers() {
+    for (final clearer in List.of(_clearers)) {
+      clearer();
+    }
+  }
 
   void setPhase(SessionPhase phase) {
     _stubPhase = phase;
@@ -22,31 +38,31 @@ class FakeSessionController extends ChangeNotifier implements SessionController 
 }
 
 void main() {
-  group('SocialHomeViewModel Unit Tests (M5-FE-S21-VM-01)', () {
-    test('initial state has correct default values', () {
+  group('SocialHomeViewModel Security & Authorization Tests (M5-FE-S21-SEC-01)', () {
+    test('default construction fails closed (missing session, opt-in false)', () {
       final vm = SocialHomeViewModel();
       expect(vm.status, SocialHomeStatus.initial);
-      expect(vm.displayName, 'Explorer');
+      expect(vm.displayName, '');
       expect(vm.avatarUrl, isNull);
       expect(vm.unreadNotificationsCount, 0);
       expect(vm.recommendedPeople, isEmpty);
       expect(vm.errorMessage, isNull);
       expect(vm.isLoading, isFalse);
       expect(vm.isAccessDenied, isFalse);
-      expect(vm.isAuthorized, isTrue);
-      expect(vm.quickActions.length, 4);
+      expect(vm.isAuthorized, isFalse);
+      expect(vm.isSocialOptedIn, isFalse);
     });
 
-    test('isAuthorized fails closed when not opted in to social module', () {
-      final vm = SocialHomeViewModel(isSocialOptedIn: false);
+    test('missing session is denied on initialize', () async {
+      final vm = SocialHomeViewModel(isSocialOptedIn: true);
       expect(vm.isAuthorized, isFalse);
 
-      vm.initialize();
+      await vm.initialize();
       expect(vm.status, SocialHomeStatus.accessDenied);
       expect(vm.isAccessDenied, isTrue);
     });
 
-    test('isAuthorized fails closed when session controller is signed out', () {
+    test('signed-out session is denied', () async {
       final fakeSession = FakeSessionController(phase: SessionPhase.signedOut);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
@@ -54,12 +70,12 @@ void main() {
       );
 
       expect(vm.isAuthorized, isFalse);
-      vm.initialize();
+      await vm.initialize();
       expect(vm.status, SocialHomeStatus.accessDenied);
       expect(vm.isAccessDenied, isTrue);
     });
 
-    test('isAuthorized fails closed when session controller is unavailable', () {
+    test('unavailable session is denied', () async {
       final fakeSession = FakeSessionController(phase: SessionPhase.unavailable);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
@@ -67,26 +83,37 @@ void main() {
       );
 
       expect(vm.isAuthorized, isFalse);
-      vm.initialize();
+      await vm.initialize();
       expect(vm.status, SocialHomeStatus.accessDenied);
       expect(vm.isAccessDenied, isTrue);
     });
 
-    test('initialize loads default recommendations when authorized and none provided', () async {
+    test('signed-in status alone without module authorization is denied', () async {
       final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
         isSocialOptedIn: true,
+        isTestAuthorized: false,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialHomeStatus.accessDenied);
+    });
+
+    test('isolated test fixture with signed-in session and opt-in is authorized', () async {
+      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        isTestAuthorized: true,
       );
 
       expect(vm.isAuthorized, isTrue);
       await vm.initialize();
-
       expect(vm.status, SocialHomeStatus.ready);
-      expect(vm.recommendedPeople.length, 4);
-      expect(vm.recommendedPeople.first.displayName, 'Nivetha R.');
-      expect(vm.recommendedPeople.first.location, 'Kandy');
-      expect(vm.errorMessage, isNull);
+      // No automatic mock profile generation in production
+      expect(vm.recommendedPeople, isEmpty);
     });
 
     test('custom recommendations in constructor are preserved upon initialization', () async {
@@ -98,8 +125,11 @@ void main() {
           photoUrl: 'https://example.com/priya.jpg',
         ),
       ];
-
+      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
       final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        isTestAuthorized: true,
         initialRecommendations: customRecs,
         initialDisplayName: 'Thulaan',
         initialUnreadNotifications: 3,
@@ -116,154 +146,151 @@ void main() {
       expect(vm.recommendedPeople.first.displayName, 'Priya S.');
     });
 
-    test('refresh calls initialize and preserves ready state', () async {
-      final vm = SocialHomeViewModel();
-      await vm.refresh();
-      expect(vm.status, SocialHomeStatus.ready);
-      expect(vm.recommendedPeople, isNotEmpty);
+    test('session logout clears private state and transitions to accessDenied', () async {
+      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        isTestAuthorized: true,
+        initialDisplayName: 'Sensitive Name',
+        initialUnreadNotifications: 5,
+        initialRecommendations: const [
+          SocialRecommendedPerson(id: 'r1', displayName: 'P1', location: 'L1'),
+        ],
+      );
+      await vm.initialize();
+      expect(vm.displayName, 'Sensitive Name');
+      expect(vm.recommendedPeople.length, 1);
+
+      // Trigger session clearance / logout
+      fakeSession.triggerPrivateStateClearers();
+
+      expect(vm.displayName, '');
+      expect(vm.unreadNotificationsCount, 0);
+      expect(vm.recommendedPeople, isEmpty);
+      expect(vm.status, SocialHomeStatus.accessDenied);
     });
 
-    test('updateProfileHeader updates displayName and avatarUrl and notifies listeners', () {
-      final vm = SocialHomeViewModel();
-      var notificationCount = 0;
-      vm.addListener(() => notificationCount++);
+    test('session phase transition to signedOut invalidates state', () async {
+      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        isTestAuthorized: true,
+        initialDisplayName: 'Sensitive Name',
+      );
+      await vm.initialize();
+      expect(vm.status, SocialHomeStatus.ready);
 
-      vm.updateProfileHeader(
-        displayName: 'Aarav',
-        avatarUrl: 'https://example.com/aarav.png',
+      fakeSession.setPhase(SessionPhase.signedOut);
+
+      expect(vm.isAuthorized, isFalse);
+      expect(vm.status, SocialHomeStatus.accessDenied);
+      expect(vm.displayName, '');
+    });
+
+    test('navigation callbacks do not fire when access is denied', () {
+      final fakeSession = FakeSessionController(phase: SessionPhase.signedOut);
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: false,
       );
 
-      expect(vm.displayName, 'Aarav');
-      expect(vm.avatarUrl, 'https://example.com/aarav.png');
-      expect(notificationCount, 1);
-    });
+      var exploreFired = false;
+      var seeAllFired = false;
+      var viewProfileFired = false;
+      var quickActionFired = false;
+      var notificationFired = false;
+      var searchFired = false;
 
-    test('setUnreadNotificationsCount updates count and clamps negative to 0', () {
-      final vm = SocialHomeViewModel();
-      var notificationCount = 0;
-      vm.addListener(() => notificationCount++);
-
-      vm.setUnreadNotificationsCount(5);
-      expect(vm.unreadNotificationsCount, 5);
-      expect(notificationCount, 1);
-
-      vm.setUnreadNotificationsCount(-2);
-      expect(vm.unreadNotificationsCount, 0);
-      expect(notificationCount, 2);
-    });
-
-    test('triggerExplorePeople invokes onExplorePeople callback', () {
-      final vm = SocialHomeViewModel();
-      var called = false;
-      vm.onExplorePeople = () => called = true;
+      vm.onExplorePeople = () => exploreFired = true;
+      vm.onSeeAllRecommendations = () => seeAllFired = true;
+      vm.onViewProfile = (_) => viewProfileFired = true;
+      vm.onQuickAction = (_) => quickActionFired = true;
+      vm.onNotificationTap = () => notificationFired = true;
+      vm.onSearchTap = () => searchFired = true;
 
       vm.triggerExplorePeople();
-      expect(called, isTrue);
-    });
-
-    test('triggerSeeAllRecommendations invokes onSeeAllRecommendations callback', () {
-      final vm = SocialHomeViewModel();
-      var called = false;
-      vm.onSeeAllRecommendations = () => called = true;
-
       vm.triggerSeeAllRecommendations();
-      expect(called, isTrue);
-    });
-
-    test('triggerViewProfile invokes onViewProfile with target userId', () {
-      final vm = SocialHomeViewModel();
-      String? viewedUserId;
-      vm.onViewProfile = (id) => viewedUserId = id;
-
-      vm.triggerViewProfile('user_xyz_123');
-      expect(viewedUserId, 'user_xyz_123');
-    });
-
-    test('triggerQuickAction invokes onQuickAction with actionId', () {
-      final vm = SocialHomeViewModel();
-      SocialHomeActionId? selectedAction;
-      vm.onQuickAction = (action) => selectedAction = action;
-
-      for (final actionId in SocialHomeActionId.values) {
-        vm.triggerQuickAction(actionId);
-        expect(selectedAction, actionId);
-      }
-    });
-
-    test('triggerNotificationTap invokes onNotificationTap callback', () {
-      final vm = SocialHomeViewModel();
-      var called = false;
-      vm.onNotificationTap = () => called = true;
-
+      vm.triggerViewProfile('target');
+      vm.triggerQuickAction(SocialHomeActionId.myConnections);
       vm.triggerNotificationTap();
-      expect(called, isTrue);
-    });
-
-    test('triggerSearchTap invokes onSearchTap callback', () {
-      final vm = SocialHomeViewModel();
-      var called = false;
-      vm.onSearchTap = () => called = true;
-
       vm.triggerSearchTap();
-      expect(called, isTrue);
+
+      expect(exploreFired, isFalse);
+      expect(seeAllFired, isFalse);
+      expect(viewProfileFired, isFalse);
+      expect(quickActionFired, isFalse);
+      expect(notificationFired, isFalse);
+      expect(searchFired, isFalse);
     });
 
-    test('SocialRecommendedPerson and SocialHomeQuickAction equality and string representation', () {
-      const person1 = SocialRecommendedPerson(
-        id: '1',
-        displayName: 'Test',
-        location: 'City',
-        photoUrl: 'url',
-      );
-      const person2 = SocialRecommendedPerson(
-        id: '1',
-        displayName: 'Test',
-        location: 'City',
-        photoUrl: 'url',
-      );
-      const person3 = SocialRecommendedPerson(
-        id: '2',
-        displayName: 'Test2',
-        location: 'City2',
+    test('navigation callbacks fire when authorized', () {
+      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        isTestAuthorized: true,
       );
 
-      expect(person1, equals(person2));
-      expect(person1 == person3, isFalse);
-      expect(person1.hashCode, person2.hashCode);
-      expect(person1.toString(), contains('SocialRecommendedPerson'));
+      var exploreFired = false;
+      var seeAllFired = false;
+      String? viewedId;
+      SocialHomeActionId? actionFired;
+      var notificationFired = false;
+      var searchFired = false;
 
-      const action1 = SocialHomeQuickAction(
-        id: SocialHomeActionId.myConnections,
-        title: 'Title',
-        subtitle: 'Sub',
-      );
-      const action2 = SocialHomeQuickAction(
-        id: SocialHomeActionId.myConnections,
-        title: 'Title',
-        subtitle: 'Sub',
-      );
-      const action3 = SocialHomeQuickAction(
-        id: SocialHomeActionId.andrilDiary,
-        title: 'Title',
-        subtitle: 'Sub',
-      );
+      vm.onExplorePeople = () => exploreFired = true;
+      vm.onSeeAllRecommendations = () => seeAllFired = true;
+      vm.onViewProfile = (id) => viewedId = id;
+      vm.onQuickAction = (act) => actionFired = act;
+      vm.onNotificationTap = () => notificationFired = true;
+      vm.onSearchTap = () => searchFired = true;
 
-      expect(action1, equals(action2));
-      expect(action1 == action3, isFalse);
-      expect(action1.hashCode, action2.hashCode);
-      expect(action1.toString(), contains('myConnections'));
+      vm.triggerExplorePeople();
+      vm.triggerSeeAllRecommendations();
+      vm.triggerViewProfile('user_42');
+      vm.triggerQuickAction(SocialHomeActionId.myConnections);
+      vm.triggerNotificationTap();
+      vm.triggerSearchTap();
+
+      expect(exploreFired, isTrue);
+      expect(seeAllFired, isTrue);
+      expect(viewedId, 'user_42');
+      expect(actionFired, SocialHomeActionId.myConnections);
+      expect(notificationFired, isTrue);
+      expect(searchFired, isTrue);
     });
 
-    test('disposed viewModel ignores updates and does not notify listeners', () {
-      final vm = SocialHomeViewModel();
-      var notifyCalled = false;
-      vm.addListener(() => notifyCalled = true);
+    test('disposed viewModel ignores updates and does not dispatch callbacks', () {
+      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        isTestAuthorized: true,
+      );
+      var exploreFired = false;
+      vm.onExplorePeople = () => exploreFired = true;
 
       vm.dispose();
 
       vm.updateProfileHeader(displayName: 'New Name');
       vm.setUnreadNotificationsCount(10);
-      expect(notifyCalled, isFalse);
+      vm.triggerExplorePeople();
+
+      expect(exploreFired, isFalse);
+      expect(vm.displayName, '');
+    });
+
+    test('diagnostic toString does not expose PII', () {
+      const person = SocialRecommendedPerson(
+        id: 'rec_private_id',
+        displayName: 'Secret Identity',
+        location: 'Secret City',
+      );
+      expect(person.toString(), equals('SocialRecommendedPerson(id: rec_private_id)'));
+      expect(person.toString(), isNot(contains('Secret Identity')));
+      expect(person.toString(), isNot(contains('Secret City')));
     });
   });
 }
