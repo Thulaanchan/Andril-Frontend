@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'learning_preferences.dart';
+
 /// Scoped domain entity representing a learner's module-specific profile projection.
 ///
 /// Under ANDRIL architecture (§04.1-04.3, §05 CF-01, CF-02, §06), M2 owns global
@@ -10,6 +12,10 @@ import 'package:flutter/foundation.dart';
 class LearningProfile {
   /// The canonical module identifier for the Learning surface.
   static const String moduleScope = 'learning';
+
+  /// Standard disconnected persistence status notice.
+  static const String disconnectedNotice =
+      'Remote repository persistence contract pending. Profile retained locally.';
 
   /// Externally assigned module-profile identity from M2 authority.
   final String profileId;
@@ -38,6 +44,9 @@ class LearningProfile {
   /// Defensive unmodifiable collection of learning goals or intentions.
   final List<String> learningGoals;
 
+  /// Learner preferences (languages, styles, availability, notifications).
+  final LearningPreferences preferences;
+
   /// External activation status reported by M2 authority (default: false).
   ///
   /// Activation is never locally fabricated or assumed.
@@ -57,6 +66,7 @@ class LearningProfile {
     List<String> skillsToLearn = const [],
     List<String> skillsToShare = const [],
     List<String> learningGoals = const [],
+    this.preferences = const LearningPreferences(),
     this.isActivated = false,
   })  : profileId = _validateId(profileId, 'profileId'),
         accountId = _validateId(accountId, 'accountId'),
@@ -65,6 +75,49 @@ class LearningProfile {
         skillsToLearn = List.unmodifiable(skillsToLearn),
         skillsToShare = List.unmodifiable(skillsToShare),
         learningGoals = List.unmodifiable(learningGoals);
+
+  /// Factory creating an empty [LearningProfile] for initial creation or fallback.
+  factory LearningProfile.empty({
+    required String ownerLearningProfileId,
+    String accountId = 'acc_default',
+    String displayName = '',
+  }) {
+    return LearningProfile(
+      profileId: ownerLearningProfileId,
+      accountId: accountId,
+      displayName: displayName,
+      skillsToLearn: const [],
+      skillsToShare: const [],
+      learningGoals: const [],
+      preferences: LearningPreferences.empty(),
+    );
+  }
+
+  /// Factory creating a synthetic sample [LearningProfile] for previews and tests.
+  factory LearningProfile.syntheticSample({
+    required String ownerLearningProfileId,
+    String accountId = 'acc_default',
+    String displayName = 'Thusa Learner',
+  }) {
+    return LearningProfile(
+      profileId: ownerLearningProfileId,
+      accountId: accountId,
+      displayName: displayName,
+      bio:
+          'Mobile Engineer passionate about Flutter, Dart, and Clean Architecture.',
+      skillsToLearn: const [
+        'Flutter',
+        'Clean Architecture',
+        'Dart Concurrency'
+      ],
+      skillsToShare: const ['UI Design', 'Figma', 'Mobile Prototyping'],
+      learningGoals: const [
+        'Master state management patterns',
+        'Build production-grade mobile applications',
+      ],
+      preferences: LearningPreferences.syntheticSample(),
+    );
+  }
 
   static String _validateId(String value, String paramName) {
     if (value.trim().isEmpty) {
@@ -99,6 +152,7 @@ class LearningProfile {
     List<String>? skillsToLearn,
     List<String>? skillsToShare,
     List<String>? learningGoals,
+    LearningPreferences? preferences,
     bool? isActivated,
   }) {
     return LearningProfile(
@@ -111,6 +165,7 @@ class LearningProfile {
       skillsToLearn: skillsToLearn ?? this.skillsToLearn,
       skillsToShare: skillsToShare ?? this.skillsToShare,
       learningGoals: learningGoals ?? this.learningGoals,
+      preferences: preferences ?? this.preferences,
       isActivated: isActivated ?? this.isActivated,
     );
   }
@@ -126,6 +181,7 @@ class LearningProfile {
         other.bio == bio &&
         other.avatarUrl == avatarUrl &&
         other.isActivated == isActivated &&
+        other.preferences == preferences &&
         listEquals(other.skillsToLearn, skillsToLearn) &&
         listEquals(other.skillsToShare, skillsToShare) &&
         listEquals(other.learningGoals, learningGoals);
@@ -140,6 +196,7 @@ class LearningProfile {
       displayName,
       bio,
       avatarUrl,
+      preferences,
       isActivated,
       Object.hashAll(skillsToLearn),
       Object.hashAll(skillsToShare),
