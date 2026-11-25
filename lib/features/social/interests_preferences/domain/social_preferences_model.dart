@@ -30,7 +30,7 @@ class SocialInterestItem {
 ///
 /// Follows M5-FE-S03-DOM-01:
 /// - Represents module-scoped Social interests independently of Learning or Hobbies.
-/// - Maintains immutable updates with duplicate prevention.
+/// - Maintains defensive immutability with unmodifiable collections.
 /// - Manages discovery criteria: age boundaries, distance, relationship goals, languages, showMe.
 /// - Excludes completion flags, matching weights, or cross-module data dependencies.
 @immutable
@@ -61,8 +61,8 @@ class SocialPreferencesModel {
     'Men',
   ];
 
-  /// Set of selected interest IDs or keys.
-  final Set<String> selectedInterests;
+  /// Internal set of selected interest IDs or keys.
+  final Set<String> _selectedInterests;
 
   /// Minimum preferred age (strictly 18+).
   final int minAge;
@@ -73,32 +73,45 @@ class SocialPreferencesModel {
   /// Maximum preferred discovery radius in kilometers.
   final int maxDistanceKm;
 
-  /// Selected relationship goals.
-  final List<String> relationshipGoals;
+  /// Internal selected relationship goals.
+  final List<String> _relationshipGoals;
 
-  /// Preferred languages for interaction.
-  final List<String> languages;
+  /// Internal preferred languages for interaction.
+  final List<String> _languages;
 
   /// Preferred discovery scope ('Everyone', 'Women', 'Men').
   final String showMe;
 
   const SocialPreferencesModel({
-    this.selectedInterests = const <String>{},
+    Set<String> selectedInterests = const <String>{},
     this.minAge = defaultMinAge,
     this.maxAge = defaultMaxAge,
     this.maxDistanceKm = defaultMaxDistanceKm,
-    this.relationshipGoals = const ['Friendship', 'Networking'],
-    this.languages = const ['English'],
+    List<String> relationshipGoals = const ['Friendship', 'Networking'],
+    List<String> languages = const ['English'],
     this.showMe = 'Everyone',
-  });
+  })  : _selectedInterests = selectedInterests,
+        _relationshipGoals = relationshipGoals,
+        _languages = languages;
+
+  /// Set of selected interest IDs or keys (defensively unmodifiable).
+  Set<String> get selectedInterests =>
+      Set<String>.unmodifiable(_selectedInterests);
+
+  /// Selected relationship goals (defensively unmodifiable).
+  List<String> get relationshipGoals =>
+      List<String>.unmodifiable(_relationshipGoals);
+
+  /// Preferred languages for interaction (defensively unmodifiable).
+  List<String> get languages => List<String>.unmodifiable(_languages);
 
   /// Returns whether a specific interest is selected.
   bool isInterestSelected(String interestId) =>
-      selectedInterests.contains(interestId);
+      _selectedInterests.contains(interestId);
 
   /// Toggles selection of an interest ID, returning an updated immutable copy.
   SocialPreferencesModel toggleInterest(String interestId) {
-    final updated = Set<String>.from(selectedInterests);
+    final updated = Set<String>.from(_selectedInterests);
     if (updated.contains(interestId)) {
       updated.remove(interestId);
     } else {
@@ -109,21 +122,21 @@ class SocialPreferencesModel {
 
   /// Adds an interest to the selected set without duplicates.
   SocialPreferencesModel withInterest(String interestId) {
-    if (selectedInterests.contains(interestId)) return this;
-    final updated = Set<String>.from(selectedInterests)..add(interestId);
+    if (_selectedInterests.contains(interestId)) return this;
+    final updated = Set<String>.from(_selectedInterests)..add(interestId);
     return copyWith(selectedInterests: updated);
   }
 
   /// Removes an interest from the selected set.
   SocialPreferencesModel withoutInterest(String interestId) {
-    if (!selectedInterests.contains(interestId)) return this;
-    final updated = Set<String>.from(selectedInterests)..remove(interestId);
+    if (!_selectedInterests.contains(interestId)) return this;
+    final updated = Set<String>.from(_selectedInterests)..remove(interestId);
     return copyWith(selectedInterests: updated);
   }
 
   /// Toggles a relationship goal in the list.
   SocialPreferencesModel toggleRelationshipGoal(String goal) {
-    final updated = List<String>.from(relationshipGoals);
+    final updated = List<String>.from(_relationshipGoals);
     if (updated.contains(goal)) {
       updated.remove(goal);
     } else {
@@ -134,7 +147,7 @@ class SocialPreferencesModel {
 
   /// Toggles a language in the list.
   SocialPreferencesModel toggleLanguage(String language) {
-    final updated = List<String>.from(languages);
+    final updated = List<String>.from(_languages);
     if (updated.contains(language)) {
       updated.remove(language);
     } else {
@@ -154,12 +167,12 @@ class SocialPreferencesModel {
     String? showMe,
   }) {
     return SocialPreferencesModel(
-      selectedInterests: selectedInterests ?? this.selectedInterests,
+      selectedInterests: selectedInterests ?? _selectedInterests,
       minAge: minAge ?? this.minAge,
       maxAge: maxAge ?? this.maxAge,
       maxDistanceKm: maxDistanceKm ?? this.maxDistanceKm,
-      relationshipGoals: relationshipGoals ?? this.relationshipGoals,
-      languages: languages ?? this.languages,
+      relationshipGoals: relationshipGoals ?? _relationshipGoals,
+      languages: languages ?? _languages,
       showMe: showMe ?? this.showMe,
     );
   }
