@@ -2,28 +2,28 @@ import 'package:characters/characters.dart';
 
 /// Immutable presentation draft representing Social-specific profile input.
 ///
-/// Follows M5-FE-S02-DOM-01 and confirmed backend contract boundaries:
-/// - Display name: 3–30 Unicode grapheme clusters (evaluated after trimming).
-/// - Bio: optional, up to 300 Unicode grapheme clusters.
-/// - Visibility: restricted to the approved private state ('private').
+/// Follows M5-FE-S02-SEC-02 and confirmed backend contract boundaries:
+/// - Display name: 3–30 Unicode text elements/grapheme clusters (evaluated after trimming).
+/// - Enforces backend-aligned character validation (letters, numbers, spaces, '_', '-',
+///   and script combining marks following letter/digit base).
+/// - Allows Tamil pulli and Sinhala al-lakuna join controls between consonants.
+/// - Rejects default-ignorable marks, invisible fillers, directional controls, and emojis.
+/// - Bio: optional, up to 300 Unicode text elements/grapheme clusters.
+/// - Visibility: restricted strictly to the approved private state ('private').
 /// - Reserved administrative display names are rejected.
 /// - Client cannot set or mutate ownership, eligibility, or completion flags.
 class SocialProfileDraft {
   /// Approved draft visibility is strictly private.
   static const String privateVisibility = 'private';
 
-  /// Minimum approved display name length in Unicode grapheme clusters.
+  /// Minimum approved display name length in Unicode text elements.
   static const int minDisplayNameLength = 3;
 
-  /// Maximum approved display name length in Unicode grapheme clusters.
+  /// Maximum approved display name length in Unicode text elements.
   static const int maxDisplayNameLength = 30;
 
-  /// Maximum approved bio length in Unicode grapheme clusters.
+  /// Maximum approved bio length in Unicode text elements.
   static const int maxBioLength = 300;
-
-  /// Disallowed C0 and C1 control characters (excluding standard whitespace).
-  static final RegExp _disallowedControlRegex =
-      RegExp(r'[\u0000-\u001F\u007F-\u009F]');
 
   /// Reserved administrative display names matching backend contracts.
   static const Set<String> _reservedNames = {
@@ -40,6 +40,11 @@ class SocialProfileDraft {
     'andrilofficial',
     'andrilteam',
   };
+
+  static final RegExp _unicodeLetterOrDigit =
+      RegExp(r'^[\p{L}\p{N}]$', unicode: true);
+  static final RegExp _unicodeCombiningMark =
+      RegExp(r'^\p{M}$', unicode: true);
 
   /// The draft display name entered by the user.
   final String displayName;
@@ -84,6 +89,104 @@ class SocialProfileDraft {
     );
   }
 
+  /// Checks if a string contains null characters or unmatched surrogates.
+  static bool _containsInvalidUnicode(String value) {
+    for (int i = 0; i < value.length; i++) {
+      final codeUnit = value.codeUnitAt(i);
+      if (codeUnit == 0) return true;
+      // Low surrogate without high surrogate
+      if (codeUnit >= 0xDC00 && codeUnit <= 0xDFFF) return true;
+      // High surrogate
+      if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
+        if (++i >= value.length) return true;
+        final next = value.codeUnitAt(i);
+        if (next < 0xDC00 || next > 0xDFFF) return true;
+      }
+    }
+    return false;
+  }
+
+  /// Evaluates Tamil and Sinhala consonant joiners (virama / al-lakuna).
+  static bool _isScriptJoiner(List<int> runes, int index) {
+    if (index < 1 || index + 1 >= runes.length) return false;
+
+    // Tamil pulli (0x0BCD) or Sinhala al-lakuna (0x0DCA) between consonants
+    if (index >= 2 && (runes[index - 1] == 0x0BCD || runes[index - 1] == 0x0DCA)) {
+      final virama = runes[index - 1];
+      return _isConsonant(runes[index - 2], virama) &&
+          _isConsonant(runes[index + 1], virama);
+    }
+
+    // Sinhala touching conjuncts: ZWJ before al-lakuna (0x0DCA)
+    return runes[index] == 0x200D &&
+        index + 2 < runes.length &&
+        runes[index + 1] == 0x0DCA &&
+        _isConsonant(runes[index - 1], 0x0DCA) &&
+        _isConsonant(runes[index + 2], 0x0DCA);
+  }
+
+  static bool _isConsonant(int rune, int virama) {
+    if (virama == 0x0BCD) {
+      // Tamil consonants: 0x0B95 to 0x0BB9
+      return rune >= 0x0B95 && rune <= 0x0BB9;
+    } else {
+      // Sinhala consonants: 0x0D9A to 0x0DC6
+      return rune >= 0x0D9A && rune <= 0x0DC6;
+    }
+  }
+
+  /// Validates allowed characters matching backend PrivateProfileFieldValidator.
+  static bool _hasAllowedNameCharacters(String value) {
+    final runes = value.runes.toList();
+    bool hasLetterOrDigit = false;
+    bool hasMarkBase = false;
+
+    for (int index = 0; index < runes.length; index++) {
+      final rune = runes[index];
+
+      // ZWNJ (0x200C) and ZWJ (0x200D)
+      if (rune == 0x200C || rune == 0x200D) {
+        if (!_isScriptJoiner(runes, index)) return false;
+        continue;
+      }
+
+      // Prohibited default-ignorable marks, fillers, keycap mark, info emoji, and directional controls
+      if (rune == 0x034F ||
+          rune == 0x115F ||
+          rune == 0x1160 ||
+          rune == 0x17B4 ||
+          rune == 0x17B5 ||
+          (rune >= 0x180B && rune <= 0x180D) ||
+          rune == 0x180F ||
+          rune == 0x20E3 ||
+          rune == 0x2139 ||
+          rune == 0x3164 ||
+          rune == 0xFFA0 ||
+          (rune >= 0xFE00 && rune <= 0xFE0F) ||
+          (rune >= 0xE0100 && rune <= 0xE01EF) ||
+          (rune >= 0x200E && rune <= 0x200F) ||
+          (rune >= 0x202A && rune <= 0x202E) ||
+          (rune >= 0x2066 && rune <= 0x2069)) {
+        return false;
+      }
+
+      final charStr = String.fromCharCode(rune);
+      if (_unicodeLetterOrDigit.hasMatch(charStr)) {
+        hasLetterOrDigit = true;
+        hasMarkBase = true;
+      } else if (rune == 0x20 || rune == 0x5F || rune == 0x2D) {
+        // ' ', '_', '-'
+        hasMarkBase = false;
+      } else if (hasMarkBase && _unicodeCombiningMark.hasMatch(charStr)) {
+        // Combining mark following letter or digit base is allowed
+      } else {
+        return false;
+      }
+    }
+
+    return hasLetterOrDigit;
+  }
+
   /// Checks if a normalized string matches any backend reserved display name.
   static bool _isReservedDisplayName(String value) {
     final buffer = StringBuffer();
@@ -95,20 +198,17 @@ class SocialProfileDraft {
     return _reservedNames.contains(buffer.toString());
   }
 
-  /// Validates the display name against approved boundaries.
-  ///
-  /// Evaluates trimmed text element length and rejects reserved administrative names.
-  /// Returns a validation error description, or null if valid.
+  /// Validates the display name against approved backend boundaries.
   static String? validateDisplayName(String? value) {
     if (value == null) {
       return 'Display name cannot be empty.';
     }
+    if (_containsInvalidUnicode(value)) {
+      return 'Display name contains invalid characters.';
+    }
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
       return 'Display name cannot be empty.';
-    }
-    if (_disallowedControlRegex.hasMatch(value)) {
-      return 'Display name contains invalid characters.';
     }
     final graphemeCount = trimmed.characters.length;
     if (graphemeCount < minDisplayNameLength) {
@@ -117,6 +217,9 @@ class SocialProfileDraft {
     if (graphemeCount > maxDisplayNameLength) {
       return 'Display name must not exceed $maxDisplayNameLength characters.';
     }
+    if (!_hasAllowedNameCharacters(trimmed)) {
+      return 'Display name contains invalid characters.';
+    }
     if (_isReservedDisplayName(trimmed)) {
       return 'Display name is reserved and cannot be used.';
     }
@@ -124,16 +227,11 @@ class SocialProfileDraft {
   }
 
   /// Validates the optional bio against approved boundaries.
-  ///
-  /// Returns a validation error description, or null if valid.
   static String? validateBio(String? value) {
     if (value == null || value.isEmpty) {
       return null;
     }
-    // Allow standard newlines in bio, but disallow other control codes.
-    final sanitizedForControlCheck =
-        value.replaceAll('\n', '').replaceAll('\r', '').replaceAll('\t', '');
-    if (_disallowedControlRegex.hasMatch(sanitizedForControlCheck)) {
+    if (_containsInvalidUnicode(value)) {
       return 'Bio contains invalid characters.';
     }
     final graphemeCount = value.characters.length;

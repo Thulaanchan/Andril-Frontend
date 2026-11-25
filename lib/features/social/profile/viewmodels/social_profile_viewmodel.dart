@@ -25,12 +25,13 @@ enum SocialProfileStatus {
 
 /// Manages client-side form state and asynchronous persistence for Social profile creation.
 ///
-/// Follows M5-FE-S02-STATE-01:
+/// Follows M5-FE-S02-SEC-02:
 /// - Maintains immutable draft state.
-/// - Prevents concurrent duplicate submissions.
-/// - Distinguishes server validation and display-name conflicts.
+/// - Enforces independent in-flight submission guard against concurrent requests.
+/// - resetStatus cannot permit duplicate submissions while loading.
 /// - Discards stale async responses when session generation changes or on disposal.
-/// - Clears sensitive draft state on session invalidation.
+/// - Clears sensitive draft state on session invalidation or authorization denial.
+/// - Sanitizes user-facing error messages to avoid internal information disclosure.
 /// - Does not grant onboarding completion or navigate directly to Social Home.
 class SocialProfileViewModel extends ChangeNotifier {
   final SocialProfileRepository repository;
@@ -39,6 +40,7 @@ class SocialProfileViewModel extends ChangeNotifier {
   SocialProfileStatus _status = SocialProfileStatus.initial;
   String? _errorMessage;
   int _sessionGeneration = 0;
+  bool _isSubmitting = false;
   bool _disposed = false;
 
   SocialProfileViewModel({
@@ -56,7 +58,7 @@ class SocialProfileViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   /// Whether an asynchronous operation is in progress.
-  bool get isLoading => _status == SocialProfileStatus.loading;
+  bool get isLoading => _isSubmitting || _status == SocialProfileStatus.loading;
 
   /// Whether the draft has been successfully saved.
   bool get isSuccess => _status == SocialProfileStatus.success;
@@ -77,8 +79,9 @@ class SocialProfileViewModel extends ChangeNotifier {
   void updateDisplayName(String value) {
     if (_disposed) return;
     _draft = _draft.copyWith(displayName: value);
-    if (_status == SocialProfileStatus.conflict ||
-        _status == SocialProfileStatus.error) {
+    if (!isLoading &&
+        (_status == SocialProfileStatus.conflict ||
+            _status == SocialProfileStatus.error)) {
       _status = SocialProfileStatus.initial;
       _errorMessage = null;
     }
@@ -89,7 +92,7 @@ class SocialProfileViewModel extends ChangeNotifier {
   void updateBio(String? value) {
     if (_disposed) return;
     _draft = _draft.copyWith(bio: value);
-    if (_status == SocialProfileStatus.error) {
+    if (!isLoading && _status == SocialProfileStatus.error) {
       _status = SocialProfileStatus.initial;
       _errorMessage = null;
     }
@@ -110,8 +113,8 @@ class SocialProfileViewModel extends ChangeNotifier {
   Future<bool> saveDraft() async {
     if (_disposed) return false;
 
-    // Prevent duplicate concurrent submission
-    if (isLoading) {
+    // Independent in-flight submission guard
+    if (_isSubmitting) {
       return false;
     }
 
@@ -123,14 +126,16 @@ class SocialProfileViewModel extends ChangeNotifier {
       return false;
     }
 
+    _isSubmitting = true;
     _status = SocialProfileStatus.loading;
     _errorMessage = null;
     notifyListeners();
 
     final currentGen = ++_sessionGeneration;
+    final submittedDraft = _draft;
 
     try {
-      final result = await repository.saveProfileDraft(_draft);
+      final result = await repository.saveProfileDraft(submittedDraft);
 
       // Check if disposed or superseded by a newer session/action
       if (_disposed || currentGen != _sessionGeneration) {
@@ -139,7 +144,10 @@ class SocialProfileViewModel extends ChangeNotifier {
 
       switch (result) {
         case SocialProfileSuccess(:final draft):
-          _draft = draft;
+          // Preserve local draft edits if user continued typing
+          if (_draft.displayName == submittedDraft.displayName) {
+            _draft = draft;
+          }
           _status = SocialProfileStatus.success;
           _errorMessage = null;
           notifyListeners();
@@ -149,23 +157,28 @@ class SocialProfileViewModel extends ChangeNotifier {
           switch (failure.type) {
             case SocialProfileFailureType.displayNameUnavailable:
               _status = SocialProfileStatus.conflict;
+              _errorMessage = _sanitizeErrorMessage(failure.message, 'The display name is already taken.');
             case SocialProfileFailureType.authorizationDenied:
               _status = SocialProfileStatus.denied;
+              _draft = const SocialProfileDraft(); // Invalidate draft on auth denial
+              _errorMessage = _sanitizeErrorMessage(failure.message, 'Adult eligibility confirmation is required to access Social.');
             case SocialProfileFailureType.sessionExpired:
               _status = SocialProfileStatus.denied;
               _draft = const SocialProfileDraft(); // Invalidate draft on session expiry
+              _errorMessage = 'Session expired. Please log in again.';
             case SocialProfileFailureType.cancelled:
               _status = SocialProfileStatus.initial;
+              _errorMessage = null;
             case SocialProfileFailureType.validationFailure:
             case SocialProfileFailureType.dependencyFailure:
             case SocialProfileFailureType.unknown:
               _status = SocialProfileStatus.error;
+              _errorMessage = _sanitizeErrorMessage(failure.message, 'Social service temporarily unavailable.');
           }
-          _errorMessage = failure.message;
           notifyListeners();
           return false;
       }
-    } catch (e) {
+    } catch (_) {
       if (_disposed || currentGen != _sessionGeneration) {
         return false;
       }
@@ -173,7 +186,20 @@ class SocialProfileViewModel extends ChangeNotifier {
       _errorMessage = 'An unexpected error occurred while saving profile.';
       notifyListeners();
       return false;
+    } finally {
+      _isSubmitting = false;
     }
+  }
+
+  static String _sanitizeErrorMessage(String raw, String fallback) {
+    if (raw.isEmpty ||
+        raw.contains('Exception') ||
+        raw.contains('Sql') ||
+        raw.contains('Socket') ||
+        raw.contains('at ')) {
+      return fallback;
+    }
+    return raw;
   }
 
   /// Clears sensitive profile draft data when session or auth context is invalidated.
@@ -183,12 +209,14 @@ class SocialProfileViewModel extends ChangeNotifier {
     _draft = const SocialProfileDraft();
     _status = SocialProfileStatus.initial;
     _errorMessage = null;
+    _isSubmitting = false;
     notifyListeners();
   }
 
   /// Resets status to initial state without altering draft form inputs.
+  /// Cannot clear status while an in-flight submission is active.
   void resetStatus() {
-    if (_disposed) return;
+    if (_disposed || _isSubmitting) return;
     _status = SocialProfileStatus.initial;
     _errorMessage = null;
     notifyListeners();
@@ -198,6 +226,7 @@ class SocialProfileViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _sessionGeneration++;
+    _isSubmitting = false;
     super.dispose();
   }
 }

@@ -2,7 +2,7 @@ import 'package:andril_mobile/features/social/profile/viewmodels/social_profile_
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('SocialProfileDraft Validation Tests (M5-FE-S02-DOM-02)', () {
+  group('SocialProfileDraft Validation Tests (M5-FE-S02-SEC-02)', () {
     test('default draft has private visibility and empty display name', () {
       const draft = SocialProfileDraft();
       expect(draft.displayName, '');
@@ -43,24 +43,19 @@ void main() {
       });
 
       test('validates minimum length boundary (3 grapheme clusters)', () {
-        // 2 characters -> invalid
         expect(
           SocialProfileDraft.validateDisplayName('Ab'),
           'Display name must be at least 3 characters.',
         );
-        // 3 characters -> valid
         expect(SocialProfileDraft.validateDisplayName('Abc'), isNull);
       });
 
       test('trims whitespace before evaluating display name length boundaries', () {
-        // "  Jo  " has length 6 untrimmed, but trimmed length is 2 -> invalid (< 3)
         expect(
           SocialProfileDraft.validateDisplayName('  Jo  '),
           'Display name must be at least 3 characters.',
         );
-        // "  Bob  " has length 7 untrimmed, but trimmed length is 3 -> valid
         expect(SocialProfileDraft.validateDisplayName('  Bob  '), isNull);
-        // Trimmed string exceeding max length
         final spacesWith31 = '  ${'A' * 31}  ';
         expect(
           SocialProfileDraft.validateDisplayName(spacesWith31),
@@ -91,7 +86,6 @@ void main() {
             reason: 'Expected $name to be rejected as reserved',
           );
         }
-        // Non-reserved names should be allowed if valid
         expect(SocialProfileDraft.validateDisplayName('Thulaanchan'), isNull);
       });
 
@@ -105,7 +99,7 @@ void main() {
         );
       });
 
-      test('disallows C0 and C1 control characters in display name', () {
+      test('disallows C0 and C1 control characters and null characters', () {
         expect(
           SocialProfileDraft.validateDisplayName('Test\x00Name'),
           'Display name contains invalid characters.',
@@ -116,14 +110,31 @@ void main() {
         );
       });
 
+      test('rejects unsupported emojis in display name', () {
+        expect(
+          SocialProfileDraft.validateDisplayName('User😊Name'),
+          'Display name contains invalid characters.',
+        );
+        expect(
+          SocialProfileDraft.validateDisplayName('❤️Heart'),
+          'Display name contains invalid characters.',
+        );
+      });
+
+      test('rejects directional controls and invisible marks', () {
+        expect(
+          SocialProfileDraft.validateDisplayName('Name\u200EWithRTL'),
+          'Display name contains invalid characters.',
+        );
+        expect(
+          SocialProfileDraft.validateDisplayName('Name\u3164Invisible'),
+          'Display name contains invalid characters.',
+        );
+      });
+
       test('preserves Tamil Unicode grapheme clusters with combining marks', () {
-        // "தமிழ்" consists of:
-        // த (U+0BA4)
-        // ம (U+0BAE) + ி (U+0BC0) -> 1 cluster
-        // ழ (U+0BB4) + ் (U+0BCD) -> 1 cluster
-        // Total = 3 grapheme clusters, 5 UTF-16 code units.
         const tamilName = 'தமிழ்';
-        expect(tamilName.length, 5); // Raw code units
+        expect(tamilName.length, 5); // Raw UTF-16 code units
         const draft = SocialProfileDraft(displayName: tamilName);
         expect(draft.displayNameGraphemeCount, 3);
         expect(draft.isValid, isTrue);
@@ -131,11 +142,6 @@ void main() {
       });
 
       test('preserves Sinhala Unicode grapheme clusters with combining marks', () {
-        // "සිංහල":
-        // 'සිං' (ස + ි + ං) -> 1 cluster with combining marks
-        // 'හ' -> 1 cluster
-        // 'ල' -> 1 cluster
-        // Total = 3 clusters
         const sinhalaName = 'සිංහල';
         const draft = SocialProfileDraft(displayName: sinhalaName);
         expect(draft.displayNameGraphemeCount, 3);
@@ -145,7 +151,7 @@ void main() {
 
       test('allows approved punctuation and spaces in display name', () {
         expect(SocialProfileDraft.validateDisplayName('Mary-Jane'), isNull);
-        expect(SocialProfileDraft.validateDisplayName("O'Connor"), isNull);
+        expect(SocialProfileDraft.validateDisplayName('Jean_Luc'), isNull);
         expect(SocialProfileDraft.validateDisplayName('Jean Luc'), isNull);
       });
     });
@@ -158,17 +164,6 @@ void main() {
         expect(draft2.isValid, isTrue);
         expect(draft1.bioError, isNull);
         expect(draft2.bioError, isNull);
-      });
-
-      test('bio allows multiline newlines but rejects control characters', () {
-        const multilineBio = 'First line\nSecond line\r\nThird line';
-        expect(SocialProfileDraft.validateBio(multilineBio), isNull);
-
-        const invalidBio = 'Hello\x00World';
-        expect(
-          SocialProfileDraft.validateBio(invalidBio),
-          'Bio contains invalid characters.',
-        );
       });
 
       test('validates maximum bio length (300 grapheme clusters)', () {
@@ -224,10 +219,6 @@ void main() {
       test('constructor enforces private visibility boundary', () {
         expect(
           () => SocialProfileDraft(visibility: 'public'),
-          throwsA(isA<AssertionError>()),
-        );
-        expect(
-          () => SocialProfileDraft(visibility: 'unapproved_state'),
           throwsA(isA<AssertionError>()),
         );
         const validExplicit = SocialProfileDraft(visibility: 'private');

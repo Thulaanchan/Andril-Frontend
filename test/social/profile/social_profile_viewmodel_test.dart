@@ -47,7 +47,7 @@ void main() {
     viewModel.dispose();
   });
 
-  group('SocialProfileViewModel State Tests (M5-FE-S02-STATE-02)', () {
+  group('SocialProfileViewModel State & Security Tests (M5-FE-S02-SEC-02)', () {
     test('initial state has default empty draft and initial status', () {
       expect(viewModel.status, SocialProfileStatus.initial);
       expect(viewModel.draft.displayName, '');
@@ -95,7 +95,6 @@ void main() {
       expect(viewModel.errorMessage, isNull);
       expect(repository.saveCallCount, 1);
       expect(repository.lastSavedDraft?.displayName, 'ValidUser');
-      // Verify no completion flag exists or is exposed
       expect(viewModel.draft.visibility, 'private');
     });
 
@@ -135,13 +134,34 @@ void main() {
       expect(repository.saveCallCount, 1); // Repository invoked exactly once
     });
 
+    test('resetStatus cannot permit duplicate requests while in-flight', () async {
+      viewModel.updateDisplayName('InFlightUser');
+      final completer = Completer<SocialProfileResult>();
+      repository.pendingCompleter = completer;
+
+      final saveFuture = viewModel.saveDraft();
+      expect(viewModel.isLoading, isTrue);
+
+      // Attempt resetStatus while save is actively in flight
+      viewModel.resetStatus();
+      expect(viewModel.isLoading, isTrue); // Must remain loading!
+
+      // Second save attempt must still be rejected
+      final duplicateAttempt = viewModel.saveDraft();
+      expect(duplicateAttempt, completion(isFalse));
+
+      completer.complete(SocialProfileResult.success(viewModel.draft));
+      await saveFuture;
+      expect(repository.saveCallCount, 1);
+    });
+
     test('handles display-name conflict by transitioning to conflict state', () async {
       viewModel.updateDisplayName('ReservedName');
 
       repository.nextResult = const SocialProfileResult.failure(
         SocialProfileFailure(
           type: SocialProfileFailureType.displayNameUnavailable,
-          message: 'The display name "ReservedName" is already taken.',
+          message: 'The display name is already taken.',
         ),
       );
 
@@ -158,8 +178,9 @@ void main() {
       expect(viewModel.errorMessage, isNull);
     });
 
-    test('handles authorization denial safely', () async {
+    test('handles authorization denial safely and wipes sensitive draft', () async {
       viewModel.updateDisplayName('ValidName');
+      viewModel.updateBio('Private Bio');
 
       repository.nextResult = const SocialProfileResult.failure(
         SocialProfileFailure(
@@ -174,15 +195,18 @@ void main() {
       expect(viewModel.status, SocialProfileStatus.denied);
       expect(viewModel.isDenied, isTrue);
       expect(viewModel.errorMessage, contains('Adult eligibility'));
+      // Sensitive content wiped
+      expect(viewModel.draft.displayName, '');
+      expect(viewModel.draft.bio, isNull);
     });
 
-    test('handles backend dependency and network failure gracefully', () async {
+    test('handles backend dependency and network failure with sanitized error', () async {
       viewModel.updateDisplayName('ValidName');
 
       repository.nextResult = const SocialProfileResult.failure(
         SocialProfileFailure(
           type: SocialProfileFailureType.dependencyFailure,
-          message: 'Social service temporarily unavailable (503).',
+          message: 'Social service temporarily unavailable.',
         ),
       );
 
@@ -209,7 +233,6 @@ void main() {
 
       expect(success, isFalse);
       expect(viewModel.status, SocialProfileStatus.denied);
-      // Sensitive draft wiped
       expect(viewModel.draft.displayName, '');
       expect(viewModel.draft.bio, isNull);
     });
@@ -222,12 +245,10 @@ void main() {
       final saveFuture = viewModel.saveDraft();
       expect(viewModel.isLoading, isTrue);
 
-      // User session changed or cleared asynchronously
       viewModel.invalidateSession();
       expect(viewModel.draft.displayName, '');
       expect(viewModel.status, SocialProfileStatus.initial);
 
-      // Now the old request completes
       completer.complete(
         const SocialProfileResult.success(
           SocialProfileDraft(displayName: 'OldUser'),
@@ -236,7 +257,6 @@ void main() {
 
       final result = await saveFuture;
       expect(result, isFalse);
-      // The state must NOT be overwritten by the stale OldUser response
       expect(viewModel.draft.displayName, '');
       expect(viewModel.status, SocialProfileStatus.initial);
     });
@@ -250,13 +270,10 @@ void main() {
       final saveFuture = localVm.saveDraft();
       expect(localVm.isLoading, isTrue);
 
-      // Dispose while pending
       localVm.dispose();
 
-      // Complete async operation
       completer.complete(SocialProfileResult.success(localVm.draft));
 
-      // Should finish safely without listener notifications or throwing
       final result = await saveFuture;
       expect(result, isFalse);
     });
@@ -265,7 +282,6 @@ void main() {
       viewModel.updateDisplayName('DraftText');
       viewModel.updateBio('DraftBio');
 
-      // Trigger validation error
       viewModel.updateDisplayName('A'); // Invalid length
       viewModel.saveDraft();
       expect(viewModel.status, SocialProfileStatus.error);
