@@ -31,35 +31,52 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Record checked-out Develop revision
+      - name: Record and verify checked-out Develop revision
         id: record_revision
         env:
           EVENT_NAME: ${{ github.event_name }}
-          GITHUB_REF: ${{ github.ref }}
+          WORKFLOW_DEFINITION_REF: ${{ github.workflow_ref }}
+          TRIGGER_REF: ${{ github.ref }}
+          EXPECTED_CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
         run: |
-          $sha = (& git rev-parse HEAD 2>$null)
-          if ($LASTEXITCODE -ne 0 -or -not $sha) {
+          $expectedSha = $env:EXPECTED_CHECKOUT_SHA
+          $actualSha = (& git rev-parse HEAD 2>$null)
+          if ($LASTEXITCODE -ne 0 -or -not $actualSha) {
               Write-Error "Failed to execute git rev-parse HEAD."
               exit 1
           }
-          $sha = $sha.Trim()
+          $actualSha = $actualSha.Trim()
           $shaRegex = '^[0-9a-f]{40}$'
-          if (-not ($sha -match $shaRegex)) {
-              Write-Error "Resolved revision '$sha' is not a valid 40-character hexadecimal SHA."
+
+          if (-not $expectedSha -or -not ($expectedSha -match $shaRegex)) {
+              Write-Error "Expected checkout SHA from checkout action is missing or invalid: '$expectedSha'."
               exit 1
           }
 
-          & git cat-file -e "$($sha)^{commit}" 2>$null
+          if (-not ($actualSha -match $shaRegex)) {
+              Write-Error "Resolved Git HEAD revision '$actualSha' is not a valid 40-character hexadecimal SHA."
+              exit 1
+          }
+
+          if ($actualSha -ne $expectedSha) {
+              Write-Error "Checkout revision mismatch! Actual Git HEAD ($actualSha) does not match expected checkout commit ($expectedSha)."
+              exit 1
+          }
+
+          & git cat-file -e "$($actualSha)^{commit}" 2>$null
           if ($LASTEXITCODE -ne 0) {
-              Write-Error "Resolved commit object '$sha' does not exist in local repository."
+              Write-Error "Resolved commit object '$actualSha' does not exist in local repository."
               exit 1
           }
 
           Write-Host "================ NIGHTLY EXECUTION CONTEXT ================"
           Write-Host "Triggered Event         : $env:EVENT_NAME"
-          Write-Host "Workflow Definition Ref : $env:GITHUB_REF"
+          Write-Host "Workflow Definition Ref : $env:WORKFLOW_DEFINITION_REF"
+          Write-Host "Triggering Ref          : $env:TRIGGER_REF"
           Write-Host "Target Checkout Ref     : refs/heads/Develop"
-          Write-Host "Checked-out Develop SHA : $sha"
+          Write-Host "Expected Checkout SHA   : $expectedSha"
+          Write-Host "Actual Develop HEAD SHA : $actualSha"
+          Write-Host "Identity Equality Check : MATCH (Equality Verified)"
           Write-Host "=========================================================="
 
       - name: Setup Java JDK (Temurin 25.0.3)
