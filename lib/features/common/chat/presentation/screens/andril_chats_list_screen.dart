@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:andril_mobile/app/themes/common/chat_theme.dart';
 import 'package:andril_mobile/features/common/chat/domain/module_config.dart';
@@ -39,6 +40,52 @@ class ConversationItem {
   }
 }
 
+/// Presentation inputs for the isolated preview, never backend permission states.
+enum ChatListPreviewStatus {
+  loading,
+  empty,
+  content,
+  unavailable,
+  retryableError
+}
+
+/// Optional input around the existing M4 preview harness. Absence preserves its
+/// seeded demo. No I/O, authenticated identity selection or server authorization.
+/// Non-content states retain no supplied rows; content is a single-module snapshot.
+class ChatListPreviewScope extends InheritedWidget {
+  final AndrilModuleType moduleType;
+  final ChatListPreviewStatus status;
+  final List<ConversationItem> conversations;
+  final VoidCallback? onRetry;
+
+  ChatListPreviewScope({
+    super.key,
+    required this.moduleType,
+    required this.status,
+    List<ConversationItem> conversations = const [],
+    this.onRetry,
+    required super.child,
+  }) : conversations = status == ChatListPreviewStatus.content
+            ? List.unmodifiable(conversations)
+            : const [] {
+    if (this
+        .conversations
+        .any((item) => item.partner.moduleType != moduleType)) {
+      throw ArgumentError('Preview conversations must match their module.');
+    }
+  }
+
+  static ChatListPreviewScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ChatListPreviewScope>();
+
+  @override
+  bool updateShouldNotify(ChatListPreviewScope oldWidget) =>
+      moduleType != oldWidget.moduleType ||
+      status != oldWidget.status ||
+      !listEquals(conversations, oldWidget.conversations) ||
+      onRetry != oldWidget.onRetry;
+}
+
 /// Reusable, module-scoped All Chats screen.
 ///
 /// Strictly enforces module isolation:
@@ -59,23 +106,54 @@ class AndrilChatsListScreen extends StatefulWidget {
 
 class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
   final TextEditingController _searchController = TextEditingController();
-  late List<ConversationItem> _conversations;
-  final bool _isLoading = false;
+  ChatListPreviewScope? _preview;
+
+  ChatListPreviewStatus get _status {
+    final preview = _preview;
+    if (preview == null) return ChatListPreviewStatus.content;
+    // Never substitute seeds when a retained input belongs to another module.
+    if (preview.moduleType != widget.moduleConfig.type) {
+      return ChatListPreviewStatus.unavailable;
+    }
+    return preview.status;
+  }
+
+  List<ConversationItem> get _conversations =>
+      _status == ChatListPreviewStatus.content
+          ? _preview?.conversations ??
+              _seedModuleConversations(widget.moduleConfig.type)
+          : const [];
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _conversations = _seedModuleConversations(widget.moduleConfig.type);
     _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = ChatListPreviewScope.maybeOf(context);
+    if (_preview?.moduleType != next?.moduleType ||
+        _preview?.status != next?.status) {
+      _resetSearch();
+    }
+    _preview = next;
   }
 
   @override
   void didUpdateWidget(covariant AndrilChatsListScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.moduleConfig.type != widget.moduleConfig.type) {
-      _conversations = _seedModuleConversations(widget.moduleConfig.type);
-    }
+    if (oldWidget.moduleConfig.type != widget.moduleConfig.type) _resetSearch();
+  }
+
+  void _resetSearch() {
+    // Lifecycle callbacks already schedule a build; avoid listener-driven setState.
+    _searchQuery = '';
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.clear();
+    _searchController.addListener(_onSearchChanged);
   }
 
   @override
@@ -91,7 +169,7 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
     });
   }
 
-  /// Initial mock conversations scoped strictly to the authenticated module.
+  /// Initial mock conversations scoped to the selected presentation module only.
   List<ConversationItem> _seedModuleConversations(AndrilModuleType type) {
     switch (type) {
       case AndrilModuleType.learning:
@@ -168,6 +246,10 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
   }
 
   void _openChat(ConversationItem item) {
+    // Reject callbacks captured before context/data replacement. Not authorization.
+    if (_status != ChatListPreviewStatus.content ||
+        item.partner.moduleType != widget.moduleConfig.type ||
+        !_filteredConversations.contains(item)) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AndrilChatScreen(
@@ -182,25 +264,15 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.moduleConfig.theme;
-
     return Scaffold(
       backgroundColor: theme.background,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(82),
-        child: _buildHeader(theme),
-      ),
       body: Column(
         children: [
+          // Let scaled header text determine its height; keep the list bounded.
+          _buildHeader(theme),
           _buildSearchBar(theme),
           Expanded(
-            child: _isLoading
-                ? Center(
-                    child: CircularProgressIndicator(
-                      key: const Key('chats_list_loading'),
-                      color: theme.primary,
-                    ),
-                  )
-                : _buildListContent(theme),
+            child: _buildPresentation(theme),
           ),
         ],
       ),
@@ -234,7 +306,7 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
       child: SafeArea(
         bottom: false,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 75),
+          constraints: const BoxConstraints(minHeight: 82),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           child: Row(
             children: [
@@ -247,11 +319,14 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
                 ),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       '${widget.moduleConfig.name} Chats',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -310,7 +385,10 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
         border: Border(bottom: BorderSide(color: theme.border, width: 0.8)),
       ),
       child: Container(
-        height: 42,
+        height: 42 +
+            (MediaQuery.textScalerOf(context).scale(14) - 14)
+                .clamp(0.0, double.infinity)
+                .toDouble(),
         decoration: BoxDecoration(
           color: theme.background,
           borderRadius: BorderRadius.circular(21),
@@ -326,6 +404,10 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
               child: TextField(
                 key: const Key('conversation_search_input'),
                 controller: _searchController,
+                enabled: _status == ChatListPreviewStatus.content &&
+                    _conversations.isNotEmpty,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => FocusScope.of(context).unfocus(),
                 style: TextStyle(fontSize: 14, color: theme.ink),
                 decoration: InputDecoration(
                   hintText: 'Search ${widget.moduleConfig.name} chats...',
@@ -342,6 +424,7 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
             if (_searchQuery.isNotEmpty)
               IconButton(
                 key: const Key('clear_search_button'),
+                tooltip: 'Clear search',
                 icon: const Icon(Icons.close, size: 18),
                 color: theme.ink.withValues(alpha: 0.5),
                 padding: EdgeInsets.zero,
@@ -356,58 +439,116 @@ class _AndrilChatsListScreenState extends State<AndrilChatsListScreen> {
     );
   }
 
+  Widget _buildPresentation(AndrilChatTheme theme) {
+    switch (_status) {
+      case ChatListPreviewStatus.loading:
+        return Center(
+            child: Semantics(
+                liveRegion: true,
+                child: CircularProgressIndicator(
+                    key: const Key('chats_list_loading'),
+                    semanticsLabel: 'Loading mock conversations',
+                    color: theme.primary)));
+      case ChatListPreviewStatus.empty:
+      case ChatListPreviewStatus.content:
+        return _buildListContent(theme);
+      case ChatListPreviewStatus.unavailable:
+        return _buildNotice(theme,
+            key: const Key('chats_list_unavailable'),
+            icon: Icons.chat_bubble_outline_rounded,
+            title: 'Chat preview unavailable',
+            description: 'Conversations are unavailable in this preview.');
+      case ChatListPreviewStatus.retryableError:
+        final captured = _preview;
+        return _buildNotice(theme,
+            key: const Key('chats_list_error'),
+            icon: Icons.refresh_rounded,
+            title: 'Unable to load chat preview',
+            description: 'Try the preview again when you are ready.',
+            onRetry: captured?.onRetry == null
+                ? null
+                : () {
+                    if (mounted &&
+                        identical(captured, _preview) &&
+                        _status == ChatListPreviewStatus.retryableError) {
+                      captured!.onRetry!();
+                    }
+                  });
+    }
+  }
+
+  Widget _buildNotice(
+    AndrilChatTheme theme, {
+    required Key key,
+    required IconData icon,
+    required String title,
+    required String description,
+    VoidCallback? onRetry,
+  }) =>
+      LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Center(
+                        child: Semantics(
+                          key: const Key('chat_list_notice_semantics'),
+                          container: true,
+                          liveRegion: true,
+                          child: Column(
+                              key: key,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(icon,
+                                    size: 54,
+                                    color:
+                                        theme.primary.withValues(alpha: 0.4)),
+                                const SizedBox(height: 12),
+                                Text(title,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.ink)),
+                                const SizedBox(height: 4),
+                                Text(description,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color:
+                                            theme.ink.withValues(alpha: 0.6))),
+                                if (onRetry != null) ...[
+                                  const SizedBox(height: 12),
+                                  ElevatedButton(
+                                      key: const Key(
+                                          'retry_chat_preview_button'),
+                                      onPressed: onRetry,
+                                      child: const Text('Retry preview')),
+                                ],
+                              ]),
+                        ),
+                      )),
+                ),
+              ));
+
   Widget _buildListContent(AndrilChatTheme theme) {
     final filtered = _filteredConversations;
 
     if (_conversations.isEmpty) {
-      return Center(
-        child: Column(
+      return _buildNotice(theme,
           key: const Key('empty_conversations_state'),
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.chat_bubble_outline_rounded,
-                size: 54, color: theme.primary.withValues(alpha: 0.4)),
-            const SizedBox(height: 12),
-            Text(
-              'No ${widget.moduleConfig.name} chats yet',
-              style: TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.bold, color: theme.ink),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Conversations with your ${widget.moduleConfig.name} connections will appear here.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 13, color: theme.ink.withValues(alpha: 0.6)),
-            ),
-          ],
-        ),
-      );
+          icon: Icons.chat_bubble_outline_rounded,
+          title: 'No ${widget.moduleConfig.name} chats yet',
+          description:
+              'Conversations with your ${widget.moduleConfig.name} connections will appear here.');
     }
-
     if (filtered.isEmpty) {
-      return Center(
-        child: Column(
+      return _buildNotice(theme,
           key: const Key('empty_search_state'),
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off_rounded,
-                size: 54, color: theme.ink.withValues(alpha: 0.35)),
-            const SizedBox(height: 12),
-            Text(
-              'No conversations found',
-              style: TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.bold, color: theme.ink),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'No results matching "$_searchQuery".',
-              style: TextStyle(
-                  fontSize: 13, color: theme.ink.withValues(alpha: 0.6)),
-            ),
-          ],
-        ),
-      );
+          icon: Icons.search_off_rounded,
+          title: 'No conversations found',
+          description: 'No results matching "$_searchQuery".');
     }
 
     return ListView.separated(
