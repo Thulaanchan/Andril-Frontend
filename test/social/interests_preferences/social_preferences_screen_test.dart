@@ -83,6 +83,34 @@ void main() {
       expect(model.languages, containsAll(['English', 'Tamil']));
     });
 
+    test('enforces defensive collection immutability for goals, languages, and interests', () {
+      const model = SocialPreferencesModel();
+      expect(
+        () => model.relationshipGoals.add('InvalidGoal'),
+        throwsA(isA<UnsupportedError>()),
+      );
+      expect(
+        () => model.relationshipGoals.clear(),
+        throwsA(isA<UnsupportedError>()),
+      );
+      expect(
+        () => model.languages.add('InvalidLang'),
+        throwsA(isA<UnsupportedError>()),
+      );
+      expect(
+        () => model.languages.clear(),
+        throwsA(isA<UnsupportedError>()),
+      );
+      expect(
+        () => model.selectedInterests.add('invalidInterest'),
+        throwsA(isA<UnsupportedError>()),
+      );
+      expect(
+        () => model.selectedInterests.clear(),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
     test('equality and hashcode operate on set and list content', () {
       final model1 = const SocialPreferencesModel()
           .withInterest('music')
