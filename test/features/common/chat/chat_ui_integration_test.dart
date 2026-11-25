@@ -617,4 +617,367 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('8. Preview-only chat list presentation states', () {
+    testWidgets('Loading exposes semantics and no conversation rows',
+        (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        await _pumpChatListState(tester, status: ChatListPreviewStatus.loading);
+        expect(find.byKey(const Key('chats_list_loading')), findsOneWidget);
+        expect(find.bySemanticsLabel('Loading mock conversations'),
+            findsOneWidget);
+        expect(find.byKey(const Key('chats_list_view')), findsNothing);
+        expect(find.text('MOCK PREVIEW'), findsOneWidget);
+      } finally {
+        // Flutter checks test-owned handles before registered teardown callbacks.
+        semantics.dispose();
+      }
+    });
+
+    testWidgets(
+        'Loading hides stale content and rejects captured row navigation',
+        (tester) async {
+      final rows = _chatListRows(AndrilModuleConfig.learning);
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning, rows: rows);
+      final staleTap = tester
+          .widget<InkWell>(
+              find.byKey(const Key('conversation_Learning Preview')))
+          .onTap!;
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning,
+          status: ChatListPreviewStatus.loading,
+          rows: rows);
+      expect(find.text('Learning Preview'), findsNothing);
+      staleTap();
+      await tester.pump();
+      expect(find.byType(AndrilChatScreen), findsNothing);
+    });
+
+    testWidgets('Empty preserves theme without substituting seeded rows',
+        (tester) async {
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.hobbies,
+          status: ChatListPreviewStatus.empty);
+      expect(
+          find.byKey(const Key('empty_conversations_state')), findsOneWidget);
+      expect(find.text('No Hobbies chats yet'), findsOneWidget);
+      expect(find.text('Nila'), findsNothing);
+      expect(tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
+          AndrilModuleConfig.hobbies.theme.background);
+    });
+
+    testWidgets('Content snapshots supplied conversations instead of seeds',
+        (tester) async {
+      final rows = _chatListRows(AndrilModuleConfig.learning);
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning, rows: rows);
+      rows.clear();
+      await tester.pump();
+      expect(find.text('Learning Preview'), findsOneWidget);
+      expect(find.text('Maya'), findsNothing);
+      expect(find.text('Preview for learning'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Search filters current-module preview rows and supports keyboard submission',
+        (tester) async {
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.hobbies,
+          rows: _chatListRows(AndrilModuleConfig.hobbies));
+      await tester.enterText(
+          find.byKey(const Key('conversation_search_input')), 'hobbies');
+      await tester.pump();
+      expect(find.text('Hobbies Preview'), findsOneWidget);
+      expect(find.text('Learning Preview'), findsNothing);
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      expect(
+          tester
+              .widget<EditableText>(find.byType(EditableText))
+              .focusNode
+              .hasFocus,
+          isFalse);
+    });
+
+    testWidgets('Search no-results is distinguishable from empty preview data',
+        (tester) async {
+      await _pumpChatListState(tester,
+          rows: _chatListRows(AndrilModuleConfig.social));
+      await tester.enterText(
+          find.byKey(const Key('conversation_search_input')), 'no-match');
+      await tester.pump();
+      expect(find.byKey(const Key('empty_search_state')), findsOneWidget);
+      expect(find.byKey(const Key('empty_conversations_state')), findsNothing);
+      await _pumpChatListState(tester, status: ChatListPreviewStatus.empty);
+      expect(
+          find.byKey(const Key('empty_conversations_state')), findsOneWidget);
+      expect(find.byKey(const Key('empty_search_state')), findsNothing);
+    });
+
+    testWidgets('Unavailable hides content and exposes a generic live notice',
+        (tester) async {
+      final rows = _chatListRows(AndrilModuleConfig.social);
+      await _pumpChatListState(tester, rows: rows);
+      await _pumpChatListState(tester,
+          status: ChatListPreviewStatus.unavailable, rows: rows);
+      expect(find.byKey(const Key('chats_list_unavailable')), findsOneWidget);
+      expect(find.text('Chat preview unavailable'), findsOneWidget);
+      expect(find.text('Social Preview'), findsNothing);
+      expect(find.byKey(const Key('chats_list_view')), findsNothing);
+      expect(
+          tester
+              .widget<Semantics>(
+                  find.byKey(const Key('chat_list_notice_semantics')))
+              .properties
+              .liveRegion,
+          isTrue);
+      expect(
+          tester
+              .widget<TextField>(
+                  find.byKey(const Key('conversation_search_input')))
+              .enabled,
+          isFalse);
+    });
+
+    testWidgets(
+        'Retry fires only on user action without claiming connection success',
+        (tester) async {
+      var retries = 0;
+      await _pumpChatListState(tester,
+          status: ChatListPreviewStatus.retryableError,
+          rows: _chatListRows(AndrilModuleConfig.social),
+          onRetry: () => retries++);
+      await tester.pump(const Duration(seconds: 1));
+      expect(retries, 0);
+      expect(find.text('Social Preview'), findsNothing);
+      await tester.tap(find.byKey(const Key('retry_chat_preview_button')));
+      await tester.pump();
+      expect(retries, 1);
+      expect(find.byKey(const Key('chats_list_error')), findsOneWidget);
+      expect(find.byKey(const Key('chats_list_view')), findsNothing);
+    });
+
+    testWidgets('Retryable error without a callback offers no action',
+        (tester) async {
+      await _pumpChatListState(tester,
+          status: ChatListPreviewStatus.retryableError);
+      expect(find.text('Unable to load chat preview'), findsOneWidget);
+      expect(find.byKey(const Key('retry_chat_preview_button')), findsNothing);
+    });
+
+    testWidgets('A to B to A resets search and rejects a stale selected row',
+        (tester) async {
+      final learning = _chatListRows(AndrilModuleConfig.learning);
+      final hobbies = _chatListRows(AndrilModuleConfig.hobbies);
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning, rows: learning);
+      await tester.enterText(
+          find.byKey(const Key('conversation_search_input')), 'learning');
+      await tester.pump();
+      final staleTap = tester
+          .widget<InkWell>(
+              find.byKey(const Key('conversation_Learning Preview')))
+          .onTap!;
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.hobbies, rows: hobbies);
+      expect(find.text('Learning Preview'), findsNothing);
+      expect(find.text('Hobbies Preview'), findsOneWidget);
+      expect(
+          tester
+              .widget<TextField>(
+                  find.byKey(const Key('conversation_search_input')))
+              .controller!
+              .text,
+          isEmpty);
+      staleTap();
+      await tester.pump();
+      expect(find.byType(AndrilChatScreen), findsNothing);
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning, rows: learning);
+      expect(find.text('Learning Preview'), findsOneWidget);
+      expect(find.text('Hobbies Preview'), findsNothing);
+    });
+
+    testWidgets('Parent state from another module fails closed until replaced',
+        (tester) async {
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.hobbies,
+          stateModule: AndrilModuleType.learning,
+          rows: _chatListRows(AndrilModuleConfig.learning));
+      expect(find.byKey(const Key('chats_list_unavailable')), findsOneWidget);
+      expect(find.text('Learning Preview'), findsNothing);
+      expect(find.text('Nila'), findsNothing);
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.hobbies,
+          rows: _chatListRows(AndrilModuleConfig.hobbies));
+      expect(find.text('Hobbies Preview'), findsOneWidget);
+      expect(find.byKey(const Key('chats_list_unavailable')), findsNothing);
+    });
+
+    testWidgets(
+        'Fresh module input removes previous unavailable and error state',
+        (tester) async {
+      for (final status in [
+        ChatListPreviewStatus.unavailable,
+        ChatListPreviewStatus.retryableError
+      ]) {
+        await _pumpChatListState(tester,
+            module: AndrilModuleConfig.learning, status: status);
+        await _pumpChatListState(tester,
+            module: AndrilModuleConfig.hobbies,
+            rows: _chatListRows(AndrilModuleConfig.hobbies));
+        expect(find.text('Hobbies Preview'), findsOneWidget);
+        expect(find.byKey(const Key('chats_list_unavailable')), findsNothing);
+        expect(find.byKey(const Key('chats_list_error')), findsNothing);
+      }
+    });
+
+    testWidgets(
+        'Seeded preview resets search on module changes without widget keys',
+        (tester) async {
+      await tester.pumpWidget(const AndrilM4DemoApp(
+          moduleConfig: AndrilModuleConfig.learning, startAtChatsList: true));
+      await tester.enterText(
+          find.byKey(const Key('conversation_search_input')), 'Maya');
+      await tester.pumpWidget(const AndrilM4DemoApp(
+          moduleConfig: AndrilModuleConfig.hobbies, startAtChatsList: true));
+      await tester.pump();
+      expect(find.text('Nila'), findsOneWidget);
+      expect(find.text('Maya'), findsNothing);
+      expect(
+          tester
+              .widget<TextField>(
+                  find.byKey(const Key('conversation_search_input')))
+              .controller!
+              .text,
+          isEmpty);
+    });
+
+    testWidgets('Same-module replacement cannot navigate a removed row',
+        (tester) async {
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning,
+          rows: _chatListRows(AndrilModuleConfig.learning));
+      final staleTap = tester
+          .widget<InkWell>(
+              find.byKey(const Key('conversation_Learning Preview')))
+          .onTap!;
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning, rows: []);
+      staleTap();
+      await tester.pump();
+      expect(find.byType(AndrilChatScreen), findsNothing);
+      expect(
+          find.byKey(const Key('empty_conversations_state')), findsOneWidget);
+    });
+
+    testWidgets('Captured retry cannot fire after a module replacement',
+        (tester) async {
+      var retries = 0;
+      await _pumpChatListState(tester,
+          status: ChatListPreviewStatus.retryableError,
+          onRetry: () => retries++);
+      final staleRetry = tester
+          .widget<ElevatedButton>(
+              find.byKey(const Key('retry_chat_preview_button')))
+          .onPressed!;
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning,
+          rows: _chatListRows(AndrilModuleConfig.learning));
+      staleRetry();
+      expect(retries, 0);
+    });
+
+    test('Supplied content rejects foreign-module presentation rows', () {
+      expect(
+          () => ChatListPreviewScope(
+              moduleType: AndrilModuleType.hobbies,
+              status: ChatListPreviewStatus.content,
+              conversations: _chatListRows(AndrilModuleConfig.learning),
+              child: const SizedBox()),
+          throwsArgumentError);
+    });
+
+    testWidgets('Supplied content preserves existing detail navigation',
+        (tester) async {
+      final rows = _chatListRows(AndrilModuleConfig.learning);
+      await _pumpChatListState(tester,
+          module: AndrilModuleConfig.learning, rows: rows);
+      await tester.tap(find.byKey(const Key('conversation_Learning Preview')));
+      await tester.pumpAndSettle();
+      final chat =
+          tester.widget<AndrilChatScreen>(find.byType(AndrilChatScreen));
+      expect(chat.conversationId, rows.single.id);
+      expect(chat.moduleConfig.type, AndrilModuleType.learning);
+      expect(chat.effectivePartner.name, 'Learning Preview');
+    });
+
+    testWidgets('All states fit narrow and wide viewports with large text',
+        (tester) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      for (final size in [const Size(320, 600), const Size(1000, 800)]) {
+        tester.view.physicalSize = size;
+        for (final module in AndrilModuleConfig.values) {
+          for (final status in ChatListPreviewStatus.values) {
+            await _pumpChatListState(tester,
+                module: module,
+                status: status,
+                rows: _chatListRows(module),
+                textScale: 2,
+                onRetry: () {});
+            expect(
+                MediaQuery.textScalerOf(
+                        tester.element(find.byType(AndrilChatsListScreen)))
+                    .scale(14),
+                28);
+            expect(tester.takeException(), isNull,
+                reason: '${module.type.name} ${status.name} at $size');
+          }
+        }
+      }
+    });
+  });
+}
+
+// Existing M4 harness only: no external API mocks or authentication adapters.
+List<ConversationItem> _chatListRows(AndrilModuleConfig module) => [
+      ConversationItem(
+          id: 'preview_${module.type.name}',
+          partner: AndrilModuleProfile(
+              name: '${module.name} Preview',
+              status: 'Offline',
+              avatarAsset: module.defaultPartner.avatarAsset,
+              moduleType: module.type),
+          lastMessage: 'Preview for ${module.type.name}',
+          lastMessageTime: '12:00'),
+    ];
+
+Future<void> _pumpChatListState(
+  WidgetTester tester, {
+  AndrilModuleConfig module = AndrilModuleConfig.social,
+  ChatListPreviewStatus status = ChatListPreviewStatus.content,
+  AndrilModuleType? stateModule,
+  List<ConversationItem> rows = const [],
+  VoidCallback? onRetry,
+  double textScale = 1,
+}) async {
+  await tester.pumpWidget(ChatListPreviewScope(
+    moduleType: stateModule ?? module.type,
+    status: status,
+    conversations: rows,
+    onRetry: onRetry,
+    child: Builder(
+        builder: (context) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(textScale)),
+              child:
+                  AndrilM4DemoApp(moduleConfig: module, startAtChatsList: true),
+            )),
+  ));
+  // The loading indicator is deliberately indeterminate.
+  await tester.pump();
 }
