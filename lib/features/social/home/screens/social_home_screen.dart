@@ -6,12 +6,14 @@ import '../widgets/social_home_header.dart';
 
 /// Screen S21: Andril Social Home Dashboard.
 ///
-/// Follows M5-FE-S21-SEC-01 architectural requirements:
+/// Follows M5-FE-S21-UI-04 architectural requirements:
 /// - Fails closed: Displays access denied banner/view if unauthorized.
 /// - Houses [SocialHomeHeader] with module badge, user greeting, and notifications.
 /// - Houses [SocialHeroBanner] with "Explore People →" CTA and carousel indicators.
 /// - Houses [SocialHomeActionGrid] with 2x2 action cards (Connections, Diary, Personality, Saved Profiles).
 /// - Houses [SocialRecommendedPeopleSection] with horizontal cards and "View" callbacks.
+/// - Houses 5 approved bottom navigation destinations: Home, Zones, Explore, Chat, Profile.
+/// - Fully responsive down to 320dp and under accessibility text scaling (1.3) without RenderFlex overflow.
 /// - Disables navigation interactions and action dispatching when access is denied.
 /// - Supports pull-to-refresh via [RefreshIndicator].
 /// - Fully decoupled navigation via callbacks.
@@ -90,6 +92,7 @@ class _SocialHomeScreenState extends State<SocialHomeScreen> {
     super.dispose();
   }
 
+  /// Approved 5-destination bottom navigation for Social Module.
   static const List<NavigationDestination> _socialDestinations = [
     NavigationDestination(
       icon: Icon(Icons.home_outlined),
@@ -97,19 +100,24 @@ class _SocialHomeScreenState extends State<SocialHomeScreen> {
       label: 'Home',
     ),
     NavigationDestination(
+      icon: Icon(Icons.diversity_3_outlined),
+      selectedIcon: Icon(Icons.diversity_3_rounded),
+      label: 'Zones',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.explore_outlined),
       selectedIcon: Icon(Icons.explore_rounded),
       label: 'Explore',
     ),
     NavigationDestination(
-      icon: Icon(Icons.people_outline_rounded),
-      selectedIcon: Icon(Icons.people_rounded),
-      label: 'Connections',
-    ),
-    NavigationDestination(
       icon: Icon(Icons.chat_bubble_outline_rounded),
       selectedIcon: Icon(Icons.chat_bubble_rounded),
-      label: 'Chats',
+      label: 'Chat',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.person_outline_rounded),
+      selectedIcon: Icon(Icons.person_rounded),
+      label: 'Profile',
     ),
   ];
 

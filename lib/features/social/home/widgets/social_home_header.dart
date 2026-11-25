@@ -4,7 +4,7 @@ import 'package:andril_mobile/features/shared/presentation/widgets/andril_module
 
 /// Header widget for Social Home (S21).
 ///
-/// Follows M5-FE-S21-UI requirements:
+/// Follows M5-FE-S21-UI-04 requirements:
 /// - Wraps [AndrilModuleAppBar] with Royal Purple badge (#330099), Cream background (#FAF7F2),
 ///   notification bell with unread indicator badge, and optional search action.
 /// - Renders welcoming heading with verified user display name.
@@ -29,6 +29,9 @@ class SocialHomeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveGreetingName =
+        displayName.isNotEmpty ? displayName : 'Explorer';
+
     return Container(
       color: AndrilSocialColors.cream,
       child: Column(
@@ -63,7 +66,7 @@ class SocialHomeHeader extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        displayName,
+                        effectiveGreetingName,
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
@@ -79,7 +82,7 @@ class SocialHomeHeader extends StatelessWidget {
                 GestureDetector(
                   onTap: onProfileTap,
                   child: Semantics(
-                    label: '$displayName profile picture',
+                    label: '$effectiveGreetingName profile picture',
                     button: onProfileTap != null,
                     child: Container(
                       decoration: BoxDecoration(
@@ -97,8 +100,8 @@ class SocialHomeHeader extends StatelessWidget {
                             : null,
                         child: (avatarUrl == null || avatarUrl!.isEmpty)
                             ? Text(
-                                displayName.isNotEmpty
-                                    ? displayName[0].toUpperCase()
+                                effectiveGreetingName.isNotEmpty
+                                    ? effectiveGreetingName[0].toUpperCase()
                                     : 'A',
                                 style: const TextStyle(
                                   color: AndrilSocialColors.royalPurple,
@@ -128,6 +131,7 @@ class SocialHomeHeader extends StatelessWidget {
 /// - Subtitle describing matchmaking.
 /// - Minimum 48dp "Explore People →" CTA pill button.
 /// - 4-dot carousel indicator.
+/// - Responsive [Wrap] layout preventing pixel overflow at 320dp and text scale 1.3.
 class SocialHeroBanner extends StatelessWidget {
   final VoidCallback? onExploreTap;
   final int activeIndex;
@@ -205,11 +209,14 @@ class SocialHeroBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // CTA Row: Pill button + 4-dot indicator
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // CTA Wrap: Pill button + 4-dot indicator (responsive wrap)
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              // "Explore People →" CTA Button
+              // "Explore People →" CTA Button (minimum 48dp height)
               ElevatedButton(
                 onPressed: onExploreTap,
                 style: ElevatedButton.styleFrom(
@@ -217,24 +224,27 @@ class SocialHeroBanner extends StatelessWidget {
                   foregroundColor: AndrilSocialColors.royalPurple,
                   elevation: 0,
                   minimumSize: const Size(140, 48),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),
                 ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Explore People',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                child: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Explore People',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
                       ),
-                    ),
-                    SizedBox(width: 6),
-                    Icon(Icons.arrow_forward_rounded, size: 16),
-                  ],
+                      SizedBox(width: 6),
+                      Icon(Icons.arrow_forward_rounded, size: 16),
+                    ],
+                  ),
                 ),
               ),
               // Dot indicators

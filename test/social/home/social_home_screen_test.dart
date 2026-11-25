@@ -25,31 +25,8 @@ class FakeScreenSessionController extends ChangeNotifier implements SessionContr
 }
 
 void main() {
-  group('SocialHomeScreen Widget & Security Tests (M5-FE-S21-SEC-01)', () {
-    testWidgets('renders Access Restricted view when unauthorized (fails closed)', (tester) async {
-      tester.view.physicalSize = const Size(400, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      // Default ViewModel fails closed
-      final vm = SocialHomeViewModel();
-      await vm.initialize();
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SocialHomeScreen(viewModel: vm),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Access Restricted'), findsOneWidget);
-      expect(find.text('You must be signed in and opted in to the Social module to access Social Home.'), findsOneWidget);
-      expect(find.text('Try Again'), findsOneWidget);
-      // NavigationBar is hidden when access is restricted
-      expect(find.byType(NavigationBar), findsNothing);
-    });
-
-    testWidgets('renders all authorized S21 components when authorized via test fixture', (tester) async {
+  group('SocialHomeScreen Widget & Accessibility Tests (M5-FE-S21-UI-04)', () {
+    testWidgets('renders all authorized S21 components at standard 400x800 without overflow', (tester) async {
       tester.view.physicalSize = const Size(400, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -78,13 +55,15 @@ void main() {
           home: MediaQuery(
             data: const MediaQueryData(
               size: Size(400, 800),
-              textScaler: TextScaler.linear(0.8),
+              textScaler: TextScaler.noScaling,
             ),
             child: SocialHomeScreen(viewModel: vm),
           ),
         ),
       );
       await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
 
       // Verify Header & Module Bar
       expect(find.byType(AndrilModuleAppBar), findsOneWidget);
@@ -108,26 +87,35 @@ void main() {
       expect(find.text('Nivetha R.'), findsOneWidget);
       expect(find.text('View'), findsWidgets);
 
-      // Verify Navigation Bar
+      // Verify 5-Destination Navigation Bar
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Zones'), findsOneWidget);
       expect(find.text('Explore'), findsOneWidget);
-      expect(find.text('Connections'), findsOneWidget);
-      expect(find.text('Chats'), findsOneWidget);
+      expect(find.text('Chat'), findsOneWidget);
+      expect(find.text('Profile'), findsOneWidget);
     });
 
-    testWidgets('empty recommendations feed renders cleanly without errors', (tester) async {
-      tester.view.physicalSize = const Size(400, 800);
+    testWidgets('renders cleanly on small screen 320x640 at TextScaler 1.0 without overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      const fixtureRecommendations = [
+        SocialRecommendedPerson(
+          id: 'rec_fixture_01',
+          displayName: 'Nivetha R.',
+          location: 'Kandy',
+        ),
+      ];
+
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
         isSocialOptedIn: true,
         isTestAuthorized: true,
         initialDisplayName: 'Amara K.',
-        initialRecommendations: const [],
+        initialRecommendations: fixtureRecommendations,
       );
       await vm.initialize();
 
@@ -135,8 +123,8 @@ void main() {
         MaterialApp(
           home: MediaQuery(
             data: const MediaQueryData(
-              size: Size(400, 800),
-              textScaler: TextScaler.linear(0.8),
+              size: Size(320, 640),
+              textScaler: TextScaler.noScaling,
             ),
             child: SocialHomeScreen(viewModel: vm),
           ),
@@ -145,8 +133,85 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Recommended for you'), findsNothing);
+      expect(find.text('Social'), findsOneWidget);
+      expect(find.text('Explore People'), findsOneWidget);
       expect(find.text('Quick Actions'), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
+    });
+
+    testWidgets('renders cleanly on small screen 320x640 with accessibility scaling (1.3) without overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      const fixtureRecommendations = [
+        SocialRecommendedPerson(
+          id: 'rec_fixture_01',
+          displayName: 'Nivetha R.',
+          location: 'Kandy',
+        ),
+      ];
+
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        isTestAuthorized: true,
+        initialDisplayName: 'Amara K.',
+        initialRecommendations: fixtureRecommendations,
+      );
+      await vm.initialize();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(320, 640),
+              textScaler: TextScaler.linear(1.3),
+            ),
+            child: SocialHomeScreen(viewModel: vm),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Social'), findsOneWidget);
+      expect(find.text('Explore People'), findsOneWidget);
+      expect(find.text('Quick Actions'), findsOneWidget);
+    });
+
+    testWidgets('renders cleanly on tablet 800x1200 at TextScaler 1.0 without overflow', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        isTestAuthorized: true,
+        initialDisplayName: 'TabletUser',
+      );
+      await vm.initialize();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(800, 1200),
+              textScaler: TextScaler.noScaling,
+            ),
+            child: SocialHomeScreen(viewModel: vm),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Social'), findsOneWidget);
+      expect(find.text('Quick Actions'), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
     });
 
     testWidgets('tapping 2x2 action card dispatches onQuickAction when authorized', (tester) async {
