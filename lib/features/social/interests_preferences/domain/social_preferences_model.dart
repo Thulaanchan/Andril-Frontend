@@ -28,9 +28,11 @@ class SocialInterestItem {
 
 /// Immutable draft model representing user-configured Social discovery preferences and interests.
 ///
-/// Follows M5-FE-S03-DOM-01:
+/// Follows M5-FE-S03-SEC-03:
 /// - Represents module-scoped Social interests independently of Learning or Hobbies.
-/// - Maintains defensive immutability with unmodifiable collections.
+/// - Enforces defensive collection immutability: copies input collections during construction.
+/// - Prevents mutation through caller-owned references or exposed properties.
+/// - Order-independent hashing for interest sets ensuring `a == b => a.hashCode == b.hashCode`.
 /// - Manages discovery criteria: age boundaries, distance, relationship goals, languages, showMe.
 /// - Excludes completion flags, matching weights, or cross-module data dependencies.
 @immutable
@@ -82,17 +84,36 @@ class SocialPreferencesModel {
   /// Preferred discovery scope ('Everyone', 'Women', 'Men').
   final String showMe;
 
-  const SocialPreferencesModel({
-    Set<String> selectedInterests = const <String>{},
+  /// Defensively constructs an immutable preferences model.
+  ///
+  /// Defensively copies all input collections to protect against external mutation.
+  SocialPreferencesModel({
+    Iterable<String>? selectedInterests,
     this.minAge = defaultMinAge,
     this.maxAge = defaultMaxAge,
     this.maxDistanceKm = defaultMaxDistanceKm,
-    List<String> relationshipGoals = const ['Friendship', 'Networking'],
-    List<String> languages = const ['English'],
+    Iterable<String>? relationshipGoals,
+    Iterable<String>? languages,
     this.showMe = 'Everyone',
-  })  : _selectedInterests = selectedInterests,
-        _relationshipGoals = relationshipGoals,
-        _languages = languages;
+  })  : _selectedInterests = selectedInterests == null
+            ? const <String>{}
+            : Set<String>.unmodifiable(Set<String>.of(selectedInterests)),
+        _relationshipGoals = relationshipGoals == null
+            ? const <String>['Friendship', 'Networking']
+            : List<String>.unmodifiable(List<String>.of(relationshipGoals)),
+        _languages = languages == null
+            ? const <String>['English']
+            : List<String>.unmodifiable(List<String>.of(languages));
+
+  /// Const constructor for the default empty baseline.
+  const SocialPreferencesModel.empty()
+      : _selectedInterests = const <String>{},
+        minAge = defaultMinAge,
+        maxAge = defaultMaxAge,
+        maxDistanceKm = defaultMaxDistanceKm,
+        _relationshipGoals = const ['Friendship', 'Networking'],
+        _languages = const ['English'],
+        showMe = 'Everyone';
 
   /// Set of selected interest IDs or keys (defensively unmodifiable).
   Set<String> get selectedInterests =>
@@ -111,7 +132,7 @@ class SocialPreferencesModel {
 
   /// Toggles selection of an interest ID, returning an updated immutable copy.
   SocialPreferencesModel toggleInterest(String interestId) {
-    final updated = Set<String>.from(_selectedInterests);
+    final updated = Set<String>.of(_selectedInterests);
     if (updated.contains(interestId)) {
       updated.remove(interestId);
     } else {
@@ -123,20 +144,20 @@ class SocialPreferencesModel {
   /// Adds an interest to the selected set without duplicates.
   SocialPreferencesModel withInterest(String interestId) {
     if (_selectedInterests.contains(interestId)) return this;
-    final updated = Set<String>.from(_selectedInterests)..add(interestId);
+    final updated = Set<String>.of(_selectedInterests)..add(interestId);
     return copyWith(selectedInterests: updated);
   }
 
   /// Removes an interest from the selected set.
   SocialPreferencesModel withoutInterest(String interestId) {
     if (!_selectedInterests.contains(interestId)) return this;
-    final updated = Set<String>.from(_selectedInterests)..remove(interestId);
+    final updated = Set<String>.of(_selectedInterests)..remove(interestId);
     return copyWith(selectedInterests: updated);
   }
 
   /// Toggles a relationship goal in the list.
   SocialPreferencesModel toggleRelationshipGoal(String goal) {
-    final updated = List<String>.from(_relationshipGoals);
+    final updated = List<String>.of(_relationshipGoals);
     if (updated.contains(goal)) {
       updated.remove(goal);
     } else {
@@ -147,7 +168,7 @@ class SocialPreferencesModel {
 
   /// Toggles a language in the list.
   SocialPreferencesModel toggleLanguage(String language) {
-    final updated = List<String>.from(_languages);
+    final updated = List<String>.of(_languages);
     if (updated.contains(language)) {
       updated.remove(language);
     } else {
@@ -158,12 +179,12 @@ class SocialPreferencesModel {
 
   /// Creates a copy of this preferences draft with updated fields.
   SocialPreferencesModel copyWith({
-    Set<String>? selectedInterests,
+    Iterable<String>? selectedInterests,
     int? minAge,
     int? maxAge,
     int? maxDistanceKm,
-    List<String>? relationshipGoals,
-    List<String>? languages,
+    Iterable<String>? relationshipGoals,
+    Iterable<String>? languages,
     String? showMe,
   }) {
     return SocialPreferencesModel(
@@ -184,27 +205,35 @@ class SocialPreferencesModel {
       maxDistanceKm > 0 &&
       selectedInterests.isNotEmpty;
 
+  static int _hashUnorderedSet(Set<Object?> elements) {
+    var hash = 0;
+    for (final element in elements) {
+      hash = (hash + (element?.hashCode ?? 0)) & 0x7FFFFFFF;
+    }
+    return hash;
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SocialPreferencesModel &&
           runtimeType == other.runtimeType &&
-          setEquals(selectedInterests, other.selectedInterests) &&
+          setEquals(_selectedInterests, other._selectedInterests) &&
           minAge == other.minAge &&
           maxAge == other.maxAge &&
           maxDistanceKm == other.maxDistanceKm &&
-          listEquals(relationshipGoals, other.relationshipGoals) &&
-          listEquals(languages, other.languages) &&
+          listEquals(_relationshipGoals, other._relationshipGoals) &&
+          listEquals(_languages, other._languages) &&
           showMe == other.showMe;
 
   @override
   int get hashCode => Object.hash(
-        Object.hashAll(selectedInterests),
+        _hashUnorderedSet(_selectedInterests),
         minAge,
         maxAge,
         maxDistanceKm,
-        Object.hashAll(relationshipGoals),
-        Object.hashAll(languages),
+        Object.hashAll(_relationshipGoals),
+        Object.hashAll(_languages),
         showMe,
       );
 
