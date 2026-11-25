@@ -1,6 +1,6 @@
 # H-05 Stale CI Execution Validation
 
-Revision: A
+Revision: B
 
 Temporary documentation-only fixture for validating same-PR workflow cancellation.
 
