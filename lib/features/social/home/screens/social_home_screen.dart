@@ -6,14 +6,14 @@ import '../widgets/social_home_header.dart';
 
 /// Screen S21: Andril Social Home Dashboard.
 ///
-/// Follows M5-FE-S21 architectural requirements:
+/// Follows M5-FE-S21-SEC-01 architectural requirements:
 /// - Fails closed: Displays access denied banner/view if unauthorized.
 /// - Houses [SocialHomeHeader] with module badge, user greeting, and notifications.
 /// - Houses [SocialHeroBanner] with "Explore People →" CTA and carousel indicators.
 /// - Houses [SocialHomeActionGrid] with 2x2 action cards (Connections, Diary, Personality, Saved Profiles).
 /// - Houses [SocialRecommendedPeopleSection] with horizontal cards and "View" callbacks.
+/// - Disables navigation interactions and action dispatching when access is denied.
 /// - Supports pull-to-refresh via [RefreshIndicator].
-/// - Responsive down to 320dp without pixel overflows.
 /// - Fully decoupled navigation via callbacks.
 class SocialHomeScreen extends StatefulWidget {
   final SocialHomeViewModel? viewModel;
@@ -118,21 +118,24 @@ class _SocialHomeScreenState extends State<SocialHomeScreen> {
     return ListenableBuilder(
       listenable: _vm,
       builder: (context, _) {
+        final isDenied = _vm.isAccessDenied || !_vm.isAuthorized;
         return Scaffold(
           backgroundColor: AndrilSocialColors.cream,
-          body: _buildBody(),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: widget.currentNavigationIndex,
-            onDestinationSelected: widget.onDestinationSelected,
-            destinations: _socialDestinations,
-          ),
+          body: _buildBody(isDenied),
+          bottomNavigationBar: isDenied
+              ? null
+              : NavigationBar(
+                  selectedIndex: widget.currentNavigationIndex,
+                  onDestinationSelected: widget.onDestinationSelected,
+                  destinations: _socialDestinations,
+                ),
         );
       },
     );
   }
 
-  Widget _buildBody() {
-    if (_vm.isAccessDenied) {
+  Widget _buildBody(bool isDenied) {
+    if (isDenied) {
       return _buildAccessDeniedView();
     }
 
@@ -172,11 +175,12 @@ class _SocialHomeScreenState extends State<SocialHomeScreen> {
               actions: _vm.quickActions,
               onActionTap: _vm.triggerQuickAction,
             ),
-            SocialRecommendedPeopleSection(
-              people: _vm.recommendedPeople,
-              onViewProfile: _vm.triggerViewProfile,
-              onSeeAll: _vm.triggerSeeAllRecommendations,
-            ),
+            if (_vm.recommendedPeople.isNotEmpty)
+              SocialRecommendedPeopleSection(
+                people: _vm.recommendedPeople,
+                onViewProfile: _vm.triggerViewProfile,
+                onSeeAll: _vm.triggerSeeAllRecommendations,
+              ),
             const SizedBox(height: 24),
           ],
         ),

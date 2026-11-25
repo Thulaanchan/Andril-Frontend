@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/security/session/session_controller.dart';
+import '../../../../shared_core/account/account_handoff_controller.dart';
+import '../../../../shared_core/onboarding/domain/onboarding_status_repository.dart';
 
 /// Data model representing a recommended connection on the Social Home feed (S21).
 @immutable
@@ -31,8 +33,7 @@ class SocialRecommendedPerson {
   int get hashCode => Object.hash(id, displayName, location, photoUrl);
 
   @override
-  String toString() =>
-      'SocialRecommendedPerson(id: $id, displayName: $displayName, location: $location)';
+  String toString() => 'SocialRecommendedPerson(id: $id)';
 }
 
 /// Identifiers for the 2x2 action cards on Social Home (S21).
@@ -69,7 +70,7 @@ class SocialHomeQuickAction {
   int get hashCode => Object.hash(id, title, subtitle);
 
   @override
-  String toString() => 'SocialHomeQuickAction(id: ${id.name}, title: $title)';
+  String toString() => 'SocialHomeQuickAction(id: ${id.name})';
 }
 
 /// Operational state of the Social Home dashboard.
@@ -92,22 +93,24 @@ enum SocialHomeStatus {
 
 /// Manages presentation state, navigation callbacks, and feed data for Social Home (Screen S21).
 ///
-/// Follows M5-FE-S21 architectural requirements:
-/// - Fails closed: Denies access if unauthenticated or not opted in to Social module.
-/// - Exposes verified user greeting display name and optional profile avatar.
-/// - Exposes the four verified S21 2x2 quick action items:
-///   1. My Connections (Matches & pending interest)
-///   2. Andril Diary (Your private reflections)
-///   3. Personality (Optional style insights)
-///   4. Saved Profiles (Revisit bookmarks)
-/// - Exposes recommended people feed.
-/// - Triggers navigation callbacks without direct context or route coupling.
+/// Follows M5-FE-S21-SEC-01 architectural requirements:
+/// - Fails closed: Denies access if unauthenticated, missing session context,
+///   or not authoritatively opted in / authorized for Social module.
+/// - Requires applicable M2 session and handoff evidence.
+/// - Signed-in state alone never authorizes Social Home.
+/// - Does not generate synthetic mock recommendations in production.
+/// - Clears private state upon session invalidation, account switch, or logout.
+/// - Guards all navigation callbacks against unauthorized or post-disposal invocation.
 class SocialHomeViewModel extends ChangeNotifier {
   final SessionController? sessionController;
+  final AccountHandoffController? handoffController;
   final bool isSocialOptedIn;
+  final bool isTestAuthorized;
+
+  VoidCallback? _unregisterSessionClearer;
 
   SocialHomeStatus _status = SocialHomeStatus.initial;
-  String _displayName = 'Explorer';
+  String _displayName = '';
   String? _avatarUrl;
   int _unreadNotificationsCount = 0;
   List<SocialRecommendedPerson> _recommendedPeople = const [];
@@ -148,17 +151,30 @@ class SocialHomeViewModel extends ChangeNotifier {
 
   SocialHomeViewModel({
     this.sessionController,
-    this.isSocialOptedIn = true,
-    String initialDisplayName = 'Explorer',
+    this.handoffController,
+    this.isSocialOptedIn = false,
+    this.isTestAuthorized = false,
+    String? initialDisplayName,
     String? initialAvatarUrl,
     int initialUnreadNotifications = 0,
     List<SocialRecommendedPerson>? initialRecommendations,
-  })  : _displayName = initialDisplayName,
+  })  : _displayName = initialDisplayName ?? '',
         _avatarUrl = initialAvatarUrl,
         _unreadNotificationsCount = initialUnreadNotifications,
         _recommendedPeople = initialRecommendations != null
             ? List.unmodifiable(initialRecommendations)
-            : const [];
+            : const [] {
+    final session = sessionController;
+    if (session != null) {
+      _unregisterSessionClearer =
+          session.registerPrivateStateClearer(_onSessionCleared);
+      session.addListener(_onSessionStateChanged);
+    }
+    final handoff = handoffController;
+    if (handoff != null) {
+      handoff.addListener(_onHandoffStateChanged);
+    }
+  }
 
   SocialHomeStatus get status => _status;
   String get displayName => _displayName;
@@ -170,14 +186,69 @@ class SocialHomeViewModel extends ChangeNotifier {
   bool get isLoading => _status == SocialHomeStatus.loading;
   bool get isAccessDenied => _status == SocialHomeStatus.accessDenied;
 
-  /// Whether user meets both session authentication and Social module opt-in.
+  /// Whether user meets both session authentication and authoritative Social module authorization.
   bool get isAuthorized {
-    if (!isSocialOptedIn) return false;
-    if (sessionController != null &&
-        sessionController!.phase != SessionPhase.signedIn) {
-      return false;
+    if (_disposed) return false;
+
+    // Fail closed: Missing session context never authorizes Social Home
+    final session = sessionController;
+    if (session == null) return false;
+
+    // Signed-in status alone never authorizes Social access
+    if (session.phase != SessionPhase.signedIn) return false;
+
+    // Explicitly isolated test fixtures with valid session may assert authorized behavior
+    if (isTestAuthorized) {
+      return isSocialOptedIn;
     }
-    return true;
+
+    // Require applicable verified M2 authorization handoff
+    final handoff = handoffController;
+    if (handoff != null) {
+      final handoffStatus = handoff.status;
+      if (handoffStatus != null &&
+          handoffStatus.starterModule == StarterModule.social &&
+          handoffStatus.progress.identityVerified &&
+          handoffStatus.progress.currentPoliciesAccepted &&
+          handoffStatus.progress.starterModuleSelected &&
+          handoffStatus.moduleHomeAuthorized &&
+          isSocialOptedIn) {
+        return true;
+      }
+    }
+
+    // If authoritative module authorization is unavailable, keep production access denied.
+    return false;
+  }
+
+  void _onSessionCleared() {
+    _clearPrivateState();
+  }
+
+  void _onSessionStateChanged() {
+    if (_disposed) return;
+    if (!isAuthorized) {
+      _clearPrivateState();
+    }
+  }
+
+  void _onHandoffStateChanged() {
+    if (_disposed) return;
+    if (!isAuthorized) {
+      _clearPrivateState();
+    }
+  }
+
+  void _clearPrivateState() {
+    _displayName = '';
+    _avatarUrl = null;
+    _unreadNotificationsCount = 0;
+    _recommendedPeople = const [];
+    _status = SocialHomeStatus.accessDenied;
+    _errorMessage = null;
+    if (!_disposed) {
+      notifyListeners();
+    }
   }
 
   /// Initializes home state. Fails closed if unauthorized.
@@ -194,34 +265,11 @@ class SocialHomeViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // If recommendations were not provided at construction, load default seed
-      if (_recommendedPeople.isEmpty) {
-        _recommendedPeople = const [
-          SocialRecommendedPerson(
-            id: 'rec_01',
-            displayName: 'Nivetha R.',
-            location: 'Kandy',
-          ),
-          SocialRecommendedPerson(
-            id: 'rec_02',
-            displayName: 'Arjun K.',
-            location: 'Colombo',
-          ),
-          SocialRecommendedPerson(
-            id: 'rec_03',
-            displayName: 'Dilan M.',
-            location: 'Galle',
-          ),
-          SocialRecommendedPerson(
-            id: 'rec_04',
-            displayName: 'Tharushi S.',
-            location: 'Jaffna',
-          ),
-        ];
-      }
+      // In production, no synthetic hardcoded recommendations are generated.
+      // Recommendations remain what was injected or fetched from authoritative gateway.
       _status = SocialHomeStatus.ready;
       _errorMessage = null;
-    } catch (e) {
+    } catch (_) {
       _status = SocialHomeStatus.error;
       _errorMessage = 'Failed to load Social Home feed.';
     }
@@ -238,51 +286,62 @@ class SocialHomeViewModel extends ChangeNotifier {
 
   /// Updates user profile display info.
   void updateProfileHeader({required String displayName, String? avatarUrl}) {
+    if (_disposed || !isAuthorized) return;
     _displayName = displayName;
     _avatarUrl = avatarUrl;
-    if (!_disposed) notifyListeners();
+    notifyListeners();
   }
 
   /// Updates the unread notifications count.
   void setUnreadNotificationsCount(int count) {
-    if (count < 0) count = 0;
-    _unreadNotificationsCount = count;
-    if (!_disposed) notifyListeners();
+    if (_disposed || !isAuthorized) return;
+    _unreadNotificationsCount = count < 0 ? 0 : count;
+    notifyListeners();
   }
 
   /// Dispatches explore people action.
   void triggerExplorePeople() {
+    if (_disposed || !isAuthorized) return;
     onExplorePeople?.call();
   }
 
   /// Dispatches see all recommendations action.
   void triggerSeeAllRecommendations() {
+    if (_disposed || !isAuthorized) return;
     onSeeAllRecommendations?.call();
   }
 
   /// Dispatches view profile action for a specific user ID.
   void triggerViewProfile(String userId) {
+    if (_disposed || !isAuthorized) return;
     onViewProfile?.call(userId);
   }
 
   /// Dispatches a 2x2 quick action navigation callback.
   void triggerQuickAction(SocialHomeActionId actionId) {
+    if (_disposed || !isAuthorized) return;
     onQuickAction?.call(actionId);
   }
 
   /// Dispatches notification tap.
   void triggerNotificationTap() {
+    if (_disposed || !isAuthorized) return;
     onNotificationTap?.call();
   }
 
   /// Dispatches search tap.
   void triggerSearchTap() {
+    if (_disposed || !isAuthorized) return;
     onSearchTap?.call();
   }
 
   @override
   void dispose() {
     _disposed = true;
+    _unregisterSessionClearer?.call();
+    _unregisterSessionClearer = null;
+    sessionController?.removeListener(_onSessionStateChanged);
+    handoffController?.removeListener(_onHandoffStateChanged);
     super.dispose();
   }
 }
