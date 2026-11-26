@@ -43,6 +43,9 @@ class _FakeSessionController extends ChangeNotifier
 }
 
 class _FakeGrowthRepository implements ILearningGrowthRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
   bool isBackendActivated = true;
   LearningGrowthSummary summary = const LearningGrowthSummary();
   List<LearningGrowthEvidence> evidenceList = [];
