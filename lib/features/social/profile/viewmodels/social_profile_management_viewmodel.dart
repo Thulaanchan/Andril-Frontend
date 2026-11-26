@@ -1,0 +1,229 @@
+import 'package:flutter/foundation.dart';
+import 'package:andril_mobile/core/security/session/session_controller.dart';
+import 'social_profile_draft.dart';
+import 'social_profile_management_repository.dart';
+import 'social_profile_repository.dart';
+
+/// Presentation state machine status for Social Profile Management.
+enum SocialProfileManagementStatus {
+  initial,
+  loading,
+  ready,
+  saving,
+  accessDenied,
+  error,
+}
+
+/// ViewModel orchestrating reading, editing, and saving the authenticated user's private Social profile.
+///
+/// Follows M5-FE Profile Management Governance:
+/// - Reuses validated [SocialProfileDraft] constraints and sanitization.
+/// - Guarded against concurrent duplicate saves and stale asynchronous responses.
+/// - Tracks unsaved edits and discards changes on cancel.
+/// - Clears private profile state on session sign-out or account invalidation.
+/// - Does not modify or bypass onboarding flags.
+class SocialProfileManagementViewModel extends ChangeNotifier {
+  final ISocialProfileManagementRepository _repository;
+  final SessionController _sessionController;
+  final bool _isSocialOptedIn;
+
+  SocialProfileManagementStatus _status = SocialProfileManagementStatus.initial;
+  SocialProfileDraft _serverDraft = const SocialProfileDraft();
+  SocialProfileDraft _editingDraft = const SocialProfileDraft();
+  String? _errorMessage;
+  int _activeOperationId = 0;
+  bool _isSaving = false;
+  bool _disposed = false;
+
+  SocialProfileManagementViewModel({
+    required ISocialProfileManagementRepository repository,
+    required SessionController sessionController,
+    bool isSocialOptedIn = true,
+  })  : _repository = repository,
+        _sessionController = sessionController,
+        _isSocialOptedIn = isSocialOptedIn {
+    _sessionController.addListener(_onSessionChanged);
+    _sessionController.registerPrivateStateClearer(_clearPrivateProfile);
+  }
+
+  SocialProfileManagementStatus get status => _status;
+  SocialProfileDraft get profile => _serverDraft;
+  SocialProfileDraft get draft => _editingDraft;
+  String? get errorMessage => _errorMessage;
+
+  bool get isLoading => _status == SocialProfileManagementStatus.loading;
+  bool get isSaving => _isSaving || _status == SocialProfileManagementStatus.saving;
+  bool get isReady => _status == SocialProfileManagementStatus.ready;
+  bool get isAccessDenied => _status == SocialProfileManagementStatus.accessDenied;
+  bool get isError => _status == SocialProfileManagementStatus.error;
+
+  /// Whether the user has modified the profile draft compared to the server state.
+  bool get hasUnsavedChanges =>
+      _editingDraft.displayName != _serverDraft.displayName ||
+      _editingDraft.bio != _serverDraft.bio ||
+      _editingDraft.profilePhotoPath != _serverDraft.profilePhotoPath;
+
+  /// Whether the draft is valid and ready to be saved.
+  bool get canSave => _editingDraft.isValid && hasUnsavedChanges && !isSaving;
+
+  /// Loads the authoritative profile from the server.
+  Future<void> loadProfile({bool refresh = false}) async {
+    if (_disposed) return;
+
+    if (!_isSocialOptedIn || _sessionController.phase != SessionPhase.signedIn) {
+      _status = SocialProfileManagementStatus.accessDenied;
+      _errorMessage = 'Adult eligibility verification and Social opt-in are required.';
+      notifyListeners();
+      return;
+    }
+
+    if (_status == SocialProfileManagementStatus.ready && !refresh) {
+      return;
+    }
+
+    final opId = ++_activeOperationId;
+    _status = SocialProfileManagementStatus.loading;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _repository.getProfile();
+      if (_disposed || opId != _activeOperationId) return;
+
+      if (result is SocialProfileSuccess) {
+        _serverDraft = result.draft;
+        _editingDraft = result.draft;
+        _status = SocialProfileManagementStatus.ready;
+        _errorMessage = null;
+      } else if (result is SocialProfileError) {
+        _handleFailure(result.failure);
+      }
+    } catch (_) {
+      if (_disposed || opId != _activeOperationId) return;
+      _status = SocialProfileManagementStatus.error;
+      _errorMessage = 'An unexpected error occurred while loading profile.';
+    }
+
+    notifyListeners();
+  }
+
+  /// Updates the editing draft display name.
+  void updateDisplayName(String value) {
+    if (_disposed) return;
+    _editingDraft = _editingDraft.copyWith(displayName: value);
+    _clearTransientErrors();
+    notifyListeners();
+  }
+
+  /// Updates the editing draft bio.
+  void updateBio(String? value) {
+    if (_disposed) return;
+    _editingDraft = _editingDraft.copyWith(bio: value);
+    _clearTransientErrors();
+    notifyListeners();
+  }
+
+  /// Updates the editing draft local profile photo.
+  void updateProfilePhoto(String? path) {
+    if (_disposed) return;
+    _editingDraft = _editingDraft.copyWith(profilePhotoPath: path);
+    _clearTransientErrors();
+    notifyListeners();
+  }
+
+  /// Resets editing draft to the last known server state, discarding unsaved edits.
+  void discardEdits() {
+    _editingDraft = _serverDraft;
+    _clearTransientErrors();
+    notifyListeners();
+  }
+
+  /// Saves the current editing draft to the server.
+  Future<bool> saveProfile() async {
+    if (_disposed || _isSaving || !canSave) return false;
+
+    _isSaving = true;
+    final opId = ++_activeOperationId;
+    _status = SocialProfileManagementStatus.saving;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _repository.updateProfile(_editingDraft);
+      if (_disposed || opId != _activeOperationId) return false;
+
+      _isSaving = false;
+      if (result is SocialProfileSuccess) {
+        _serverDraft = result.draft;
+        _editingDraft = result.draft;
+        _status = SocialProfileManagementStatus.ready;
+        _errorMessage = null;
+        notifyListeners();
+        return true;
+      } else if (result is SocialProfileError) {
+        _handleFailure(result.failure);
+        notifyListeners();
+        return false;
+      }
+    } catch (_) {
+      if (_disposed || opId != _activeOperationId) return false;
+      _isSaving = false;
+      _status = SocialProfileManagementStatus.error;
+      _errorMessage = 'Failed to save profile.';
+      notifyListeners();
+      return false;
+    }
+
+    _isSaving = false;
+    notifyListeners();
+    return false;
+  }
+
+  void _clearTransientErrors() {
+    if (_status == SocialProfileManagementStatus.error) {
+      _status = SocialProfileManagementStatus.ready;
+      _errorMessage = null;
+    }
+  }
+
+  void _clearPrivateProfile() {
+    _serverDraft = const SocialProfileDraft();
+    _editingDraft = const SocialProfileDraft();
+    _errorMessage = null;
+  }
+
+  void _onSessionChanged() {
+    if (_disposed) return;
+    if (_sessionController.phase != SessionPhase.signedIn) {
+      _clearPrivateProfile();
+      _status = SocialProfileManagementStatus.accessDenied;
+      _errorMessage = 'Session signed out.';
+      notifyListeners();
+    }
+  }
+
+  void _handleFailure(SocialProfileFailure failure) {
+    switch (failure.type) {
+      case SocialProfileFailureType.authorizationDenied:
+      case SocialProfileFailureType.sessionExpired:
+        _status = SocialProfileManagementStatus.accessDenied;
+        _errorMessage = failure.message;
+        break;
+      case SocialProfileFailureType.displayNameUnavailable:
+      case SocialProfileFailureType.validationFailure:
+      case SocialProfileFailureType.dependencyFailure:
+      case SocialProfileFailureType.cancelled:
+      case SocialProfileFailureType.unknown:
+        _status = SocialProfileManagementStatus.error;
+        _errorMessage = failure.message;
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _sessionController.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+}
