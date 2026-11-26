@@ -1,4 +1,6 @@
 import '../entities/learning_growth_evidence.dart';
+import '../entities/learning_mentorship.dart';
+import '../entities/learning_topic_gap.dart';
 
 /// Operational failure classifications for Learning Growth operations (LRN-04).
 enum LearningGrowthFailureType {
@@ -72,4 +74,39 @@ abstract class ILearningGrowthRepository {
     Iterable<String>? skillNames,
     String? sourceReference,
   });
+
+  /// Retrieves the list of topic gap explanations for the private dashboard.
+  Future<LearningGrowthResult<List<LearningTopicGap>>> getTopicGaps();
+
+  /// Retrieves a specific topic gap explanation by its identifier.
+  Future<LearningGrowthResult<LearningTopicGap>> getTopicGapById(String gapId);
+
+  /// Retrieves available voluntary mentorship offers.
+  Future<LearningGrowthResult<List<LearningMentorshipOffer>>>
+      getMentorshipOffers();
+
+  /// Retrieves the learner's active, pending, or historical mentorship engagements.
+  Future<LearningGrowthResult<List<LearningMentorship>>> getMentorships();
+
+  /// Initiates a voluntary mentorship request to an available mentor offer.
+  Future<LearningGrowthResult<LearningMentorship>> requestMentorship({
+    required String offerId,
+    required String learningGoal,
+    required String message,
+  });
+
+  /// Transitions a pending mentorship to accepted (mentor action).
+  Future<LearningGrowthResult<LearningMentorship>> acceptMentorship(
+    String mentorshipId,
+  );
+
+  /// Transitions a pending mentorship to declined (mentor action).
+  Future<LearningGrowthResult<LearningMentorship>> declineMentorship(
+    String mentorshipId,
+  );
+
+  /// Transitions a pending mentorship to cancelled (learner action).
+  Future<LearningGrowthResult<LearningMentorship>> cancelMentorship(
+    String mentorshipId,
+  );
 }

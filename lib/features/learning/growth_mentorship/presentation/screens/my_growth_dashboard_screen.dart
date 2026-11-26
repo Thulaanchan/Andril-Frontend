@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:andril_mobile/app/themes/learning/learning_colors.dart';
 import '../../domain/entities/learning_growth_evidence.dart';
 import '../viewmodels/learning_growth_viewmodel.dart';
+import '../viewmodels/learning_mentorship_viewmodel.dart';
+import '../viewmodels/learning_topic_gap_viewmodel.dart';
 import '../widgets/evidence_detail_sheet.dart';
 import '../widgets/growth_evidence_card.dart';
 import '../widgets/growth_skill_card.dart';
+import 'learning_mentorship_hub_screen.dart';
+import 'topic_gap_explanation_screen.dart';
 
 /// Screen displaying the Private My Learning Growth Dashboard (LRN-04, GRW-01-05, Q41_LUC-24).
 ///
@@ -1031,6 +1035,14 @@ class _MyGrowthDashboardScreenState extends State<MyGrowthDashboardScreen>
           ),
           const SizedBox(height: 16.0),
 
+          // Topic Gap Action Card
+          _buildTopicGapActionCard(context),
+          const SizedBox(height: 12.0),
+
+          // Mentorship Action Card
+          _buildMentorshipActionCard(context),
+          const SizedBox(height: 16.0),
+
           // Qualitative Learning Reflections
           const Text(
             'Learning Journey Reflections',
@@ -1053,6 +1065,171 @@ class _MyGrowthDashboardScreenState extends State<MyGrowthDashboardScreen>
             narrative:
                 'Verified records reflect peer confirmations and mentor sign-offs, while self-reports capture personal reflections.',
             icon: Icons.verified_user_outlined,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopicGapActionCard(BuildContext context) {
+    return Container(
+      key: const ValueKey('card_topic_gap_action'),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: const Icon(Icons.analytics_outlined,
+                    size: 20, color: Color(0xFFB45309)),
+              ),
+              const SizedBox(width: 12.0),
+              const Expanded(
+                child: Text(
+                  'Topic Gap Analysis',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: LearningColors.heading,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8.0),
+          const Text(
+            'Explore evidence-grounded analysis of your learning focus areas and recommended next steps.',
+            style: TextStyle(
+              fontSize: 12,
+              color: LearningColors.secondaryText,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 12.0),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              key: const ValueKey('btn_view_topic_gaps'),
+              onPressed: () {
+                final topicGapViewModel = LearningTopicGapViewModel(
+                  repository: widget.viewModel.repository,
+                  sessionController: widget.viewModel.sessionController,
+                  isLearningActivated: widget.viewModel.isLearningActivated,
+                  currentProfileId: widget.viewModel.currentProfileId,
+                );
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => TopicGapExplanationScreen(
+                      viewModel: topicGapViewModel,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text('View Topic Gaps'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: LearningColors.primary,
+                side: const BorderSide(color: LearningColors.primary),
+                minimumSize: const Size(double.infinity, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMentorshipActionCard(BuildContext context) {
+    return Container(
+      key: const ValueKey('card_mentorship_hub_action'),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: const Icon(Icons.people_outline,
+                    size: 20, color: Color(0xFF1D4ED8)),
+              ),
+              const SizedBox(width: 12.0),
+              const Expanded(
+                child: Text(
+                  'Voluntary Peer Mentorship',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: LearningColors.heading,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8.0),
+          const Text(
+            'Connect with peer mentors for qualitative guidance, structured pacts, and mutual learning goals.',
+            style: TextStyle(
+              fontSize: 12,
+              color: LearningColors.secondaryText,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 12.0),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              key: const ValueKey('btn_open_mentorship_hub'),
+              onPressed: () {
+                final mentorshipViewModel = LearningMentorshipViewModel(
+                  repository: widget.viewModel.repository,
+                  sessionController: widget.viewModel.sessionController,
+                  isLearningActivated: widget.viewModel.isLearningActivated,
+                  currentProfileId: widget.viewModel.currentProfileId,
+                  currentDisplayName: widget.viewModel.currentDisplayName,
+                );
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => LearningMentorshipHubScreen(
+                      viewModel: mentorshipViewModel,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.school, size: 16),
+              label: const Text('Explore Peer Mentorship'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: LearningColors.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+            ),
           ),
         ],
       ),
