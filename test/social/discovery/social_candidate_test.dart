@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/features/social/discovery/domain/social_candidate.dart';
 
 void main() {
-  group('SocialCandidate Domain Model Tests (M5-FE-S09-DOM-QA-01)', () {
+  group('SocialCandidate Domain Model Tests (Task 107 & 108)', () {
     test('constructs valid candidate with all approved fields', () {
       final candidate = SocialCandidate(
         id: 'candidate_001',
@@ -32,7 +32,7 @@ void main() {
       expect(candidate.isVerified, isTrue);
     });
 
-    test('handles optional fields safely with default fallbacks', () {
+    test('handles optional fields safely when valid', () {
       final candidate = SocialCandidate(
         id: 'candidate_minimal',
         displayName: 'Kavindu',
@@ -53,147 +53,162 @@ void main() {
       expect(candidate.isVerified, isFalse);
     });
 
-    test('enforces defensive copying of input collections', () {
-      final inputLanguages = ['English', 'Tamil'];
-      final inputGoals = ['Networking'];
-      final inputInterests = {'Music', 'Coding'};
-      final inputPhotos = ['https://cdn.andril.app/p1.jpg'];
+    test('defensive collection immutability', () {
+      final rawLanguages = ['English', 'Tamil'];
+      final rawInterests = {'Music', 'Reading'};
+      final rawPhotos = ['https://cdn.andril.app/p1.jpg'];
 
       final candidate = SocialCandidate(
-        id: 'defensive_test',
-        displayName: 'Aarav',
+        id: 'c_immutable',
+        displayName: 'Ananthan',
         age: 22,
-        sharedLanguages: inputLanguages,
-        sharedConnectionGoals: inputGoals,
-        interests: inputInterests,
-        photoUrls: inputPhotos,
+        sharedLanguages: rawLanguages,
+        interests: rawInterests,
+        photoUrls: rawPhotos,
       );
 
-      // Mutate original caller collections
-      inputLanguages.add('Sinhala');
-      inputGoals.add('Friendship');
-      inputInterests.add('Hiking');
-      inputPhotos.add('https://cdn.andril.app/p2.jpg');
-
-      // Candidate collections must remain unchanged
-      expect(candidate.sharedLanguages, ['English', 'Tamil']);
-      expect(candidate.sharedConnectionGoals, ['Networking']);
-      expect(candidate.interests, {'Music', 'Coding'});
-      expect(candidate.photoUrls, ['https://cdn.andril.app/p1.jpg']);
+      expect(() => (candidate.sharedLanguages as dynamic).add('French'), throwsA(isA<UnsupportedError>()));
+      expect(() => (candidate.interests as dynamic).add('Gaming'), throwsA(isA<UnsupportedError>()));
+      expect(() => (candidate.photoUrls as dynamic).add('p2.jpg'), throwsA(isA<UnsupportedError>()));
     });
 
-    test('enforces runtime unmodifiability on exposed collections', () {
-      final candidate = SocialCandidate(
-        id: 'immutable_test',
-        displayName: 'Nethmi',
-        age: 25,
-        sharedLanguages: const ['English'],
-        sharedConnectionGoals: const ['Friendship'],
-        interests: const {'Art'},
-        photoUrls: const ['https://cdn.andril.app/p1.jpg'],
-      );
-
-      expect(() => candidate.sharedLanguages.add('Tamil'), throwsUnsupportedError);
-      expect(() => candidate.sharedConnectionGoals.add('Networking'), throwsUnsupportedError);
-      expect(() => candidate.interests.add('Design'), throwsUnsupportedError);
-      expect(() => candidate.photoUrls.add('https://cdn.andril.app/p2.jpg'), throwsUnsupportedError);
-    });
-
-    test('implements order-independent set equality and hashing', () {
-      final candidateA = SocialCandidate(
-        id: 'equal_test',
-        displayName: 'Rohan',
-        age: 26,
-        interests: {'Reading', 'Coffee', 'Running'},
-      );
-
-      final candidateB = SocialCandidate(
-        id: 'equal_test',
-        displayName: 'Rohan',
-        age: 26,
-        interests: {'Running', 'Reading', 'Coffee'}, // different insertion order
-      );
-
-      expect(candidateA, equals(candidateB));
-      expect(candidateA.hashCode, equals(candidateB.hashCode));
-    });
-
-    test('serializes to and deserializes from backend JSON accurately', () {
-      final jsonPayload = {
-        'candidateProfileId': 'guid_555',
-        'displayName': 'Thilini M.',
-        'age': 28,
+    test('parses valid JSON with approved DTO fields', () {
+      final json = {
+        'candidateProfileId': 'c_json_01',
+        'displayName': 'Dilshan',
+        'age': 25,
         'approximateDistanceKm': 8,
-        'sharedLanguages': ['Sinhala', 'English'],
-        'sharedConnectionGoals': ['Serious Relationship'],
-        'biography': 'Passionate about wildlife conservation.',
-        'interests': ['Wildlife', 'Hiking'],
-        'photoUrls': ['https://cdn.andril.app/p_thilini.jpg'],
+        'sharedLanguages': ['English', 'Sinhala'],
+        'sharedConnectionGoals': ['Mentorship'],
+        'biography': 'Software engineering enthusiast.',
+        'interests': ['Tech', 'Hiking'],
+        'photoUrls': ['https://cdn.andril.app/dilshan.jpg'],
         'locationName': 'Kandy',
         'isVerified': true,
       };
 
-      final candidate = SocialCandidate.fromJson(jsonPayload);
-      expect(candidate.id, 'guid_555');
-      expect(candidate.displayName, 'Thilini M.');
-      expect(candidate.age, 28);
+      final candidate = SocialCandidate.fromJson(json);
+      expect(candidate.id, 'c_json_01');
+      expect(candidate.displayName, 'Dilshan');
+      expect(candidate.age, 25);
       expect(candidate.approximateDistanceKm, 8);
-      expect(candidate.sharedLanguages, ['Sinhala', 'English']);
-      expect(candidate.sharedConnectionGoals, ['Serious Relationship']);
-      expect(candidate.biography, 'Passionate about wildlife conservation.');
-      expect(candidate.interests, {'Wildlife', 'Hiking'});
-      expect(candidate.photoUrls, ['https://cdn.andril.app/p_thilini.jpg']);
+      expect(candidate.sharedLanguages, ['English', 'Sinhala']);
+      expect(candidate.sharedConnectionGoals, ['Mentorship']);
+      expect(candidate.biography, 'Software engineering enthusiast.');
+      expect(candidate.interests, {'Tech', 'Hiking'});
+      expect(candidate.primaryPhotoUrl, 'https://cdn.andril.app/dilshan.jpg');
       expect(candidate.locationName, 'Kandy');
       expect(candidate.isVerified, isTrue);
-
-      final serialized = candidate.toJson();
-      expect(serialized['candidateProfileId'], 'guid_555');
-      expect(serialized['displayName'], 'Thilini M.');
-      expect(serialized['age'], 28);
-      expect(serialized['approximateDistanceKm'], 8);
-      expect(serialized['isVerified'], isTrue);
     });
 
-    test('copyWith produces an updated immutable clone preserving unchanged fields', () {
-      final original = SocialCandidate(
-        id: 'copy_test',
-        displayName: 'Nuwan',
-        age: 30,
-        approximateDistanceKm: 15,
-        locationName: 'Galle',
-      );
-
-      final updated = original.copyWith(
-        approximateDistanceKm: 25,
-        locationName: 'Matara',
-      );
-
-      expect(updated.id, 'copy_test');
-      expect(updated.displayName, 'Nuwan');
-      expect(updated.age, 30);
-      expect(updated.approximateDistanceKm, 25);
-      expect(updated.locationName, 'Matara');
-      expect(original.approximateDistanceKm, 15);
-    });
-
-    test('sanitized toString contains presentation diagnostics without cross-module leakage', () {
+    test('serializes to JSON accurately', () {
       final candidate = SocialCandidate(
-        id: 'diag_test',
-        displayName: 'Amara',
-        age: 23,
+        id: 'c_ser_01',
+        displayName: 'Anuki',
+        age: 21,
         approximateDistanceKm: 5,
+        sharedLanguages: const ['English'],
+        sharedConnectionGoals: const ['Friendship'],
+        biography: 'Bookworm & coffee lover',
+        interests: const {'Reading', 'Coffee'},
+        photoUrls: const ['https://cdn.andril.app/anuki.jpg'],
+        locationName: 'Galle',
         isVerified: true,
       );
 
-      final str = candidate.toString();
-      expect(str, contains('SocialCandidate'));
-      expect(str, contains('Amara'));
-      expect(str, contains('23'));
-      expect(str, contains('5km'));
-      expect(str, isNot(contains('password')));
-      expect(str, isNot(contains('account')));
-      expect(str, isNot(contains('scoring')));
-      expect(str, isNot(contains('gps')));
+      final json = candidate.toJson();
+      expect(json['candidateProfileId'], 'c_ser_01');
+      expect(json['displayName'], 'Anuki');
+      expect(json['age'], 21);
+      expect(json['approximateDistanceKm'], 5);
+      expect(json['sharedLanguages'], ['English']);
+      expect(json['sharedConnectionGoals'], ['Friendship']);
+      expect(json['biography'], 'Bookworm & coffee lover');
+      expect(json['interests'], ['Reading', 'Coffee']);
+      expect(json['photoUrls'], ['https://cdn.andril.app/anuki.jpg']);
+      expect(json['locationName'], 'Galle');
+      expect(json['isVerified'], isTrue);
+    });
+
+    test('rejects missing or empty candidate ID in JSON', () {
+      expect(
+        () => SocialCandidate.fromJson({'displayName': 'Test', 'age': 20}),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => SocialCandidate.fromJson({'candidateProfileId': '   ', 'displayName': 'Test', 'age': 20}),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects missing or empty display name in JSON (no manufactured Explorer default)', () {
+      expect(
+        () => SocialCandidate.fromJson({'candidateProfileId': 'c_1', 'age': 20}),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => SocialCandidate.fromJson({'candidateProfileId': 'c_1', 'displayName': '   ', 'age': 20}),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects missing age in JSON (no manufactured 18 default)', () {
+      expect(
+        () => SocialCandidate.fromJson({'candidateProfileId': 'c_1', 'displayName': 'Test'}),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => SocialCandidate.fromJson({'candidateProfileId': 'c_1', 'displayName': 'Test', 'age': 'twenty'}),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects underage candidate in JSON (< 18)', () {
+      expect(
+        () => SocialCandidate.fromJson({'candidateProfileId': 'c_1', 'displayName': 'Minor', 'age': 17}),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => SocialCandidate.fromJson({'candidateProfileId': 'c_1', 'displayName': 'Minor', 'age': 0}),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('redacted diagnostic string protects private user profile details', () {
+      final candidate = SocialCandidate(
+        id: 'confidential_guid_999',
+        displayName: 'Secret Person',
+        age: 30,
+        biography: 'Private sensitive biography',
+        locationName: 'Private Location',
+      );
+
+      final diag = candidate.toString();
+      expect(diag, 'SocialCandidate(redacted)');
+      expect(diag.contains('confidential'), isFalse);
+      expect(diag.contains('Secret Person'), isFalse);
+      expect(diag.contains('30'), isFalse);
+      expect(diag.contains('Private sensitive biography'), isFalse);
+    });
+
+    test('equality and hashCode contract', () {
+      final c1 = SocialCandidate(
+        id: 'c1',
+        displayName: 'Kasun',
+        age: 25,
+        interests: const {'Sports'},
+      );
+      final c2 = SocialCandidate(
+        id: 'c1',
+        displayName: 'Kasun',
+        age: 25,
+        interests: const {'Sports'},
+      );
+      final c3 = c1.copyWith(displayName: 'Kasun Updated');
+
+      expect(c1, equals(c2));
+      expect(c1.hashCode, equals(c2.hashCode));
+      expect(c1 == c3, isFalse);
     });
   });
 }

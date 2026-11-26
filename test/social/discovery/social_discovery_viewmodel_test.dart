@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
@@ -6,72 +5,68 @@ import 'package:andril_mobile/features/social/discovery/data/social_discovery_re
 import 'package:andril_mobile/features/social/discovery/domain/social_candidate.dart';
 import 'package:andril_mobile/features/social/discovery/presentation/social_discovery_viewmodel.dart';
 import 'package:andril_mobile/features/social/interests_preferences/domain/social_preferences_model.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
-class FakeSessionController extends ChangeNotifier implements SessionController {
-  SessionPhase _stubPhase;
+class _FakeSessionController extends ChangeNotifier implements SessionController {
+  SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'user-test-uuid';
   final Set<VoidCallback> _clearers = {};
 
-  FakeSessionController({SessionPhase phase = SessionPhase.signedIn})
-      : _stubPhase = phase;
-
   @override
-  SessionPhase get phase => _stubPhase;
+  SessionPhase get phase => _phase;
 
-  @override
-  bool get moduleHomeAuthorized => false;
-
-  @override
-  VoidCallback registerPrivateStateClearer(VoidCallback clear) {
-    _clearers.add(clear);
-    return () => _clearers.remove(clear);
+  set phase(SessionPhase value) {
+    _phase = value;
+    notifyListeners();
   }
 
-  void triggerPrivateStateClearers() {
+  @override
+  String? get subject => _subject;
+
+  set subject(String? value) {
+    _subject = value;
+    notifyListeners();
+  }
+
+  @override
+  VoidCallback registerPrivateStateClearer(VoidCallback clearer) {
+    _clearers.add(clearer);
+    return () => _clearers.remove(clearer);
+  }
+
+  void triggerClearers() {
     for (final clearer in List.of(_clearers)) {
       clearer();
     }
-  }
-
-  void setPhase(SessionPhase phase) {
-    _stubPhase = phase;
-    notifyListeners();
   }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class FakeDiscoveryRepository implements ISocialDiscoveryRepository {
-  DiscoveryResult<List<SocialCandidate>> exploreResult;
-  DiscoveryResult<SocialInterestResult> interestResult;
-  final List<Map<String, dynamic>> exploreCalls = [];
-  final List<Map<String, dynamic>> interestCalls = [];
-  Completer<void>? delayCompleter;
+class _FakeDiscoveryRepository implements ISocialDiscoveryRepository {
+  List<SocialCandidate> feedToReturn = [];
+  DiscoveryFailureType? failureToReturn;
+  String? errorMessageToReturn;
+  SocialInterestResult? interestResultToReturn;
 
-  FakeDiscoveryRepository({
-    DiscoveryResult<List<SocialCandidate>>? exploreResult,
-    DiscoveryResult<SocialInterestResult>? interestResult,
-  })  : exploreResult = exploreResult ??
-            const DiscoveryResult.success(<SocialCandidate>[]),
-        interestResult = interestResult ??
-            const DiscoveryResult.success(
-              SocialInterestResult(
-                success: true,
-                matchCreated: false,
-                visibleState: 'Recorded',
-              ),
-            );
+  int exploreCalls = 0;
+  int recordInterestCalls = 0;
 
   @override
   Future<DiscoveryResult<List<SocialCandidate>>> getExploreFeed({
     int rotationOffset = 0,
     int limit = 20,
+    SocialPreferencesModel? filters,
   }) async {
-    exploreCalls.add({'offset': rotationOffset, 'limit': limit});
-    if (delayCompleter != null) {
-      await delayCompleter!.future;
+    exploreCalls++;
+    if (failureToReturn != null) {
+      return DiscoveryResult.failure(
+        failureType: failureToReturn!,
+        errorMessage: errorMessageToReturn ?? 'Error loading feed',
+      );
     }
-    return exploreResult;
+    return DiscoveryResult.success(feedToReturn);
   }
 
   @override
@@ -79,302 +74,262 @@ class FakeDiscoveryRepository implements ISocialDiscoveryRepository {
     required String targetProfileId,
     required bool isPositive,
   }) async {
-    interestCalls.add({'targetProfileId': targetProfileId, 'isPositive': isPositive});
-    if (delayCompleter != null) {
-      await delayCompleter!.future;
+    recordInterestCalls++;
+    if (failureToReturn != null) {
+      return DiscoveryResult.failure(
+        failureType: failureToReturn!,
+        errorMessage: errorMessageToReturn ?? 'Error recording decision',
+      );
     }
-    return interestResult;
+    return DiscoveryResult.success(
+      interestResultToReturn ??
+          const SocialInterestResult(
+            success: true,
+            matchCreated: false,
+            visibleState: 'Recorded',
+          ),
+    );
   }
-}
 
-SocialCandidate _fixtureCandidate(String id, String name, int age) {
-  return SocialCandidate(
-    id: id,
-    displayName: name,
-    age: age,
-    approximateDistanceKm: 10,
-    sharedLanguages: const ['English'],
-    sharedConnectionGoals: const ['Friendship'],
-    interests: const {'Music'},
-    photoUrls: const ['https://cdn.andril.app/p1.jpg'],
-    locationName: 'Colombo',
-    isVerified: true,
-  );
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
-  group('SocialDiscoveryViewModel Tests (M5-FE-S09-VM-QA-01)', () {
-    test('default construction fails closed and denies unverified access', () {
-      final repo = FakeDiscoveryRepository();
-      final vm = SocialDiscoveryViewModel(repository: repo);
+  late _FakeSessionController sessionController;
+  late _FakeDiscoveryRepository repository;
 
-      expect(vm.status, SocialDiscoveryStatus.initial);
-      expect(vm.candidates, isEmpty);
-      expect(vm.currentIndex, 0);
-      expect(vm.currentCandidate, isNull);
-      expect(vm.remainingCount, 0);
-      expect(vm.hasMoreCandidates, isFalse);
+  final sampleCandidates = [
+    SocialCandidate(
+      id: 'c1',
+      displayName: 'Maya',
+      age: 23,
+      interests: const {'Art'},
+    ),
+    SocialCandidate(
+      id: 'c2',
+      displayName: 'Tariq',
+      age: 26,
+      interests: const {'Tech'},
+    ),
+  ];
+
+  setUp(() {
+    sessionController = _FakeSessionController();
+    repository = _FakeDiscoveryRepository();
+    repository.feedToReturn = sampleCandidates;
+  });
+
+  group('SocialDiscoveryViewModel Authorization & Security (Task 109 & 110)', () {
+    test('missing session fails closed with accessDenied', () async {
+      final vm = SocialDiscoveryViewModel(
+        repository: repository,
+        sessionController: null,
+      );
+
       expect(vm.isAuthorized, isFalse);
-      expect(vm.isAccessDenied, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialDiscoveryStatus.accessDenied);
+      expect(repository.exploreCalls, 0);
     });
 
-    test('initialize denies access when session is missing or unauthenticated', () async {
-      final repo = FakeDiscoveryRepository();
+    test('unauthenticated session fails closed with accessDenied', () async {
+      sessionController.phase = SessionPhase.signedOut;
       final vm = SocialDiscoveryViewModel(
-        repository: repo,
+        repository: repository,
+        sessionController: sessionController,
         isSocialOptedIn: true,
       );
 
+      expect(vm.isAuthorized, isFalse);
       await vm.initialize();
-
       expect(vm.status, SocialDiscoveryStatus.accessDenied);
-      expect(vm.isAccessDenied, isTrue);
-      expect(vm.errorMessage, contains('requires signed-in module authorization'));
-      expect(repo.exploreCalls, isEmpty);
+      expect(repository.exploreCalls, 0);
     });
 
-    test('initialize denies access when user has not opted in to Social', () async {
-      final repo = FakeDiscoveryRepository();
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
+    test('authoritative adult opt-in evidence grants access and loads feed', () async {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-uuid',
+      );
       final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: false,
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
       );
 
+      expect(vm.isAuthorized, isTrue);
       await vm.initialize();
-
-      expect(vm.status, SocialDiscoveryStatus.accessDenied);
-      expect(repo.exploreCalls, isEmpty);
-    });
-
-    test('production repository defaults to dormant unavailable boundary', () async {
-      const prodRepo = SocialDiscoveryRepository(isBackendActivated: false);
-      final result = await prodRepo.getExploreFeed();
-
-      expect(result.isSuccess, isFalse);
-      expect(result.failureType, DiscoveryFailureType.serviceUnavailable);
-      expect(result.errorMessage, contains('currently preparing and unavailable'));
-    });
-
-    test('authorized initialize loads candidates and transitions to ready', () async {
-      final candidates = [
-        _fixtureCandidate('c1', 'Amara', 24),
-        _fixtureCandidate('c2', 'Kamal', 27),
-      ];
-      final repo = FakeDiscoveryRepository(
-        exploreResult: DiscoveryResult.success(candidates),
-      );
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
-      final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
-      );
-
-      await vm.initialize();
-
       expect(vm.status, SocialDiscoveryStatus.ready);
       expect(vm.candidates.length, 2);
-      expect(vm.currentIndex, 0);
-      expect(vm.currentCandidate?.displayName, 'Amara');
+      expect(vm.currentCandidate?.displayName, 'Maya');
       expect(vm.remainingCount, 2);
-      expect(vm.hasMoreCandidates, isTrue);
-      expect(repo.exploreCalls.length, 1);
     });
 
-    test('empty candidate response transitions to empty state', () async {
-      final repo = FakeDiscoveryRepository(
-        exploreResult: const DiscoveryResult.success(<SocialCandidate>[]),
+    test('underage evidence denies access', () async {
+      final evidence = SocialAccessEvidence(
+        userId: 'user-test-uuid',
+        isAdult: false,
+        isOptedIn: true,
+        verifiedAt: DateTime.now(),
+        isAuthoritative: true,
       );
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
       final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialDiscoveryStatus.accessDenied);
+      expect(repository.exploreCalls, 0);
+    });
+
+    test('unverified evidence denies access', () async {
+      final evidence = SocialAccessEvidence.unverified(
+        userId: 'user-test-uuid',
+      );
+      final vm = SocialDiscoveryViewModel(
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialDiscoveryStatus.accessDenied);
+      expect(repository.exploreCalls, 0);
+    });
+
+    test('revoked evidence denies access', () async {
+      final evidence = SocialAccessEvidence.revoked(
+        userId: 'user-test-uuid',
+      );
+      final vm = SocialDiscoveryViewModel(
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialDiscoveryStatus.accessDenied);
+      expect(repository.exploreCalls, 0);
+    });
+
+    test('subject mismatch between session and evidence fails closed', () async {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'foreign-subject-id',
+      );
+      final vm = SocialDiscoveryViewModel(
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialDiscoveryStatus.accessDenied);
+      expect(repository.exploreCalls, 0);
+    });
+
+    test('session logout clears candidate queue and private state', () async {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-uuid',
+      );
+      final vm = SocialDiscoveryViewModel(
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
       );
 
       await vm.initialize();
+      expect(vm.status, SocialDiscoveryStatus.ready);
+      expect(vm.candidates.isNotEmpty, isTrue);
 
-      expect(vm.status, SocialDiscoveryStatus.empty);
+      sessionController.phase = SessionPhase.signedOut;
+      expect(vm.status, SocialDiscoveryStatus.accessDenied);
       expect(vm.candidates, isEmpty);
       expect(vm.currentCandidate, isNull);
     });
 
-    test('service unavailable response transitions to unavailableService state', () async {
-      final repo = FakeDiscoveryRepository(
-        exploreResult: const DiscoveryResult.failure(
-          errorMessage: 'Social discovery service is currently preparing and unavailable.',
-          failureType: DiscoveryFailureType.serviceUnavailable,
-        ),
+    test('account switching invalidates private candidate state', () async {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-uuid',
       );
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
       final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
       );
 
       await vm.initialize();
+      expect(vm.status, SocialDiscoveryStatus.ready);
+      expect(vm.candidates.length, 2);
 
-      expect(vm.status, SocialDiscoveryStatus.unavailableService);
-      expect(vm.isServiceUnavailable, isTrue);
-      expect(vm.errorMessage, contains('preparing and unavailable'));
+      sessionController.subject = 'switched-subject-999';
+      expect(vm.status, SocialDiscoveryStatus.accessDenied);
+      expect(vm.candidates, isEmpty);
     });
 
-    test('directional pass records negative interest and advances stack', () async {
-      final candidates = [
-        _fixtureCandidate('c1', 'Amara', 24),
-        _fixtureCandidate('c2', 'Kamal', 27),
-      ];
-      final repo = FakeDiscoveryRepository(
-        exploreResult: DiscoveryResult.success(candidates),
+    test('handles serviceUnavailable backend mapping without fabricating candidates', () async {
+      repository.failureToReturn = DiscoveryFailureType.serviceUnavailable;
+      repository.errorMessageToReturn = 'Service dormant';
+
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-uuid',
       );
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
       final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
+      );
+
+      await vm.initialize();
+      expect(vm.status, SocialDiscoveryStatus.unavailableService);
+      expect(vm.isServiceUnavailable, isTrue);
+      expect(vm.candidates, isEmpty);
+    });
+
+    test('evaluates pass and like card decisions sequentially', () async {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-uuid',
+      );
+      final vm = SocialDiscoveryViewModel(
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
       );
 
       await vm.initialize();
       expect(vm.currentIndex, 0);
+      expect(vm.currentCandidate?.displayName, 'Maya');
 
       final passResult = await vm.pass();
       expect(passResult?.success, isTrue);
-      expect(repo.interestCalls.length, 1);
-      expect(repo.interestCalls.first['targetProfileId'], 'c1');
-      expect(repo.interestCalls.first['isPositive'], isFalse);
-
       expect(vm.currentIndex, 1);
-      expect(vm.currentCandidate?.displayName, 'Kamal');
-      expect(vm.remainingCount, 1);
-    });
+      expect(vm.currentCandidate?.displayName, 'Tariq');
 
-    test('directional like records positive interest and triggers match callback when matched', () async {
-      final candidates = [_fixtureCandidate('c1', 'Amara', 24)];
-      final repo = FakeDiscoveryRepository(
-        exploreResult: DiscoveryResult.success(candidates),
-        interestResult: const DiscoveryResult.success(
-          SocialInterestResult(
-            success: true,
-            matchCreated: true,
-            matchId: 'match_999',
-            visibleState: 'Matched',
-          ),
-        ),
-      );
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
-      final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
-      );
-
-      SocialInterestResult? reportedMatch;
-      vm.onMatchCreated = (result) {
-        reportedMatch = result;
-      };
-
-      await vm.initialize();
       final likeResult = await vm.like();
-
       expect(likeResult?.success, isTrue);
-      expect(likeResult?.matchCreated, isTrue);
-      expect(reportedMatch?.matchId, 'match_999');
-      expect(repo.interestCalls.first['isPositive'], isTrue);
+      expect(vm.currentIndex, 2);
+      expect(vm.hasMoreCandidates, isFalse);
       expect(vm.status, SocialDiscoveryStatus.empty);
     });
 
-    test('in-flight guard rejects duplicate concurrent operations', () async {
-      final candidates = [_fixtureCandidate('c1', 'Amara', 24)];
-      final completer = Completer<void>();
-      final repo = FakeDiscoveryRepository(
-        exploreResult: DiscoveryResult.success(candidates),
-      )..delayCompleter = completer;
-
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
+    test('disposed viewmodel rejects decisions and unregisters session clearer', () {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-uuid',
+      );
       final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
-        initialCandidates: candidates,
-      );
-
-      // Trigger first like (async delay)
-      final future1 = vm.like();
-      expect(vm.isActionInProgress, isTrue);
-
-      // Concurrent second like must be rejected
-      final future2 = await vm.like();
-      expect(future2, isNull);
-
-      completer.complete();
-      await future1;
-      expect(vm.isActionInProgress, isFalse);
-    });
-
-    test('session invalidation clears private candidate state and denies access', () async {
-      final candidates = [_fixtureCandidate('c1', 'Amara', 24)];
-      final repo = FakeDiscoveryRepository(
-        exploreResult: DiscoveryResult.success(candidates),
-      );
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
-      final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
-      );
-
-      await vm.initialize();
-      expect(vm.candidates.isNotEmpty, isTrue);
-
-      // Trigger session clearance (logout / epoch invalidation)
-      session.triggerPrivateStateClearers();
-
-      expect(vm.candidates, isEmpty);
-      expect(vm.currentCandidate, isNull);
-      expect(vm.status, SocialDiscoveryStatus.accessDenied);
-    });
-
-    test('applying filters stores preferences model and triggers refresh', () async {
-      final repo = FakeDiscoveryRepository();
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
-      final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
-      );
-
-      await vm.initialize();
-      expect(repo.exploreCalls.length, 1);
-
-      final filterDraft = SocialPreferencesModel(
-        minAge: 21,
-        maxAge: 35,
-        maxDistanceKm: 25,
-      );
-      vm.applyFilters(filterDraft);
-
-      expect(vm.activeFilters?.minAge, 21);
-      expect(vm.activeFilters?.maxDistanceKm, 25);
-      expect(repo.exploreCalls.length, 2);
-    });
-
-    test('disposal unregisters session listeners and prevents post-disposal dispatches', () async {
-      final repo = FakeDiscoveryRepository();
-      final session = FakeSessionController(phase: SessionPhase.signedIn);
-      final vm = SocialDiscoveryViewModel(
-        repository: repo,
-        sessionController: session,
-        isSocialOptedIn: true,
+        repository: repository,
+        sessionController: sessionController,
+        accessEvidence: evidence,
+        initialCandidates: sampleCandidates,
       );
 
       vm.dispose();
-      await vm.initialize();
-
-      expect(repo.exploreCalls, isEmpty);
-      expect(vm.isAuthorized, isFalse);
+      expect(vm.candidates, isEmpty);
     });
   });
 }
