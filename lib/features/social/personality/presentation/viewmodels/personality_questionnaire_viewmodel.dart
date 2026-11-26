@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import '../../../likes_matches/domain/authorization/social_access_boundary.dart';
 import '../../data/repositories/personality_questionnaire_repository.dart';
 import '../../domain/entities/personality_questionnaire.dart';
 
@@ -15,14 +16,19 @@ enum PersonalityQuestionnaireStatus {
 
 /// Presentation ViewModel orchestrating the interactive Personality Questionnaire flow.
 ///
-/// Follows M5 Personality & Privacy Governance:
+/// Follows Task 113 Fast Feature Delivery Governance:
 /// - Purely client-side draft progression; never submits answers to dormant backend endpoints.
-/// - Clears private answer drafts immediately upon session invalidation or cancellation.
+/// - Requires current authoritative Social access evidence (SocialAccessBoundary).
+/// - Default-true Social opt-in authorization is removed (defaults to false / fail-closed).
+/// - Keeps Personality Test completely optional (never required for Social entry).
+/// - Clears private answer drafts immediately upon session invalidation, logout, or account switch.
 /// - Does not fabricate local psychological or personality match outcomes.
 /// - Guarantees single-option selection per question and enforces required question answers.
 class PersonalityQuestionnaireViewModel extends ChangeNotifier {
   final IPersonalityQuestionnaireRepository _repository;
   final SessionController _sessionController;
+  final ISocialAccessBoundary _accessBoundary;
+  final SocialAccessEvidence? _accessEvidence;
   final bool _isSocialOptedIn;
 
   PersonalityQuestionnaireStatus _status = PersonalityQuestionnaireStatus.initial;
@@ -32,14 +38,24 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
   String? _errorMessage;
   int _activeOperationId = 0;
   bool _disposed = false;
+  String? _boundSubject;
 
   PersonalityQuestionnaireViewModel({
     required IPersonalityQuestionnaireRepository repository,
     required SessionController sessionController,
-    bool isSocialOptedIn = true,
+    ISocialAccessBoundary accessBoundary = const SocialAccessBoundary(),
+    SocialAccessEvidence? accessEvidence,
+    bool isSocialOptedIn = false, // Defaults to false: fails closed
   })  : _repository = repository,
         _sessionController = sessionController,
+        _accessBoundary = accessBoundary,
+        _accessEvidence = accessEvidence,
         _isSocialOptedIn = isSocialOptedIn {
+    try {
+      _boundSubject = _sessionController.subject;
+    } catch (_) {
+      _boundSubject = null;
+    }
     _sessionController.addListener(_onSessionChanged);
     _sessionController.registerPrivateStateClearer(_clearPrivateDraft);
   }
@@ -54,6 +70,7 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
   bool get isReady => _status == PersonalityQuestionnaireStatus.ready;
   bool get isAccessDenied => _status == PersonalityQuestionnaireStatus.accessDenied;
   bool get isServiceUnavailable => _status == PersonalityQuestionnaireStatus.serviceUnavailable;
+  bool get isError => _status == PersonalityQuestionnaireStatus.error;
 
   int get totalQuestions => _questionnaire?.totalQuestions ?? 0;
 
@@ -82,6 +99,18 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
     return _answerDraft!.isCompleteFor(_questionnaire!);
   }
 
+  /// Evaluates current authoritative access to Personality Questionnaire.
+  bool get isAuthorized {
+    if (_sessionController.phase != SessionPhase.signedIn) return false;
+    if (_accessEvidence != null) {
+      return _accessBoundary.isAccessGranted(
+        sessionController: _sessionController,
+        evidence: _accessEvidence,
+      );
+    }
+    return _isSocialOptedIn;
+  }
+
   String? selectedOptionForCurrentQuestion() {
     final q = currentQuestion;
     if (q == null || _answerDraft == null) return null;
@@ -97,7 +126,24 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
   Future<void> loadQuestionnaire({bool refresh = false}) async {
     if (_disposed) return;
 
-    if (!_isSocialOptedIn || _sessionController.phase != SessionPhase.signedIn) {
+    // Subject validation
+    final currentSubject = _resolveSubject();
+    if (_boundSubject != null && currentSubject != null && currentSubject != _boundSubject) {
+      _questionnaire = null;
+      _clearPrivateDraft();
+      _boundSubject = currentSubject;
+      _status = PersonalityQuestionnaireStatus.accessDenied;
+      _errorMessage = 'Session subject changed.';
+      notifyListeners();
+      return;
+    }
+    if (_boundSubject == null && currentSubject != null) {
+      _boundSubject = currentSubject;
+    }
+
+    if (!isAuthorized) {
+      _questionnaire = null;
+      _clearPrivateDraft();
       _status = PersonalityQuestionnaireStatus.accessDenied;
       _errorMessage = 'Adult eligibility verification and Social opt-in are required.';
       notifyListeners();
@@ -134,7 +180,9 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
       _errorMessage = 'Failed to load questionnaire.';
     }
 
-    notifyListeners();
+    if (!_disposed && opId == _activeOperationId) {
+      notifyListeners();
+    }
   }
 
   /// Records the caller's chosen option for the current question.
@@ -177,12 +225,12 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
 
   /// Clears in-memory draft answers and resets to the first question.
   void cancelDraft() {
-    _clearPrivateDraft();
+    _clearPrivateDraft(resetToEmptyDraft: true);
     notifyListeners();
   }
 
-  void _clearPrivateDraft() {
-    if (_questionnaire != null) {
+  void _clearPrivateDraft({bool resetToEmptyDraft = false}) {
+    if (resetToEmptyDraft && _questionnaire != null) {
       _answerDraft = PersonalityAnswerDraft(questionnaireVersion: _questionnaire!.version);
     } else {
       _answerDraft = null;
@@ -190,13 +238,24 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
     _currentQuestionIndex = 0;
   }
 
+  String? _resolveSubject() {
+    try {
+      return _sessionController.subject;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _onSessionChanged() {
     if (_disposed) return;
-    if (_sessionController.phase != SessionPhase.signedIn) {
-      _clearPrivateDraft();
+    final currentSubject = _resolveSubject();
+    if (_sessionController.phase != SessionPhase.signedIn ||
+        (_boundSubject != null && currentSubject != null && currentSubject != _boundSubject)) {
       _questionnaire = null;
+      _clearPrivateDraft();
+      _boundSubject = currentSubject;
       _status = PersonalityQuestionnaireStatus.accessDenied;
-      _errorMessage = 'Session signed out.';
+      _errorMessage = 'Session signed out or account switched.';
       notifyListeners();
     }
   }
@@ -227,4 +286,7 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
     _sessionController.removeListener(_onSessionChanged);
     super.dispose();
   }
+
+  @override
+  String toString() => 'PersonalityQuestionnaireViewModel(status: ${_status.name})';
 }
