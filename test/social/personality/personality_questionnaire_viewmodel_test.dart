@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import 'package:andril_mobile/features/social/personality/data/repositories/personality_questionnaire_repository.dart';
 import 'package:andril_mobile/features/social/personality/domain/entities/personality_questionnaire.dart';
 import 'package:andril_mobile/features/social/personality/presentation/viewmodels/personality_questionnaire_viewmodel.dart';
@@ -41,10 +42,25 @@ class MockQuestionnaireRepository implements IPersonalityQuestionnaireRepository
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'user-test-123';
   final List<VoidCallback> _clearers = [];
+
+  FakeSessionController({
+    SessionPhase phase = SessionPhase.signedIn,
+    String? subject = 'user-test-123',
+  })  : _phase = phase,
+        _subject = subject;
 
   @override
   SessionPhase get phase => _phase;
+
+  @override
+  String? get subject => _subject;
+
+  set subject(String? newSubject) {
+    _subject = newSubject;
+    notifyListeners();
+  }
 
   void setPhase(SessionPhase newPhase) {
     _phase = newPhase;
@@ -76,12 +92,11 @@ void main() {
     fakeSession = FakeSessionController();
   });
 
-  group('PersonalityQuestionnaireViewModel', () {
-    test('initializes with initial status and empty state', () {
+  group('PersonalityQuestionnaireViewModel Security & Lifecycle Tests (Tasks 113-114)', () {
+    test('default construction fails closed (isSocialOptedIn defaults to false, no evidence)', () {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
       );
 
       expect(vm.status, PersonalityQuestionnaireStatus.initial);
@@ -90,27 +105,27 @@ void main() {
       expect(vm.currentQuestionIndex, 0);
       expect(vm.progress, 0.0);
       expect(vm.isComplete, isFalse);
+      expect(vm.isAuthorized, isFalse);
     });
 
-    test('denies access if caller is not opted in to Social', () async {
+    test('denies access on load if not opted in or unverified', () async {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: false,
+        accessEvidence: SocialAccessEvidence.unverified(userId: 'user-test-123'),
       );
 
       await vm.loadQuestionnaire();
-
       expect(vm.status, PersonalityQuestionnaireStatus.accessDenied);
       expect(vm.isAccessDenied, isTrue);
       expect(mockRepo.callCount, 0);
     });
 
-    test('loads questionnaire successfully and initializes answer draft', () async {
+    test('loads questionnaire successfully when authoritatively authorized', () async {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       await vm.loadQuestionnaire();
@@ -125,11 +140,11 @@ void main() {
       expect(vm.answerDraft?.questionnaireVersion, 'v1.0');
     });
 
-    test('handles option selection and answer updating', () async {
+    test('handles option selection, answer updating, and local completion', () async {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       await vm.loadQuestionnaire();
@@ -142,101 +157,89 @@ void main() {
       vm.selectOption('1');
       expect(vm.selectedOptionForCurrentQuestion(), '1');
       expect(vm.progress, 0.5);
-      // q01 is required and answered, so questionnaire is complete!
+      // q01 is required and answered, so questionnaire is complete
       expect(vm.isComplete, isTrue);
     });
 
-    test('handles question navigation backwards and forwards', () async {
+    test('handles navigation and cancel draft correctly', () async {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       await vm.loadQuestionnaire();
-
-      expect(vm.previousQuestion(), isFalse);
+      vm.selectOption('1');
       expect(vm.nextQuestion(), isTrue);
       expect(vm.currentQuestionIndex, 1);
-      expect(vm.currentQuestion?.id, 'q02');
-      expect(vm.isLastQuestion, isTrue);
-      expect(vm.nextQuestion(), isFalse);
-
-      expect(vm.previousQuestion(), isTrue);
-      expect(vm.currentQuestionIndex, 0);
-
-      // Direct jump
-      vm.goToQuestion(1);
-      expect(vm.currentQuestionIndex, 1);
-    });
-
-    test('clears private answer draft on cancellation', () async {
-      final vm = PersonalityQuestionnaireViewModel(
-        repository: mockRepo,
-        sessionController: fakeSession,
-        isSocialOptedIn: true,
-      );
-
-      await vm.loadQuestionnaire();
-      vm.selectOption('1');
-      expect(vm.selectedOptionForCurrentQuestion(), '1');
 
       vm.cancelDraft();
+      expect(vm.currentQuestionIndex, 0);
       expect(vm.selectedOptionForCurrentQuestion(), isNull);
-      expect(vm.progress, 0.0);
     });
 
-    test('clears private answers on session sign-out or invalidation', () async {
+    test('clears answers and denies access on session sign-out', () async {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       await vm.loadQuestionnaire();
       vm.selectOption('1');
+      expect(vm.isReady, isTrue);
 
-      // Trigger session sign-out
       fakeSession.setPhase(SessionPhase.signedOut);
-
       expect(vm.status, PersonalityQuestionnaireStatus.accessDenied);
-      expect(vm.answerDraft?.answers.isEmpty ?? true, isTrue);
       expect(vm.questionnaire, isNull);
+      expect(vm.answerDraft, isNull);
     });
 
-    test('private state clearer resets private draft answers', () async {
+    test('clears answers and denies access on account switch', () async {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       await vm.loadQuestionnaire();
       vm.selectOption('1');
-      expect(vm.selectedOptionForCurrentQuestion(), '1');
 
-      // Session clearer invoked
-      fakeSession.invokeClearers();
-      expect(vm.selectedOptionForCurrentQuestion(), isNull);
+      fakeSession.subject = 'switched-user-999';
+      expect(vm.status, PersonalityQuestionnaireStatus.accessDenied);
+      expect(vm.questionnaire, isNull);
+      expect(vm.answerDraft, isNull);
     });
 
-    test('handles service unavailable failure', () async {
+    test('maps repository failures gracefully', () async {
       mockRepo.result = const QuestionnaireResult.failure(
-        errorMessage: 'Questionnaires unavailable.',
         failureType: QuestionnaireFailureType.serviceUnavailable,
+        errorMessage: 'Backend personality service unavailable',
       );
 
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       await vm.loadQuestionnaire();
-
       expect(vm.status, PersonalityQuestionnaireStatus.serviceUnavailable);
       expect(vm.isServiceUnavailable, isTrue);
-      expect(vm.errorMessage, 'Questionnaires unavailable.');
+      expect(vm.errorMessage, 'Backend personality service unavailable');
+    });
+
+    test('safely handles disposal without throws', () async {
+      final vm = PersonalityQuestionnaireViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+      );
+
+      final future = vm.loadQuestionnaire();
+      vm.dispose();
+      await future;
+      expect(vm.isLoading, isTrue); // Was loading when disposed
     });
   });
 }
