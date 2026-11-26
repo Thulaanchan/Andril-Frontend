@@ -19,10 +19,22 @@ import '../../../privacy/data/repositories/unconfigured_eligibility_repository.d
 import '../../../privacy/domain/entities/eligibility_result.dart';
 import '../../../privacy/domain/repositories/eligibility_repository.dart';
 import '../../../privacy/screens/eligibility_policies_screen.dart';
+import '../../../module_profile_setup/data/repositories/unconfigured_module_profile_repository.dart';
+import '../../../module_profile_setup/domain/models/profile_creation_config.dart';
+import '../../../module_profile_setup/domain/repositories/module_profile_repository.dart';
+import '../../../module_profile_setup/presentation/screens/hobbies_profile_screen.dart';
+import '../../../module_profile_setup/presentation/screens/hobbies_welcome_screen.dart';
+import '../../../module_profile_setup/presentation/screens/learning_profile_screen.dart';
+import '../../../module_profile_setup/presentation/screens/learning_welcome_screen.dart';
+import '../../../module_profile_setup/presentation/screens/social_profile_screen.dart';
+import '../../../module_profile_setup/presentation/screens/social_welcome_screen.dart';
+import '../../../module_profile_setup/presentation/viewmodels/module_profile_viewmodel.dart';
 import 'splash_screen.dart';
 import 'welcome_screen.dart';
 
-/// Central navigation coordinator for all ten finalized onboarding screens (Screens 01 through 10).
+/// Central navigation coordinator for all ten finalized onboarding screens (Screens 01 through 10),
+/// post-selection module welcome screens (Screens 11, 13, and 15),
+/// and module profile creation screens (Screens 12, 14, and 16).
 ///
 /// Steps:
 /// - 0: Screen 01 – Splash Screen
@@ -35,6 +47,12 @@ import 'welcome_screen.dart';
 /// - 7: Screen 08 – Password Reset Screen (Create New Password)
 /// - 8: Screen 09 – Eligibility & Policies Screen
 /// - 9: Screen 10 – Starter Module Selection Screen (Choose Your Modules)
+/// - 10: Screen 11 – Learning Welcome Screen
+/// - 11: Screen 13 – Hobbies Welcome Screen
+/// - 12: Screen 15 – Social Welcome Screen
+/// - 13: Screen 12 – Create Your Learning Profile Screen
+/// - 14: Screen 14 – Create Your Hobbies Profile Screen
+/// - 15: Screen 16 – Create Your Social Profile Screen
 ///
 /// Flow Intelligence:
 /// - First-time unauthenticated: Splash -> Language -> Welcome.
@@ -44,7 +62,9 @@ import 'welcome_screen.dart';
 /// - Login -> Eligibility & Policies (8), or Account Verification (4) if unverified.
 /// - Password Recovery Request (6) -> Password Reset (7) -> Login (5).
 /// - Eligibility & Policies (8) -> Starter Module Selection (9).
-/// - Starter Module Selection (9) -> invokes [onOnboardingCompleted] with next step (e.g. 'profile_setup').
+/// - Starter Module Selection (9) -> Welcome screen (10, 11, 12).
+/// - Module Welcome -> Profile Creation (13, 14, 15).
+/// - Profile Creation -> Handoff via [onProfileCreationCompleted].
 ///
 /// Preserves production security:
 /// - Default application uses unconfigured repositories that report service unavailable.
@@ -57,27 +77,33 @@ class OnboardingFlowCoordinator extends StatefulWidget {
     this.onLogin,
     this.onAuthSuccess,
     this.onOnboardingCompleted,
+    this.onNavigateToProfileSetup,
+    this.onProfileCreationCompleted,
     this.splashDuration = const Duration(milliseconds: 2400),
     this.languageRepository,
     this.authRepository,
     this.eligibilityRepository,
     this.starterModuleRepository,
+    this.moduleProfileRepository,
     this.initialVerificationEmail,
     this.recoveryToken,
     this.isSocialAuthorizedByServer = true,
   });
 
-  /// Optional manual step override (0..9).
+  /// Optional manual step override (0..15).
   final int? initialStep;
   final VoidCallback? onRegister;
   final VoidCallback? onLogin;
   final ValueChanged<AuthUser>? onAuthSuccess;
   final ValueChanged<String>? onOnboardingCompleted;
+  final ValueChanged<String>? onNavigateToProfileSetup;
+  final ValueChanged<String>? onProfileCreationCompleted;
   final Duration splashDuration;
   final LanguagePreferenceRepository? languageRepository;
   final OnboardingAuthRepository? authRepository;
   final EligibilityRepository? eligibilityRepository;
   final StarterModuleRepository? starterModuleRepository;
+  final ModuleProfileRepository? moduleProfileRepository;
   final String? initialVerificationEmail;
   final String? recoveryToken;
   final bool isSocialAuthorizedByServer;
@@ -93,6 +119,10 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
   late final OnboardingAuthRepository _authRepository;
   late final EligibilityRepository _eligibilityRepository;
   late final StarterModuleRepository _starterModuleRepository;
+  late final ModuleProfileRepository _moduleProfileRepository;
+  late final ModuleProfileViewModel _learningProfileViewModel;
+  late final ModuleProfileViewModel _hobbiesProfileViewModel;
+  late final ModuleProfileViewModel _socialProfileViewModel;
 
   bool _hasValidSavedLanguage = false;
   bool _hasNavigatedFromSplash = false;
@@ -110,6 +140,22 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
         widget.eligibilityRepository ?? const UnconfiguredEligibilityRepository();
     _starterModuleRepository = widget.starterModuleRepository ??
         const UnconfiguredStarterModuleRepository();
+    _moduleProfileRepository = widget.moduleProfileRepository ??
+        const UnconfiguredModuleProfileRepository();
+
+    _learningProfileViewModel = ModuleProfileViewModel(
+      config: ProfileCreationConfig.learning(),
+      repository: _moduleProfileRepository,
+    );
+    _hobbiesProfileViewModel = ModuleProfileViewModel(
+      config: ProfileCreationConfig.hobbies(),
+      repository: _moduleProfileRepository,
+    );
+    _socialProfileViewModel = ModuleProfileViewModel(
+      config: ProfileCreationConfig.social(),
+      repository: _moduleProfileRepository,
+      isSocialAuthorizedByServer: widget.isSocialAuthorizedByServer,
+    );
 
     _currentStep = widget.initialStep ?? 0;
     _activeVerificationEmail =
@@ -119,6 +165,14 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
     if (_currentStep == 0) {
       _checkSavedLanguage();
     }
+  }
+
+  @override
+  void dispose() {
+    _learningProfileViewModel.dispose();
+    _hobbiesProfileViewModel.dispose();
+    _socialProfileViewModel.dispose();
+    super.dispose();
   }
 
   Future<void> _checkSavedLanguage() async {
@@ -224,6 +278,62 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
 
   void _onStarterSelectionCompleted(StarterSelectionResult result) {
     widget.onOnboardingCompleted?.call(result.nextStep);
+    if (!mounted) return;
+    setState(() {
+      switch (result.selectedModuleId.toLowerCase()) {
+        case 'hobbies':
+          _currentStep = 11;
+        case 'social':
+          _currentStep = 12;
+        case 'learning':
+        default:
+          _currentStep = 10;
+      }
+    });
+  }
+
+  void _backToModuleSelection() {
+    if (!mounted) return;
+    setState(() => _currentStep = 9);
+  }
+
+  void _handleModuleWelcomeGetStarted(String moduleId) {
+    widget.onNavigateToProfileSetup?.call(moduleId);
+    if (!mounted) return;
+    setState(() {
+      switch (moduleId.toLowerCase()) {
+        case 'hobbies':
+          _currentStep = 14;
+          break;
+        case 'social':
+          _currentStep = 15;
+          break;
+        case 'learning':
+        default:
+          _currentStep = 13;
+          break;
+      }
+    });
+  }
+
+  void _backToLearningWelcome() {
+    if (!mounted) return;
+    setState(() => _currentStep = 10);
+  }
+
+  void _backToHobbiesWelcome() {
+    if (!mounted) return;
+    setState(() => _currentStep = 11);
+  }
+
+  void _backToSocialWelcome() {
+    if (!mounted) return;
+    setState(() => _currentStep = 12);
+  }
+
+  void _handleProfileCreationCompleted(String moduleId) {
+    widget.onProfileCreationCompleted?.call(moduleId);
+    widget.onOnboardingCompleted?.call('preferences_$moduleId');
   }
 
   @override
@@ -316,6 +426,47 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
           isSocialAuthorizedByServer: widget.isSocialAuthorizedByServer,
           onBack: _goToEligibility,
           onStarterSelectionCompleted: _onStarterSelectionCompleted,
+        );
+      case 10:
+        return LearningWelcomeScreen(
+          key: const ValueKey('learning_welcome_screen'),
+          onGetStarted: () => _handleModuleWelcomeGetStarted('learning'),
+          onBackToModuleSelection: _backToModuleSelection,
+        );
+      case 11:
+        return HobbiesWelcomeScreen(
+          key: const ValueKey('hobbies_welcome_screen'),
+          onGetStarted: () => _handleModuleWelcomeGetStarted('hobbies'),
+          onBackToModuleSelection: _backToModuleSelection,
+        );
+      case 12:
+        return SocialWelcomeScreen(
+          key: const ValueKey('social_welcome_screen'),
+          isSocialAuthorizedByServer: widget.isSocialAuthorizedByServer,
+          onGetStarted: () => _handleModuleWelcomeGetStarted('social'),
+          onBackToModuleSelection: _backToModuleSelection,
+        );
+      case 13:
+        return LearningProfileScreen(
+          key: const ValueKey('learning_profile_screen'),
+          viewModel: _learningProfileViewModel,
+          onBack: _backToLearningWelcome,
+          onContinue: () => _handleProfileCreationCompleted('learning'),
+        );
+      case 14:
+        return HobbiesProfileScreen(
+          key: const ValueKey('hobbies_profile_screen'),
+          viewModel: _hobbiesProfileViewModel,
+          onBack: _backToHobbiesWelcome,
+          onContinue: () => _handleProfileCreationCompleted('hobbies'),
+        );
+      case 15:
+        return SocialProfileScreen(
+          key: const ValueKey('social_profile_screen'),
+          viewModel: _socialProfileViewModel,
+          isSocialAuthorizedByServer: widget.isSocialAuthorizedByServer,
+          onBack: _backToSocialWelcome,
+          onContinue: () => _handleProfileCreationCompleted('social'),
         );
       default:
         return WelcomeScreen(
