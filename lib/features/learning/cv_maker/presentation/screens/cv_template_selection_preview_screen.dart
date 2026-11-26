@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'package:andril_mobile/app/themes/learning/learning_colors.dart';
 import 'package:andril_mobile/features/shared/presentation/widgets/andril_module_app_bar.dart';
+import 'package:andril_mobile/features/learning/cv_maker/domain/services/i_cv_pdf_export_service.dart';
+import 'package:andril_mobile/features/learning/cv_maker/data/services/cv_pdf_export_service.dart';
+import 'package:andril_mobile/features/learning/cv_maker/domain/entities/cv_pdf_export_result.dart';
+import 'package:andril_mobile/features/learning/cv_maker/presentation/widgets/cv_pdf_export_sheet.dart';
 
 /// The three approved visual CV templates per ANDRIL LRN-05 & CV-01..CV-05.
 enum CvTemplate {
@@ -413,6 +417,15 @@ class CvTemplateSelectionPreviewScreen extends StatefulWidget {
   /// Optional custom app bar. Defaults to [AndrilModuleAppBar] with CV Maker branding.
   final PreferredSizeWidget? appBar;
 
+  /// Service responsible for compiling and exporting the CV as a PDF.
+  final ICvPdfExportService exportService;
+
+  /// Optional callback invoked when a PDF is exported successfully.
+  final ValueChanged<CvPdfExportResult>? onExportPdf;
+
+  /// Optional current authenticated user ID for owner-scoped authorization.
+  final String? currentUserId;
+
   const CvTemplateSelectionPreviewScreen({
     super.key,
     this.initialDraft,
@@ -421,6 +434,9 @@ class CvTemplateSelectionPreviewScreen extends StatefulWidget {
     this.onTemplateChanged,
     this.initialPreviewMode = false,
     this.appBar,
+    this.exportService = const CvPdfExportService(),
+    this.onExportPdf,
+    this.currentUserId,
   });
 
   @override
@@ -1869,6 +1885,28 @@ class _CvTemplateSelectionPreviewScreenState
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
+  Future<void> _handleExportPdf() async {
+    final result = await CvPdfExportSheet.show(
+      context,
+      draft: _currentDraft,
+      exportService: widget.exportService,
+      currentUserId: widget.currentUserId,
+      onExportSuccess: (res) {
+        setState(() {
+          _statusBannerMessage =
+              'Exported "${res.fileName}" (${res.pageCount} page${res.pageCount == 1 ? '' : 's'}).';
+        });
+        widget.onExportPdf?.call(res);
+      },
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _statusBannerMessage =
+            'Exported "${result.fileName}" (${result.pageCount} page${result.pageCount == 1 ? '' : 's'}).';
+      });
+    }
+  }
+
   Widget _buildPreviewBottomToolbar() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1916,21 +1954,56 @@ class _CvTemplateSelectionPreviewScreenState
           ),
         );
 
+        final exportBtn = SizedBox(
+          width: double.infinity,
+          height: 48.0,
+          child: OutlinedButton.icon(
+            key: const Key('export_pdf_button'),
+            onPressed: _handleExportPdf,
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18.0),
+            label: const Text(
+              'Export PDF',
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _currentDraft.selectedTemplate.accentColor,
+              side: BorderSide(
+                color: _currentDraft.selectedTemplate.accentColor,
+                width: 1.5,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
+              ),
+            ),
+          ),
+        );
+
         if (isNarrow) {
           return Column(
             children: [
               continueBtn,
+              const SizedBox(height: 10.0),
+              exportBtn,
               const SizedBox(height: 10.0),
               backBtn,
             ],
           );
         }
 
-        return Row(
+        return Column(
           children: [
-            Expanded(child: backBtn),
-            const SizedBox(width: 12.0),
-            Expanded(flex: 2, child: continueBtn),
+            exportBtn,
+            const SizedBox(height: 10.0),
+            Row(
+              children: [
+                Expanded(child: backBtn),
+                const SizedBox(width: 12.0),
+                Expanded(flex: 2, child: continueBtn),
+              ],
+            ),
           ],
         );
       },
