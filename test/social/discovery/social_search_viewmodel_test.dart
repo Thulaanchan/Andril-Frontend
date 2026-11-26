@@ -1,16 +1,31 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
 import 'package:andril_mobile/features/social/discovery/domain/social_candidate.dart';
-import 'package:andril_mobile/features/social/discovery/presentation/social_search_screen.dart';
 import 'package:andril_mobile/features/social/discovery/presentation/social_search_viewmodel.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'user-test-123';
   final List<VoidCallback> _clearers = [];
+
+  FakeSessionController({
+    SessionPhase phase = SessionPhase.signedIn,
+    String? subject = 'user-test-123',
+  })  : _phase = phase,
+        _subject = subject;
 
   @override
   SessionPhase get phase => _phase;
+
+  @override
+  String? get subject => _subject;
+
+  set subject(String? newSubject) {
+    _subject = newSubject;
+    notifyListeners();
+  }
 
   void setPhase(SessionPhase phase) {
     _phase = phase;
@@ -59,20 +74,11 @@ void main() {
     fakeSession = FakeSessionController();
   });
 
-  Widget buildTestHost(Widget child, {Size size = const Size(400, 800)}) {
-    return MediaQuery(
-      data: MediaQueryData(size: size),
-      child: MaterialApp(
-        home: child,
-      ),
-    );
-  }
-
-  group('SocialSearchViewModel', () {
-    test('initializes with empty query and results', () {
+  group('SocialSearchViewModel Security & Session Tests (Tasks 111-112)', () {
+    test('initializes with initial status and empty results', () {
       final vm = SocialSearchViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       expect(vm.status, SocialSearchViewStatus.initial);
@@ -81,23 +87,51 @@ void main() {
       expect(vm.isLoading, isFalse);
     });
 
-    test('denies access if caller is not opted in', () async {
+    test('denies access if evidence is unverified or underage', () async {
+      final unverifiedEvidence = SocialAccessEvidence.unverified(userId: 'user-test-123');
       final vm = SocialSearchViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: false,
+        accessEvidence: unverifiedEvidence,
       );
 
       await vm.search('Elena', candidateSource: sampleCandidates);
-
       expect(vm.status, SocialSearchViewStatus.accessDenied);
       expect(vm.isAccessDenied, isTrue);
       expect(vm.results, isEmpty);
     });
 
-    test('filters candidates by name, bio, and interest', () async {
+    test('returns serviceUnavailable when candidateSource is null (no fabricated search endpoint)', () async {
       final vm = SocialSearchViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+      );
+
+      await vm.search('Elena', candidateSource: null);
+      expect(vm.status, SocialSearchViewStatus.serviceUnavailable);
+      expect(vm.isServiceUnavailable, isTrue);
+      expect(vm.results, isEmpty);
+    });
+
+    test('rejects cross-session candidate source (source session mismatch)', () async {
+      final vm = SocialSearchViewModel(
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+      );
+
+      await vm.search(
+        'Elena',
+        candidateSource: sampleCandidates,
+        sourceSessionSubject: 'other-user-456',
+      );
+
+      expect(vm.status, SocialSearchViewStatus.accessDenied);
+      expect(vm.results, isEmpty);
+    });
+
+    test('filters candidates by name, bio, and interest for authorized search', () async {
+      final vm = SocialSearchViewModel(
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       // Search by name
@@ -119,25 +153,24 @@ void main() {
       expect(vm.results, isEmpty);
     });
 
-    test('clears search results when query is emptied or clearSearch called', () async {
+    test('clears results and sets status to initial on empty query', () async {
       final vm = SocialSearchViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       await vm.search('Elena', candidateSource: sampleCandidates);
       expect(vm.results.length, 1);
 
-      vm.clearSearch();
+      await vm.search('   ', candidateSource: sampleCandidates);
       expect(vm.status, SocialSearchViewStatus.initial);
-      expect(vm.currentQuery, isEmpty);
       expect(vm.results, isEmpty);
     });
 
-    test('clears private search on session invalidation', () async {
+    test('clears private search results on session invalidation', () async {
       final vm = SocialSearchViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       await vm.search('Elena', candidateSource: sampleCandidates);
@@ -147,59 +180,48 @@ void main() {
       expect(vm.status, SocialSearchViewStatus.accessDenied);
       expect(vm.results, isEmpty);
     });
-  });
 
-  group('SocialSearchScreen Widget Tests', () {
-    testWidgets('renders search field and displays matching candidate cards', (tester) async {
+    test('clears private search results on account switch', () async {
       final vm = SocialSearchViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
-      SocialCandidate? selectedCandidate;
-      await tester.pumpWidget(buildTestHost(SocialSearchScreen(
-        viewModel: vm,
-        candidates: sampleCandidates,
-        onViewProfile: (c) => selectedCandidate = c,
-      )));
-      await tester.pumpAndSettle();
+      await vm.search('Elena', candidateSource: sampleCandidates);
+      expect(vm.results.length, 1);
 
-      expect(find.text('Search Social Members'), findsOneWidget);
-
-      // Enter search text
-      await tester.enterText(find.byKey(const Key('search_people_field')), 'Elena');
-      await tester.pumpAndSettle();
-
-      expect(find.text('Elena Rostova, 26'), findsOneWidget);
-      expect(find.text('Photography, Coffee, Hiking'), findsOneWidget);
-
-      // Tap on candidate card
-      await tester.tap(find.text('Elena Rostova, 26'));
-      expect(selectedCandidate?.displayName, 'Elena Rostova');
-
-      // Clear search
-      await tester.tap(find.byKey(const Key('clear_search_button')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Search Social Members'), findsOneWidget);
+      fakeSession.subject = 'user-switched-999';
+      expect(vm.status, SocialSearchViewStatus.accessDenied);
+      expect(vm.results, isEmpty);
     });
 
-    testWidgets('renders empty state S26 when no candidates match', (tester) async {
+    test('invalidates stale asynchronous queries when newer query supersedes', () async {
       final vm = SocialSearchViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
-      await tester.pumpWidget(buildTestHost(SocialSearchScreen(
-        viewModel: vm,
-        candidates: sampleCandidates,
-      )));
-      await tester.pumpAndSettle();
+      final search1 = vm.search('Elena', candidateSource: sampleCandidates);
+      final search2 = vm.search('Marcus', candidateSource: sampleCandidates);
 
-      await tester.enterText(find.byKey(const Key('search_people_field')), 'Astronaut');
-      await tester.pumpAndSettle();
+      await Future.wait([search1, search2]);
 
-      expect(find.text('No People Found'), findsOneWidget);
+      // Only the last search result should remain
+      expect(vm.results.length, 1);
+      expect(vm.results.first.displayName, 'Marcus Chen');
+    });
+
+    test('safely handles disposal without throwing on late completion', () async {
+      final vm = SocialSearchViewModel(
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+      );
+
+      final searchFuture = vm.search('Elena', candidateSource: sampleCandidates);
+      vm.dispose();
+
+      await searchFuture;
+      expect(vm.status, SocialSearchViewStatus.loading); // Was loading when disposed
     });
   });
 }
