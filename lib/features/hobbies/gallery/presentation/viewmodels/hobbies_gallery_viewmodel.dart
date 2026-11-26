@@ -1,21 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/features/hobbies/presentation/screens/hobbies_gallery_screen.dart';
 import '../../domain/entities/hobbies_media.dart';
+import '../../domain/exceptions/hobbies_gallery_access_denied_exception.dart';
 import '../../domain/usecases/get_hobbies_gallery_media_usecase.dart';
 
-/// Authoritative exception signaling access denial to the Hobbies Gallery.
-///
-/// Thrown only by explicit authorization checks or session evaluators,
-/// never inferred from arbitrary exception message strings.
-///
-/// Uses a fixed diagnostic representation without caller-controlled messages
-/// to prevent private metadata leakage in diagnostics or logs.
-class HobbiesGalleryAccessDeniedException implements Exception {
-  const HobbiesGalleryAccessDeniedException();
-
-  @override
-  String toString() => 'HobbiesGalleryAccessDeniedException';
-}
+export '../../domain/exceptions/hobbies_gallery_access_denied_exception.dart';
 
 /// ViewModel coordinating state management and presentation mapping for Hobbies Gallery.
 ///
