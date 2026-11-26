@@ -17,7 +17,7 @@ enum MatchCommunicationStatus {
   /// Match verification evidence has expired.
   expired,
 
-  /// Communication is unauthorized by policy or age restrictions.
+  /// Communication is unauthorized by policy, identity mismatch, or missing evidence.
   unauthorized,
 
   /// M4 messaging/calling dependency is unavailable or not registered.
@@ -29,7 +29,7 @@ enum MatchCommunicationStatus {
 /// Follows M4 Communication & M5 Matching Governance:
 /// - One-sided likes NEVER authorize communication.
 /// - Client-side state flags cannot manufacture a mutual match.
-/// - Requires active M4 channel clearance.
+/// - Requires active M4 channel clearance and non-forged participant binding.
 @immutable
 class MatchCommunicationEvidence {
   final String matchId;
@@ -38,6 +38,7 @@ class MatchCommunicationEvidence {
   final bool isMutual;
   final bool isBlocked;
   final bool isUnmatched;
+  final bool isExpired;
   final String? m4ChannelId;
   final DateTime verifiedAt;
   final bool isM4Authorized;
@@ -49,6 +50,7 @@ class MatchCommunicationEvidence {
     required this.isMutual,
     this.isBlocked = false,
     this.isUnmatched = false,
+    this.isExpired = false,
     this.m4ChannelId,
     required this.verifiedAt,
     this.isM4Authorized = false,
@@ -61,6 +63,7 @@ class MatchCommunicationEvidence {
     required String participantB,
     required String m4ChannelId,
     DateTime? verifiedAt,
+    bool isExpired = false,
   }) {
     return MatchCommunicationEvidence(
       matchId: matchId,
@@ -69,6 +72,7 @@ class MatchCommunicationEvidence {
       isMutual: true,
       isBlocked: false,
       isUnmatched: false,
+      isExpired: isExpired,
       m4ChannelId: m4ChannelId,
       verifiedAt: verifiedAt ?? DateTime.now(),
       isM4Authorized: true,
@@ -88,6 +92,7 @@ class MatchCommunicationEvidence {
       isMutual: false,
       isBlocked: false,
       isUnmatched: false,
+      isExpired: false,
       m4ChannelId: null,
       verifiedAt: DateTime.now(),
       isM4Authorized: false,
@@ -101,6 +106,7 @@ class MatchCommunicationEvidence {
         'isMutual': isMutual,
         'isBlocked': isBlocked,
         'isUnmatched': isUnmatched,
+        'isExpired': isExpired,
         if (m4ChannelId != null) 'm4ChannelId': m4ChannelId,
         'verifiedAt': verifiedAt.toIso8601String(),
         'isM4Authorized': isM4Authorized,
@@ -114,6 +120,7 @@ class MatchCommunicationEvidence {
       isMutual: json['isMutual'] as bool? ?? false,
       isBlocked: json['isBlocked'] as bool? ?? false,
       isUnmatched: json['isUnmatched'] as bool? ?? false,
+      isExpired: json['isExpired'] as bool? ?? false,
       m4ChannelId: json['m4ChannelId'] as String?,
       verifiedAt: DateTime.tryParse(json['verifiedAt'] as String? ?? '') ?? DateTime.now(),
       isM4Authorized: json['isM4Authorized'] as bool? ?? false,
@@ -122,28 +129,56 @@ class MatchCommunicationEvidence {
 
   @override
   String toString() =>
-      'MatchCommunicationEvidence(matchId: $matchId, mutual: $isMutual, m4Auth: $isM4Authorized)';
+      'MatchCommunicationEvidence(matchId: $matchId, mutual: $isMutual, m4Auth: $isM4Authorized, expired: $isExpired)';
 }
 
 /// Abstract contract governing peer communication clearance between matched members.
 abstract class ISocialMatchCommunicationBoundary {
   /// Evaluates whether communication can be initiated for the provided [evidence].
-  MatchCommunicationStatus evaluateMatchCommunication(MatchCommunicationEvidence? evidence);
+  /// Optionally validates [callerId] binding against participants.
+  MatchCommunicationStatus evaluateMatchCommunication(
+    MatchCommunicationEvidence? evidence, {
+    String? callerId,
+  });
 
   /// Convenience boolean check: true only when [evaluateMatchCommunication] is [MatchCommunicationStatus.authorized].
-  bool canInitiateCommunication(MatchCommunicationEvidence? evidence);
+  bool canInitiateCommunication(
+    MatchCommunicationEvidence? evidence, {
+    String? callerId,
+  });
 }
 
 /// Production implementation of [ISocialMatchCommunicationBoundary].
 ///
 /// Follows M4/M5 Module Boundary Governance:
 /// - Fails closed: communication is denied unless mutual confirmation AND M4 authorization exist.
+/// - Verifies participant identity non-empty and non-identical.
+/// - Validates optional caller binding strictly against participant identities.
+/// - Enforces expiration checks.
 class SocialMatchCommunicationBoundary implements ISocialMatchCommunicationBoundary {
   const SocialMatchCommunicationBoundary();
 
   @override
-  MatchCommunicationStatus evaluateMatchCommunication(MatchCommunicationEvidence? evidence) {
+  MatchCommunicationStatus evaluateMatchCommunication(
+    MatchCommunicationEvidence? evidence, {
+    String? callerId,
+  }) {
     if (evidence == null) {
+      return MatchCommunicationStatus.unauthorized;
+    }
+
+    // Identity validity check: participants must be distinct non-empty IDs
+    if (evidence.participantA.isEmpty ||
+        evidence.participantB.isEmpty ||
+        evidence.participantA == evidence.participantB) {
+      return MatchCommunicationStatus.unauthorized;
+    }
+
+    // Caller binding check: if callerId is provided, caller must be one of the participants
+    if (callerId != null &&
+        callerId.isNotEmpty &&
+        callerId != evidence.participantA &&
+        callerId != evidence.participantB) {
       return MatchCommunicationStatus.unauthorized;
     }
 
@@ -155,11 +190,17 @@ class SocialMatchCommunicationBoundary implements ISocialMatchCommunicationBound
       return MatchCommunicationStatus.unmatched;
     }
 
+    if (evidence.isExpired) {
+      return MatchCommunicationStatus.expired;
+    }
+
     if (!evidence.isMutual) {
       return MatchCommunicationStatus.pendingMutualMatch;
     }
 
-    if (!evidence.isM4Authorized || evidence.m4ChannelId == null || evidence.m4ChannelId!.isEmpty) {
+    if (!evidence.isM4Authorized ||
+        evidence.m4ChannelId == null ||
+        evidence.m4ChannelId!.trim().isEmpty) {
       return MatchCommunicationStatus.m4Unavailable;
     }
 
@@ -167,7 +208,11 @@ class SocialMatchCommunicationBoundary implements ISocialMatchCommunicationBound
   }
 
   @override
-  bool canInitiateCommunication(MatchCommunicationEvidence? evidence) {
-    return evaluateMatchCommunication(evidence) == MatchCommunicationStatus.authorized;
+  bool canInitiateCommunication(
+    MatchCommunicationEvidence? evidence, {
+    String? callerId,
+  }) {
+    return evaluateMatchCommunication(evidence, callerId: callerId) ==
+        MatchCommunicationStatus.authorized;
   }
 }
