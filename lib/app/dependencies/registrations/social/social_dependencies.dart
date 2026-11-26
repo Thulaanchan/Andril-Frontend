@@ -9,70 +9,138 @@ import '../../../../features/social/zones/presentation/social_zones_viewmodel.da
 
 /// Scoped dependency container managing lifecycle and instances of Social module services.
 ///
-/// Follows M5 Social Architecture & M2 Session Governance:
-/// - Reuses approved production repositories and ViewModels.
-/// - Does not register permissive production mocks or leak cross-module state.
-/// - Automatically disposes private state and unregisters listeners upon session change.
+/// Follows M5 Fast Feature Delivery Governance (Task 103):
+/// - Reuses approved SessionController without constructing fake fallback production sessions.
+/// - Requires authoritative Social access evidence bound to active session; fails closed otherwise.
+/// - Signed-in state alone or local opt-in boolean alone does not authorize Social.
+/// - Automatically unregisters callbacks, disposes owned ViewModels, and prevents post-disposal recreation.
+/// - Disposal is idempotent.
 class SocialDependenciesScope {
   final SessionController? _sessionController;
   final bool _isSocialOptedIn;
+  final SocialAccessEvidence? _accessEvidence;
+  final ISocialAccessBoundary _accessBoundary;
+  final ISocialMatchCommunicationBoundary _communicationBoundary;
 
-  // Singletons / Lazily initialized instances within the scope
+  // Lazily initialized instances within the scope
   ISocialZoneRepository? _zoneRepository;
   SocialZonesViewModel? _zonesViewModel;
   SocialZoneManagementViewModel? _zoneManagementViewModel;
-  ISocialAccessBoundary? _accessBoundary;
-  ISocialMatchCommunicationBoundary? _communicationBoundary;
 
   VoidCallback? _unregisterSessionClearer;
+  bool _isDisposed = false;
 
   SocialDependenciesScope({
     SessionController? sessionController,
     bool isSocialOptedIn = false,
+    SocialAccessEvidence? accessEvidence,
+    ISocialAccessBoundary? accessBoundary,
+    ISocialMatchCommunicationBoundary? communicationBoundary,
   })  : _sessionController = sessionController,
-        _isSocialOptedIn = isSocialOptedIn {
+        _isSocialOptedIn = isSocialOptedIn,
+        _accessEvidence = accessEvidence,
+        _accessBoundary = accessBoundary ?? const SocialAccessBoundary(),
+        _communicationBoundary = communicationBoundary ?? const SocialMatchCommunicationBoundary() {
     _unregisterSessionClearer = _sessionController?.registerPrivateStateClearer(dispose);
   }
 
-  /// Authoritative Social Access Boundary.
-  ISocialAccessBoundary get accessBoundary =>
-      _accessBoundary ??= const SocialAccessBoundary();
+  /// Whether this scope has already been permanently disposed.
+  bool get isDisposed => _isDisposed;
 
-  /// Peer match communication authorization boundary.
-  ISocialMatchCommunicationBoundary get communicationBoundary =>
-      _communicationBoundary ??= const SocialMatchCommunicationBoundary();
+  void _checkDisposed() {
+    if (_isDisposed) {
+      throw StateError('SocialDependenciesScope has already been disposed and cannot be accessed.');
+    }
+  }
 
-  /// Dormant-safe Social Zone Repository.
-  ISocialZoneRepository get zoneRepository =>
-      _zoneRepository ??= SocialZoneRepository(
-        sessionController: _sessionController ?? _FallbackSessionController(),
-      );
+  /// Raw unauthoritative client opt-in preference flag.
+  bool get isSocialOptedIn {
+    _checkDisposed();
+    return _isSocialOptedIn;
+  }
 
-  /// Viewmodel for discovering and browsing interest zones.
-  SocialZonesViewModel get zonesViewModel =>
-      _zonesViewModel ??= SocialZonesViewModel(
-        repository: zoneRepository,
-        sessionController: _sessionController,
-        isSocialOptedIn: _isSocialOptedIn,
-      );
-
-  /// Viewmodel for creating and managing interest zones.
-  SocialZoneManagementViewModel get zoneManagementViewModel =>
-      _zoneManagementViewModel ??= SocialZoneManagementViewModel(
-        sessionController: _sessionController,
-        isSocialOptedIn: _isSocialOptedIn,
-      );
-
-  /// Creates a scoped [SocialHomeViewModel] instance.
-  SocialHomeViewModel createHomeViewModel() {
-    return SocialHomeViewModel(
-      sessionController: _sessionController,
-      isSocialOptedIn: _isSocialOptedIn,
+  /// Evaluates whether the caller has authoritative, non-revoked adult Social module eligibility.
+  ///
+  /// Fails closed if session is absent/unauthenticated, or if authoritative evidence is missing.
+  /// Neither signed-in state alone nor a local boolean flag grants access.
+  bool get isSocialAuthorized {
+    _checkDisposed();
+    final session = _sessionController;
+    if (session == null || session.phase != SessionPhase.signedIn) {
+      return false;
+    }
+    // Signed-in state alone does NOT authorize. Local opt-in boolean alone does NOT authorize.
+    // Must evaluate authoritative evidence through ISocialAccessBoundary.
+    final evidence = _accessEvidence;
+    if (evidence == null) {
+      return false; // Fails closed without authoritative evidence
+    }
+    return _accessBoundary.isAccessGranted(
+      sessionController: session,
+      evidence: evidence,
     );
   }
 
-  /// Disposes all created ViewModels and clears in-memory scoped dependencies.
+  /// Authoritative Social Access Boundary.
+  ISocialAccessBoundary get accessBoundary {
+    _checkDisposed();
+    return _accessBoundary;
+  }
+
+  /// Peer match communication authorization boundary.
+  ISocialMatchCommunicationBoundary get communicationBoundary {
+    _checkDisposed();
+    return _communicationBoundary;
+  }
+
+  /// Dormant-safe Social Zone Repository.
+  ///
+  /// Fails closed if SessionController is not provided, rather than inventing fake sessions.
+  ISocialZoneRepository get zoneRepository {
+    _checkDisposed();
+    final session = _sessionController;
+    if (session == null) {
+      throw StateError('Cannot initialize SocialZoneRepository without an authentic SessionController.');
+    }
+    return _zoneRepository ??= SocialZoneRepository(
+      sessionController: session,
+      isDormant: true, // Dormant in production: no fake synthetic zones or synthetic counts
+    );
+  }
+
+  /// ViewModel for discovering and browsing interest zones.
+  SocialZonesViewModel get zonesViewModel {
+    _checkDisposed();
+    return _zonesViewModel ??= SocialZonesViewModel(
+      repository: zoneRepository,
+      sessionController: _sessionController,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
+  /// ViewModel for creating and managing interest zones.
+  SocialZoneManagementViewModel get zoneManagementViewModel {
+    _checkDisposed();
+    return _zoneManagementViewModel ??= SocialZoneManagementViewModel(
+      sessionController: _sessionController,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
+  /// Creates a scoped [SocialHomeViewModel] instance bound to current authorization.
+  SocialHomeViewModel createHomeViewModel() {
+    _checkDisposed();
+    return SocialHomeViewModel(
+      sessionController: _sessionController,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
+  /// Idempotently disposes all created ViewModels, unregisters listeners, and clears private dependencies.
   void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+
     _zonesViewModel?.dispose();
     _zonesViewModel = null;
 
@@ -80,23 +148,8 @@ class SocialDependenciesScope {
     _zoneManagementViewModel = null;
 
     _zoneRepository = null;
-    _accessBoundary = null;
-    _communicationBoundary = null;
 
     _unregisterSessionClearer?.call();
     _unregisterSessionClearer = null;
   }
-}
-
-class _FallbackSessionController extends ChangeNotifier implements SessionController {
-  _FallbackSessionController();
-
-  @override
-  SessionPhase get phase => SessionPhase.signedOut;
-
-  @override
-  VoidCallback registerPrivateStateClearer(VoidCallback clearer) => () {};
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
