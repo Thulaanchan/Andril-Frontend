@@ -88,19 +88,24 @@ abstract class ISocialZoneRepository {
   Future<ZoneResult<SocialZone>> leaveZone(String zoneId);
 }
 
-/// Production-ready implementation of [ISocialZoneRepository].
+/// Production implementation of [ISocialZoneRepository].
 ///
 /// Follows M5 Group Readiness Governance:
-/// - GroupMembershipController is dormant ([NonController]) in production backend.
+/// - In production, GroupMembershipController and group discovery are dormant pending backend activation.
 /// - Does not manufacture fraudulent success responses or fake membership mutations.
-/// - Returns explicit [ZoneFailureType.serviceUnavailable] for dormant mutative actions.
-/// - Enforces fails-closed access when session is unauthenticated.
+/// - Returns explicit [ZoneFailureType.serviceUnavailable] when [isDormant] is enabled without falling back to fixtures.
+/// - Enforces fail-closed access when session is unauthenticated.
 class SocialZoneRepository implements ISocialZoneRepository {
   final SessionController _sessionController;
+  final bool isDormant;
+  final List<SocialZone>? _fixtureZones;
 
   const SocialZoneRepository({
     required SessionController sessionController,
-  }) : _sessionController = sessionController;
+    this.isDormant = false,
+    List<SocialZone>? fixtureZones,
+  })  : _sessionController = sessionController,
+        _fixtureZones = fixtureZones;
 
   @override
   Future<ZoneResult<List<SocialZone>>> getZones({
@@ -114,7 +119,14 @@ class SocialZoneRepository implements ISocialZoneRepository {
       ));
     }
 
-    final allZones = _curatedApprovedZones;
+    if (isDormant) {
+      return const ZoneResult.failure(ZoneFailure(
+        type: ZoneFailureType.serviceUnavailable,
+        message: 'Zone discovery service is currently dormant pending backend service activation.',
+      ));
+    }
+
+    final allZones = _fixtureZones ?? _testFallbackZones;
     var filtered = allZones;
 
     if (category != null && category.isNotEmpty && category.toLowerCase() != 'all') {
@@ -141,7 +153,15 @@ class SocialZoneRepository implements ISocialZoneRepository {
       ));
     }
 
-    final match = _curatedApprovedZones.where((z) => z.id == zoneId).firstOrNull;
+    if (isDormant) {
+      return const ZoneResult.failure(ZoneFailure(
+        type: ZoneFailureType.serviceUnavailable,
+        message: 'Zone detail service is currently dormant pending backend service activation.',
+      ));
+    }
+
+    final allZones = _fixtureZones ?? _testFallbackZones;
+    final match = allZones.where((z) => z.id == zoneId).firstOrNull;
     if (match != null) {
       return ZoneResult.success(match);
     }
@@ -184,7 +204,7 @@ class SocialZoneRepository implements ISocialZoneRepository {
     ));
   }
 
-  static const List<SocialZone> _curatedApprovedZones = [
+  static const List<SocialZone> _testFallbackZones = [
     SocialZone(
       id: 'zone-tech-innovators',
       name: 'Tech Innovators & Makers',
