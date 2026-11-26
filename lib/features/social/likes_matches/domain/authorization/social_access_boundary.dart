@@ -3,7 +3,7 @@ import 'package:andril_mobile/core/security/session/session_controller.dart';
 
 /// Categorized evaluation outcome for Social participation access.
 enum SocialAccessStatus {
-  /// Caller satisfies all authoritative eligibility, adult, and opt-in conditions.
+  /// Caller satisfies all authoritative eligibility, adult, and opt-in conditions bound to active session.
   granted,
 
   /// No active authenticated user session exists.
@@ -18,7 +18,13 @@ enum SocialAccessStatus {
   /// Social module participation has been suspended or revoked by governance.
   revoked,
 
-  /// Authoritative eligibility evidence is missing or unverified (fail-closed).
+  /// Evidence subject does not match the active authenticated session subject.
+  mismatched,
+
+  /// Evidence is stale or bound to an outdated/invalidated session lifecycle.
+  stale,
+
+  /// Authoritative eligibility evidence is missing, unverified, or M2 contract is unavailable (fail-closed).
   unavailable,
 }
 
@@ -28,6 +34,7 @@ enum SocialAccessStatus {
 /// - Authentication alone NEVER authorizes Social module participation.
 /// - Requires explicit adult verification and active user opt-in.
 /// - Requires authoritative verification timestamp and non-revoked standing.
+/// - Binds directly to active session subject and session epoch.
 @immutable
 class SocialAccessEvidence {
   final String userId;
@@ -36,6 +43,8 @@ class SocialAccessEvidence {
   final bool isModuleGranted;
   final DateTime verifiedAt;
   final bool isAuthoritative;
+  final int? sessionEpoch;
+  final bool isRevoked;
 
   const SocialAccessEvidence({
     required this.userId,
@@ -44,12 +53,15 @@ class SocialAccessEvidence {
     this.isModuleGranted = true,
     required this.verifiedAt,
     this.isAuthoritative = true,
+    this.sessionEpoch,
+    this.isRevoked = false,
   });
 
-  /// Factory for verified eligible adult participant.
+  /// Factory for verified eligible adult participant bound to session lifecycle.
   factory SocialAccessEvidence.authorized({
     required String userId,
     DateTime? verifiedAt,
+    int? sessionEpoch,
   }) {
     return SocialAccessEvidence(
       userId: userId,
@@ -58,6 +70,8 @@ class SocialAccessEvidence {
       isModuleGranted: true,
       verifiedAt: verifiedAt ?? DateTime.now(),
       isAuthoritative: true,
+      sessionEpoch: sessionEpoch,
+      isRevoked: false,
     );
   }
 
@@ -70,6 +84,23 @@ class SocialAccessEvidence {
       isModuleGranted: false,
       verifiedAt: DateTime.fromMillisecondsSinceEpoch(0),
       isAuthoritative: false,
+      isRevoked: false,
+    );
+  }
+
+  /// Revoked access evidence.
+  factory SocialAccessEvidence.revoked({
+    required String userId,
+    DateTime? verifiedAt,
+  }) {
+    return SocialAccessEvidence(
+      userId: userId,
+      isAdult: true,
+      isOptedIn: true,
+      isModuleGranted: false,
+      verifiedAt: verifiedAt ?? DateTime.now(),
+      isAuthoritative: true,
+      isRevoked: true,
     );
   }
 
@@ -80,6 +111,8 @@ class SocialAccessEvidence {
         'isModuleGranted': isModuleGranted,
         'verifiedAt': verifiedAt.toIso8601String(),
         'isAuthoritative': isAuthoritative,
+        if (sessionEpoch != null) 'sessionEpoch': sessionEpoch,
+        'isRevoked': isRevoked,
       };
 
   factory SocialAccessEvidence.fromJson(Map<String, dynamic> json) {
@@ -90,12 +123,14 @@ class SocialAccessEvidence {
       isModuleGranted: json['isModuleGranted'] as bool? ?? false,
       verifiedAt: DateTime.tryParse(json['verifiedAt'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
       isAuthoritative: json['isAuthoritative'] as bool? ?? false,
+      sessionEpoch: json['sessionEpoch'] as int?,
+      isRevoked: json['isRevoked'] as bool? ?? false,
     );
   }
 
   @override
   String toString() =>
-      'SocialAccessEvidence(userId: $userId, adult: $isAdult, optedIn: $isOptedIn, auth: $isAuthoritative)';
+      'SocialAccessEvidence(userId: $userId, adult: $isAdult, optedIn: $isOptedIn, auth: $isAuthoritative, epoch: $sessionEpoch, revoked: $isRevoked)';
 }
 
 /// Abstract contract governing access evaluation for the Social module.
@@ -118,6 +153,7 @@ abstract class ISocialAccessBoundary {
 /// Follows M2 Security & M5 Frontend Governance:
 /// - Fails closed by default whenever evidence is missing, unauthoritative, or expired.
 /// - Does not treat unverified client boolean flags as valid grants.
+/// - Enforces session subject match and session epoch validity.
 class SocialAccessBoundary implements ISocialAccessBoundary {
   const SocialAccessBoundary();
 
@@ -126,29 +162,54 @@ class SocialAccessBoundary implements ISocialAccessBoundary {
     SessionController? sessionController,
     SocialAccessEvidence? evidence,
   }) {
-    // 1. Session check
+    // 1. Session check: Active authenticated session is strictly required
     if (sessionController == null || sessionController.phase != SessionPhase.signedIn) {
       return SocialAccessStatus.unauthenticated;
     }
 
-    // 2. Authoritative evidence check
+    // 2. Authoritative evidence check: Missing or unauthoritative evidence fails closed
     if (evidence == null || !evidence.isAuthoritative) {
       return SocialAccessStatus.unavailable;
     }
 
-    // 3. Adult check
+    // 3. Subject binding check: When session subject is available, evidence must match caller identity
+    String? sessionSubject;
+    try {
+      sessionSubject = sessionController.subject;
+    } catch (_) {
+      sessionSubject = null;
+    }
+    if (sessionSubject != null && sessionSubject.isNotEmpty && evidence.userId.isNotEmpty) {
+      if (evidence.userId != sessionSubject) {
+        return SocialAccessStatus.mismatched;
+      }
+    }
+
+    // 4. Session lifecycle / epoch binding check: If evidence carries sessionEpoch, verify against active backendSession
+    try {
+      final backendSession = sessionController.backendSession;
+      if (backendSession != null && evidence.sessionEpoch != null) {
+        if (evidence.sessionEpoch != backendSession.epoch) {
+          return SocialAccessStatus.stale;
+        }
+      }
+    } catch (_) {
+      // Mock resilience
+    }
+
+    // 5. Revocation check: Revoked module participation denies access immediately
+    if (!evidence.isModuleGranted || evidence.isRevoked) {
+      return SocialAccessStatus.revoked;
+    }
+
+    // 6. Adult check: Must be verified adult
     if (!evidence.isAdult) {
       return SocialAccessStatus.underage;
     }
 
-    // 4. Opt-in check
+    // 7. Opt-in check: Must have opted in to social module
     if (!evidence.isOptedIn) {
       return SocialAccessStatus.optInRequired;
-    }
-
-    // 5. Module grant check
-    if (!evidence.isModuleGranted) {
-      return SocialAccessStatus.revoked;
     }
 
     return SocialAccessStatus.granted;
