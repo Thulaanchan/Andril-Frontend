@@ -7,6 +7,7 @@ import 'package:andril_mobile/features/social/likes_matches/domain/authorization
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'u-active-1';
   final List<VoidCallback> _clearers = [];
 
   @override
@@ -17,8 +18,26 @@ class FakeSessionController extends ChangeNotifier implements SessionController 
     notifyListeners();
   }
 
+  @override
+  String? get subject => _subject;
+
+  set subject(String? newSubject) {
+    _subject = newSubject;
+    notifyListeners();
+  }
+
   void triggerSignOut() {
     _phase = SessionPhase.signedOut;
+    _subject = null;
+    for (final clearer in _clearers) {
+      clearer();
+    }
+    notifyListeners();
+  }
+
+  void switchAccount(String newSubject) {
+    _subject = newSubject;
+    _phase = SessionPhase.signedIn;
     for (final clearer in _clearers) {
       clearer();
     }
@@ -42,7 +61,7 @@ void main() {
     fakeSession = FakeSessionController();
   });
 
-  group('SocialNavigationCoordinator (Task 092)', () {
+  group('SocialNavigationCoordinator (Tasks 092 & 100)', () {
     test('initial destination is home when authorized', () {
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
@@ -55,10 +74,10 @@ void main() {
       expect(coordinator.isAuthorized, isTrue);
     });
 
-    test('navigates to approved destinations when authorized', () {
+    test('navigates to approved destinations when authorized with explicit evidence', () {
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-active-1'),
       );
 
       final navigatedToZones = coordinator.navigateTo(SocialDestination.zones);
@@ -70,7 +89,20 @@ void main() {
       expect(coordinator.currentDestination, SocialDestination.discovery);
     });
 
-    test('redirects to accessDenied and returns false when unauthorized', () {
+    test('redirects to accessDenied and sets reason when access evidence is revoked or unauthoritative', () {
+      final coordinator = SocialNavigationCoordinator(
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.revoked(userId: 'u-active-1'),
+      );
+
+      final result = coordinator.navigateTo(SocialDestination.zones);
+
+      expect(result, isFalse);
+      expect(coordinator.currentDestination, SocialDestination.accessDenied);
+      expect(coordinator.navigationDeniedReason, contains('Access denied: SocialAccessStatus.revoked'));
+    });
+
+    test('redirects to accessDenied and returns false when unauthorized without evidence', () {
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
         isSocialOptedIn: false, // not opted in
@@ -107,8 +139,9 @@ void main() {
       expect(coordinator.currentDestination, SocialDestination.accessDenied);
     });
 
-    test('chat handoff succeeds only with verified mutual M4-authorized evidence', () {
+    test('chat handoff succeeds only with verified mutual M4-authorized evidence and matching caller', () {
       String? handedOffChannelId;
+      fakeSession.subject = 'u-1';
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
         isSocialOptedIn: true,
@@ -127,8 +160,31 @@ void main() {
       expect(handedOffChannelId, 'm4-room-42');
     });
 
+    test('chat handoff denied when active session subject does not match either participant', () {
+      String? handedOffChannelId;
+      fakeSession.subject = 'u-intruder';
+      final coordinator = SocialNavigationCoordinator(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        onChatHandoff: (channelId) => handedOffChannelId = channelId,
+      );
+
+      final authorizedEvidence = MatchCommunicationEvidence.authorized(
+        matchId: 'm-ok',
+        participantA: 'u-1',
+        participantB: 'u-2',
+        m4ChannelId: 'm4-room-42',
+      );
+
+      final success = coordinator.navigateToChat(authorizedEvidence);
+      expect(success, isFalse);
+      expect(handedOffChannelId, isNull);
+      expect(coordinator.navigationDeniedReason, contains('Chat handoff denied'));
+    });
+
     test('chat handoff strictly denied for unconfirmed or one-sided matches', () {
       String? handedOffChannelId;
+      fakeSession.subject = 'u-1';
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
         isSocialOptedIn: true,
@@ -147,19 +203,36 @@ void main() {
       expect(coordinator.navigationDeniedReason, contains('Chat handoff denied'));
     });
 
-    test('resets navigation and clears reason upon session sign out', () {
+    test('resets navigation, clears evidence and reason upon session sign out', () {
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-active-1'),
       );
 
       coordinator.navigateTo(SocialDestination.zones);
       expect(coordinator.currentDestination, SocialDestination.zones);
+      expect(coordinator.accessEvidence, isNotNull);
 
       fakeSession.triggerSignOut();
 
       expect(coordinator.currentDestination, SocialDestination.home);
+      expect(coordinator.accessEvidence, isNull);
       expect(coordinator.navigationDeniedReason, isNull);
+    });
+
+    test('switching accounts triggers state clearer and resets navigation context', () {
+      final coordinator = SocialNavigationCoordinator(
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-active-1'),
+      );
+
+      coordinator.navigateTo(SocialDestination.connections);
+      expect(coordinator.currentDestination, SocialDestination.connections);
+
+      fakeSession.switchAccount('u-active-2');
+
+      expect(coordinator.currentDestination, SocialDestination.home);
+      expect(coordinator.accessEvidence, isNull);
     });
   });
 }
