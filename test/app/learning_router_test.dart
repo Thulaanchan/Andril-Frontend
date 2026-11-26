@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:andril_mobile/app/router/learning_router.dart';
 import 'package:andril_mobile/app/themes/learning/learning_theme.dart';
+import 'package:andril_mobile/features/common/chat/domain/module_config.dart';
+import 'package:andril_mobile/features/common/chat/presentation/screens/andril_chats_list_screen.dart';
 import 'package:andril_mobile/features/learning/profile/screens/learning_welcome_screen.dart';
 
 class _TestAccessPolicy implements LearningAccessPolicy {
@@ -72,7 +74,7 @@ void main() {
         ('/learning/home', 'Learning Home'),
         ('/learning/classrooms', 'Learning Classrooms'),
         ('/learning/explore', 'Learning Explore'),
-        ('/learning/chat', 'Learning Chat'),
+        ('/learning/chat', 'Learning Chats'),
         ('/learning/profile', 'Learning Profile'),
       ];
 
@@ -89,6 +91,10 @@ void main() {
         expect(find.byType(LearningWelcomeScreen), findsNothing);
         expect(find.text('Access Restricted'), findsNothing);
         expect(find.text(title), findsOneWidget);
+        if (path == '/learning/chat') {
+          expect(find.byType(AndrilChatsListScreen), findsOneWidget);
+          expect(find.text('Maya'), findsOneWidget);
+        }
       }
     });
 
@@ -233,7 +239,7 @@ void main() {
       }
     });
 
-    testWidgets('9. Unimplemented features display unavailable states',
+    testWidgets('9. Learning chat mounts AndrilChatsListScreen in learning shell',
         (tester) async {
       const authorizedPolicy = _TestAccessPolicy(
         isAuthenticated: true,
@@ -249,14 +255,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(router.routeInformationProvider.value.uri.path, '/learning/chat');
-      expect(find.text('Learning Chat'), findsOneWidget);
-      expect(
-        find.text(
-          'This feature is currently under active development. No production data or live services are available yet.',
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('Feature Pending Implementation'), findsOneWidget);
+      expect(find.byType(AndrilChatsListScreen), findsOneWidget);
+      expect(find.text('Learning Chats'), findsOneWidget);
+      expect(find.text('Maya'), findsOneWidget);
+      final chatsList =
+          tester.widget<AndrilChatsListScreen>(find.byType(AndrilChatsListScreen));
+      expect(chatsList.moduleConfig.type, AndrilModuleType.learning);
     });
 
     testWidgets('10. No route crosses module boundaries', (tester) async {
@@ -316,7 +320,7 @@ void main() {
         final protectedBranches = [
           ('/learning/classrooms', 'Learning Classrooms'),
           ('/learning/explore', 'Learning Explore'),
-          ('/learning/chat', 'Learning Chat'),
+          ('/learning/chat', 'Learning Chats'),
           ('/learning/profile', 'Learning Profile'),
         ];
 
@@ -435,7 +439,7 @@ void main() {
         final protectedBranches = [
           ('/learning/classrooms', 'Learning Classrooms'),
           ('/learning/explore', 'Learning Explore'),
-          ('/learning/chat', 'Learning Chat'),
+          ('/learning/chat', 'Learning Chats'),
           ('/learning/profile', 'Learning Profile'),
         ];
 
@@ -658,7 +662,7 @@ void main() {
           ('/learning/home', 'Learning Home'),
           ('/learning/classrooms', 'Learning Classrooms'),
           ('/learning/explore', 'Learning Explore'),
-          ('/learning/chat', 'Learning Chat'),
+          ('/learning/chat', 'Learning Chats'),
           ('/learning/profile', 'Learning Profile'),
         ];
 
@@ -705,7 +709,7 @@ void main() {
         final tabs = [
           ('Classrooms', '/learning/classrooms', 'Learning Classrooms'),
           ('Explore', '/learning/explore', 'Learning Explore'),
-          ('Chat', '/learning/chat', 'Learning Chat'),
+          ('Chat', '/learning/chat', 'Learning Chats'),
           ('Profile', '/learning/profile', 'Learning Profile'),
           ('Home', '/learning/home', 'Learning Home'),
         ];
@@ -789,7 +793,7 @@ void main() {
             '/learning/welcome');
         expect(router.routeInformationProvider.value.uri.path, '/learning/welcome');
         expect(find.byType(LearningWelcomeScreen), findsOneWidget);
-        expect(find.text('Learning Chat'), findsNothing);
+        expect(find.text('Learning Chats'), findsNothing);
       });
     });
 

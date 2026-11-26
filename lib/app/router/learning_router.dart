@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/common/chat/domain/module_config.dart';
+import '../../features/common/chat/presentation/navigation/chat_navigation_contract.dart';
+import '../../features/common/chat/presentation/screens/andril_chat_screen.dart';
+import '../../features/common/chat/presentation/screens/andril_chats_list_screen.dart';
+import '../../features/common/chat/preview/main_app_chat_route_preview.dart';
 import '../../features/learning/profile/screens/learning_welcome_screen.dart';
 import '../../features/shared/presentation/scaffolds/learning_scaffold.dart';
 import '../../features/shared/presentation/widgets/andril_module_app_bar.dart';
@@ -114,11 +119,85 @@ GoRouter createLearningRouter({
               GoRoute(
                 path: '/learning/chat',
                 name: 'learning-chat',
-                builder: (context, state) =>
-                    const _LearningDestinationPlaceholder(
-                  destinationName: 'Chat',
-                  icon: Icons.chat_bubble_rounded,
+                builder: (context, state) => AndrilChatsListScreen(
+                  key: const ValueKey('learning_chats_list_screen'),
+                  moduleConfig: AndrilModuleConfig.learning,
+                  onOpenConversation: (item) {
+                    context.go(
+                      '/learning/chat/${item.id}',
+                      extra: item.partner,
+                    );
+                  },
                 ),
+                routes: [
+                  GoRoute(
+                    path: ':conversationId',
+                    name: 'learning-chat-detail',
+                    builder: (context, state) {
+                      final conversationId =
+                          state.pathParameters['conversationId'];
+                      final partnerExtra =
+                          state.extra is AndrilModuleProfile
+                              ? state.extra as AndrilModuleProfile
+                              : null;
+
+                      // Validate conversation against Learning module scope
+                      final validation = ChatNavigationParams.validate(
+                        rawModule: 'learning',
+                        conversationId: conversationId,
+                        partner: partnerExtra,
+                        allowedConversationsByModule:
+                            MockConversationCatalog.previewAllowedConversations,
+                      );
+
+                      if (!validation.isValid) {
+                        return ChatRouteDeniedScreen(
+                          reason: validation.denialReason ??
+                              'Invalid Learning chat navigation parameters.',
+                          onReturn: () => context.go('/learning/chat'),
+                        );
+                      }
+
+                      final params = validation.params!;
+                      final catalogPartner =
+                          MockConversationCatalog.defaultPartnerFor(
+                        params.moduleType,
+                        params.conversationId,
+                      );
+
+                      if (catalogPartner == null) {
+                        return ChatRouteDeniedScreen(
+                          reason:
+                              'Conversation "${params.conversationId}" is not available in Learning.',
+                          onReturn: () => context.go('/learning/chat'),
+                        );
+                      }
+
+                      // Verify partner consistency if extra was provided (reject spoofed partners).
+                      // Do not rely solely on display-name equality for identity verification.
+                      if (partnerExtra != null) {
+                        if (partnerExtra.moduleType != AndrilModuleType.learning ||
+                            partnerExtra.name != catalogPartner.name ||
+                            partnerExtra.avatarAsset !=
+                                catalogPartner.avatarAsset) {
+                          return ChatRouteDeniedScreen(
+                            reason:
+                                'Partner profile mismatch for conversation "${params.conversationId}".',
+                            onReturn: () => context.go('/learning/chat'),
+                          );
+                        }
+                      }
+
+                      return AndrilChatScreen(
+                        key: ValueKey('learning_chat_${params.conversationId}'),
+                        moduleConfig: params.moduleConfig,
+                        partner: catalogPartner,
+                        conversationId: params.conversationId,
+                        onBackPressed: () => context.go('/learning/chat'),
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),
