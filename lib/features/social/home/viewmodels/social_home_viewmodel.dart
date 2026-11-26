@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/security/session/session_controller.dart';
 import '../../../../shared_core/account/account_handoff_controller.dart';
 import '../../../../shared_core/onboarding/domain/onboarding_status_repository.dart';
+import '../../../../features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
 /// Data model representing a recommended connection on the Social Home feed (S21).
 @immutable
@@ -89,23 +90,26 @@ enum SocialHomeStatus {
 
   /// Network or backend loading failure.
   error,
+
+  /// Service is unavailable in production (e.g. recommendation service dormant).
+  serviceUnavailable,
 }
 
 /// Manages presentation state, navigation callbacks, and feed data for Social Home (Screen S21).
 ///
-/// Follows M5-FE-S21-SEC-01 architectural requirements:
+/// Follows Task 105 Fast Feature Delivery Governance:
 /// - Fails closed: Denies access if unauthenticated, missing session context,
-///   or not authoritatively opted in / authorized for Social module.
-/// - Requires applicable M2 session and handoff evidence.
-/// - Signed-in state alone never authorizes Social Home.
-/// - Does not generate synthetic mock recommendations in production.
-/// - Clears private state upon session invalidation, account switch, or logout.
-/// - Guards all navigation callbacks against unauthorized or post-disposal invocation.
+///   missing adult eligibility, or not authoritatively opted in / authorized.
+/// - Bound to authoritative [SocialAccessBoundary] and session lifecycle.
+/// - Removes production test-authorization bypass.
+/// - Clears private state upon session invalidation, account switch, or access loss.
+/// - Discards stale asynchronous results after account switching or disposal.
 class SocialHomeViewModel extends ChangeNotifier {
   final SessionController? sessionController;
   final AccountHandoffController? handoffController;
   final bool isSocialOptedIn;
-  final bool isTestAuthorized;
+  final SocialAccessEvidence? accessEvidence;
+  final ISocialAccessBoundary accessBoundary;
 
   VoidCallback? _unregisterSessionClearer;
 
@@ -116,6 +120,8 @@ class SocialHomeViewModel extends ChangeNotifier {
   List<SocialRecommendedPerson> _recommendedPeople = const [];
   String? _errorMessage;
   bool _disposed = false;
+  int _activeLifecycleGeneration = 0;
+  String? _boundSubject;
 
   /// Default verified S21 2x2 quick actions.
   static const List<SocialHomeQuickAction> defaultQuickActions = [
@@ -153,12 +159,15 @@ class SocialHomeViewModel extends ChangeNotifier {
     this.sessionController,
     this.handoffController,
     this.isSocialOptedIn = false,
-    this.isTestAuthorized = false,
+    this.accessEvidence,
+    ISocialAccessBoundary? accessBoundary,
+    bool isTestAuthorized = false, // Neutralized: test bypass disallowed in production
     String? initialDisplayName,
     String? initialAvatarUrl,
     int initialUnreadNotifications = 0,
     List<SocialRecommendedPerson>? initialRecommendations,
-  })  : _displayName = initialDisplayName ?? '',
+  })  : accessBoundary = accessBoundary ?? const SocialAccessBoundary(),
+        _displayName = initialDisplayName ?? '',
         _avatarUrl = initialAvatarUrl,
         _unreadNotificationsCount = initialUnreadNotifications,
         _recommendedPeople = initialRecommendations != null
@@ -166,6 +175,7 @@ class SocialHomeViewModel extends ChangeNotifier {
             : const [] {
     final session = sessionController;
     if (session != null) {
+      _boundSubject = session.subject;
       _unregisterSessionClearer =
           session.registerPrivateStateClearer(_onSessionCleared);
       session.addListener(_onSessionStateChanged);
@@ -190,19 +200,19 @@ class SocialHomeViewModel extends ChangeNotifier {
   bool get isAuthorized {
     if (_disposed) return false;
 
-    // Fail closed: Missing session context never authorizes Social Home
+    // 1. Session check: Missing or non-signedIn session never authorizes Social Home
     final session = sessionController;
-    if (session == null) return false;
+    if (session == null || session.phase != SessionPhase.signedIn) return false;
 
-    // Signed-in status alone never authorizes Social access
-    if (session.phase != SessionPhase.signedIn) return false;
-
-    // Explicitly isolated test fixtures with valid session may assert authorized behavior
-    if (isTestAuthorized) {
-      return isSocialOptedIn;
+    // 2. Authoritative access boundary evaluation (Task 095)
+    if (accessEvidence != null) {
+      return accessBoundary.isAccessGranted(
+        sessionController: session,
+        evidence: accessEvidence,
+      );
     }
 
-    // Require applicable verified M2 authorization handoff
+    // 3. Fallback: verified M2 onboarding handoff controller
     final handoff = handoffController;
     if (handoff != null) {
       final handoffStatus = handoff.status;
@@ -217,16 +227,24 @@ class SocialHomeViewModel extends ChangeNotifier {
       }
     }
 
-    // If authoritative module authorization is unavailable, keep production access denied.
+    // Fail closed: Authentication alone or local boolean alone never grants module access.
     return false;
   }
 
   void _onSessionCleared() {
+    _activeLifecycleGeneration++;
     _clearPrivateState();
   }
 
   void _onSessionStateChanged() {
     if (_disposed) return;
+    final currentSubject = sessionController?.subject;
+    if (_boundSubject != currentSubject) {
+      _boundSubject = currentSubject;
+      _activeLifecycleGeneration++;
+      _clearPrivateState();
+      return;
+    }
     if (!isAuthorized) {
       _clearPrivateState();
     }
@@ -255,6 +273,9 @@ class SocialHomeViewModel extends ChangeNotifier {
   Future<void> initialize() async {
     if (_disposed) return;
 
+    final requestGeneration = ++_activeLifecycleGeneration;
+    final requestSubject = sessionController?.subject;
+
     if (!isAuthorized) {
       _status = SocialHomeStatus.accessDenied;
       notifyListeners();
@@ -265,11 +286,21 @@ class SocialHomeViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // In production, no synthetic hardcoded recommendations are generated.
-      // Recommendations remain what was injected or fetched from authoritative gateway.
+      // In production, recommendation service is dormant; no fake mock recommendations generated.
+      if (_disposed ||
+          requestGeneration != _activeLifecycleGeneration ||
+          sessionController?.subject != requestSubject ||
+          !isAuthorized) {
+        return; // Discard stale asynchronous results
+      }
       _status = SocialHomeStatus.ready;
       _errorMessage = null;
     } catch (_) {
+      if (_disposed ||
+          requestGeneration != _activeLifecycleGeneration ||
+          sessionController?.subject != requestSubject) {
+        return;
+      }
       _status = SocialHomeStatus.error;
       _errorMessage = 'Failed to load Social Home feed.';
     }
@@ -338,6 +369,7 @@ class SocialHomeViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _activeLifecycleGeneration++;
     _unregisterSessionClearer?.call();
     _unregisterSessionClearer = null;
     sessionController?.removeListener(_onSessionStateChanged);

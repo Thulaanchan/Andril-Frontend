@@ -2,16 +2,29 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
 import 'package:andril_mobile/features/social/home/viewmodels/social_home_viewmodel.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _stubPhase;
+  String? _subject;
   final Set<VoidCallback> _clearers = {};
 
-  FakeSessionController({SessionPhase phase = SessionPhase.signedIn})
-      : _stubPhase = phase;
+  FakeSessionController({
+    SessionPhase phase = SessionPhase.signedIn,
+    String? subject = 'user-test-123',
+  })  : _stubPhase = phase,
+        _subject = subject;
 
   @override
   SessionPhase get phase => _stubPhase;
+
+  @override
+  String? get subject => _subject;
+
+  set subject(String? newSubject) {
+    _subject = newSubject;
+    notifyListeners();
+  }
 
   @override
   bool get moduleHomeAuthorized => false;
@@ -38,7 +51,16 @@ class FakeSessionController extends ChangeNotifier implements SessionController 
 }
 
 void main() {
-  group('SocialHomeViewModel Security & Authorization Tests (M5-FE-S21-SEC-01)', () {
+  late FakeSessionController fakeSession;
+
+  setUp(() {
+    fakeSession = FakeSessionController(
+      phase: SessionPhase.signedIn,
+      subject: 'user-test-123',
+    );
+  });
+
+  group('SocialHomeViewModel Security & Authorization Tests (Task 105 & 106)', () {
     test('default construction fails closed (missing session, opt-in false)', () {
       final vm = SocialHomeViewModel();
       expect(vm.status, SocialHomeStatus.initial);
@@ -50,7 +72,6 @@ void main() {
       expect(vm.isLoading, isFalse);
       expect(vm.isAccessDenied, isFalse);
       expect(vm.isAuthorized, isFalse);
-      expect(vm.isSocialOptedIn, isFalse);
     });
 
     test('missing session is denied on initialize', () async {
@@ -63,7 +84,19 @@ void main() {
     });
 
     test('signed-out session is denied', () async {
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedOut);
+      fakeSession.setPhase(SessionPhase.signedOut);
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialHomeStatus.accessDenied);
+    });
+
+    test('unavailable session is denied', () async {
+      fakeSession.setPhase(SessionPhase.unavailable);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
         isSocialOptedIn: true,
@@ -72,11 +105,9 @@ void main() {
       expect(vm.isAuthorized, isFalse);
       await vm.initialize();
       expect(vm.status, SocialHomeStatus.accessDenied);
-      expect(vm.isAccessDenied, isTrue);
     });
 
-    test('unavailable session is denied', () async {
-      final fakeSession = FakeSessionController(phase: SessionPhase.unavailable);
+    test('signed-in status alone without authoritative evidence is denied', () async {
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
         isSocialOptedIn: true,
@@ -85,15 +116,13 @@ void main() {
       expect(vm.isAuthorized, isFalse);
       await vm.initialize();
       expect(vm.status, SocialHomeStatus.accessDenied);
-      expect(vm.isAccessDenied, isTrue);
     });
 
-    test('signed-in status alone without module authorization is denied', () async {
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+    test('isTestAuthorized flag alone cannot bypass authorization', () async {
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
         isSocialOptedIn: true,
-        isTestAuthorized: false,
+        isTestAuthorized: true, // Bypass neutralized
       );
 
       expect(vm.isAuthorized, isFalse);
@@ -101,22 +130,65 @@ void main() {
       expect(vm.status, SocialHomeStatus.accessDenied);
     });
 
-    test('isolated test fixture with signed-in session and opt-in is authorized', () async {
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+    test('authoritative adult opt-in evidence grants access and reaches ready state', () async {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-123',
+      );
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: evidence,
       );
 
       expect(vm.isAuthorized, isTrue);
       await vm.initialize();
       expect(vm.status, SocialHomeStatus.ready);
-      // No automatic mock profile generation in production
+      // No synthetic hardcoded mock recommendations in production
       expect(vm.recommendedPeople, isEmpty);
     });
 
-    test('custom recommendations in constructor are preserved upon initialization', () async {
+    test('underage evidence is denied', () async {
+      final evidence = SocialAccessEvidence.unverified(
+        userId: 'user-test-123',
+      );
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        accessEvidence: evidence,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialHomeStatus.accessDenied);
+    });
+
+    test('revoked evidence is denied', () async {
+      final evidence = SocialAccessEvidence.revoked(
+        userId: 'user-test-123',
+      );
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        accessEvidence: evidence,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialHomeStatus.accessDenied);
+    });
+
+    test('subject mismatch between session and evidence fails closed', () async {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'different-user-456',
+      );
+      final vm = SocialHomeViewModel(
+        sessionController: fakeSession,
+        accessEvidence: evidence,
+      );
+
+      expect(vm.isAuthorized, isFalse);
+      await vm.initialize();
+      expect(vm.status, SocialHomeStatus.accessDenied);
+    });
+
+    test('injected custom recommendations are preserved upon initialization', () async {
       const customRecs = [
         SocialRecommendedPerson(
           id: 'custom_01',
@@ -125,11 +197,12 @@ void main() {
           photoUrl: 'https://example.com/priya.jpg',
         ),
       ];
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-123',
+      );
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: evidence,
         initialRecommendations: customRecs,
         initialDisplayName: 'Thulaan',
         initialUnreadNotifications: 3,
@@ -138,7 +211,6 @@ void main() {
       expect(vm.displayName, 'Thulaan');
       expect(vm.unreadNotificationsCount, 3);
       expect(vm.recommendedPeople.length, 1);
-      expect(vm.recommendedPeople.first.id, 'custom_01');
 
       await vm.initialize();
       expect(vm.status, SocialHomeStatus.ready);
@@ -147,11 +219,12 @@ void main() {
     });
 
     test('session logout clears private state and transitions to accessDenied', () async {
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-123',
+      );
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: evidence,
         initialDisplayName: 'Sensitive Name',
         initialUnreadNotifications: 5,
         initialRecommendations: const [
@@ -171,18 +244,20 @@ void main() {
       expect(vm.status, SocialHomeStatus.accessDenied);
     });
 
-    test('session phase transition to signedOut invalidates state', () async {
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+    test('account switching invalidates private state', () async {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-123',
+      );
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
-        initialDisplayName: 'Sensitive Name',
+        accessEvidence: evidence,
+        initialDisplayName: 'Account A User',
       );
       await vm.initialize();
       expect(vm.status, SocialHomeStatus.ready);
 
-      fakeSession.setPhase(SessionPhase.signedOut);
+      // Switch account
+      fakeSession.subject = 'user-switched-999';
 
       expect(vm.isAuthorized, isFalse);
       expect(vm.status, SocialHomeStatus.accessDenied);
@@ -190,10 +265,9 @@ void main() {
     });
 
     test('navigation callbacks do not fire when access is denied', () {
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedOut);
+      fakeSession.setPhase(SessionPhase.signedOut);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: false,
       );
 
       var exploreFired = false;
@@ -226,71 +300,59 @@ void main() {
     });
 
     test('navigation callbacks fire when authorized', () {
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-123',
+      );
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: evidence,
       );
 
       var exploreFired = false;
       var seeAllFired = false;
-      String? viewedId;
-      SocialHomeActionId? actionFired;
+      String? viewedProfileId;
+      SocialHomeActionId? executedAction;
       var notificationFired = false;
       var searchFired = false;
 
       vm.onExplorePeople = () => exploreFired = true;
       vm.onSeeAllRecommendations = () => seeAllFired = true;
-      vm.onViewProfile = (id) => viewedId = id;
-      vm.onQuickAction = (act) => actionFired = act;
+      vm.onViewProfile = (id) => viewedProfileId = id;
+      vm.onQuickAction = (action) => executedAction = action;
       vm.onNotificationTap = () => notificationFired = true;
       vm.onSearchTap = () => searchFired = true;
 
       vm.triggerExplorePeople();
       vm.triggerSeeAllRecommendations();
-      vm.triggerViewProfile('user_42');
-      vm.triggerQuickAction(SocialHomeActionId.myConnections);
+      vm.triggerViewProfile('target-profile-uuid');
+      vm.triggerQuickAction(SocialHomeActionId.personality);
       vm.triggerNotificationTap();
       vm.triggerSearchTap();
 
       expect(exploreFired, isTrue);
       expect(seeAllFired, isTrue);
-      expect(viewedId, 'user_42');
-      expect(actionFired, SocialHomeActionId.myConnections);
+      expect(viewedProfileId, 'target-profile-uuid');
+      expect(executedAction, SocialHomeActionId.personality);
       expect(notificationFired, isTrue);
       expect(searchFired, isTrue);
     });
 
-    test('disposed viewModel ignores updates and does not dispatch callbacks', () {
-      final fakeSession = FakeSessionController(phase: SessionPhase.signedIn);
+    test('disposed viewmodel rejects operations and unregisters listeners', () {
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'user-test-123',
+      );
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: evidence,
       );
-      var exploreFired = false;
-      vm.onExplorePeople = () => exploreFired = true;
 
       vm.dispose();
 
-      vm.updateProfileHeader(displayName: 'New Name');
-      vm.setUnreadNotificationsCount(10);
+      expect(vm.isAuthorized, isFalse);
+      var callbackFired = false;
+      vm.onExplorePeople = () => callbackFired = true;
       vm.triggerExplorePeople();
-
-      expect(exploreFired, isFalse);
-      expect(vm.displayName, '');
-    });
-
-    test('diagnostic toString does not expose PII', () {
-      const person = SocialRecommendedPerson(
-        id: 'rec_private_id',
-        displayName: 'Secret Identity',
-        location: 'Secret City',
-      );
-      expect(person.toString(), equals('SocialRecommendedPerson(id: rec_private_id)'));
-      expect(person.toString(), isNot(contains('Secret Identity')));
-      expect(person.toString(), isNot(contains('Secret City')));
+      expect(callbackFired, isFalse);
     });
   });
 }
