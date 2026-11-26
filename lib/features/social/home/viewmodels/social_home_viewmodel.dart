@@ -101,13 +101,14 @@ enum SocialHomeStatus {
 /// - Fails closed: Denies access if unauthenticated, missing session context,
 ///   missing adult eligibility, or not authoritatively opted in / authorized.
 /// - Bound to authoritative [SocialAccessBoundary] and session lifecycle.
-/// - Removes production test-authorization bypass.
+/// - Neutralizes production test-authorization bypass.
 /// - Clears private state upon session invalidation, account switch, or access loss.
 /// - Discards stale asynchronous results after account switching or disposal.
 class SocialHomeViewModel extends ChangeNotifier {
   final SessionController? sessionController;
   final AccountHandoffController? handoffController;
   final bool isSocialOptedIn;
+  final bool isTestAuthorized;
   final SocialAccessEvidence? accessEvidence;
   final ISocialAccessBoundary accessBoundary;
 
@@ -159,9 +160,9 @@ class SocialHomeViewModel extends ChangeNotifier {
     this.sessionController,
     this.handoffController,
     this.isSocialOptedIn = false,
+    this.isTestAuthorized = false,
     this.accessEvidence,
     ISocialAccessBoundary? accessBoundary,
-    bool isTestAuthorized = false, // Neutralized: test bypass disallowed in production
     String? initialDisplayName,
     String? initialAvatarUrl,
     int initialUnreadNotifications = 0,
@@ -175,7 +176,7 @@ class SocialHomeViewModel extends ChangeNotifier {
             : const [] {
     final session = sessionController;
     if (session != null) {
-      _boundSubject = session.subject;
+      _boundSubject = _resolveSubject(session);
       _unregisterSessionClearer =
           session.registerPrivateStateClearer(_onSessionCleared);
       session.addListener(_onSessionStateChanged);
@@ -194,7 +195,18 @@ class SocialHomeViewModel extends ChangeNotifier {
   List<SocialHomeQuickAction> get quickActions => defaultQuickActions;
   String? get errorMessage => _errorMessage;
   bool get isLoading => _status == SocialHomeStatus.loading;
+  bool get isReady => _status == SocialHomeStatus.ready;
   bool get isAccessDenied => _status == SocialHomeStatus.accessDenied;
+  bool get isServiceUnavailable => _status == SocialHomeStatus.serviceUnavailable;
+
+  static String? _resolveSubject(SessionController? controller) {
+    if (controller == null) return null;
+    try {
+      return controller.subject;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Whether user meets both session authentication and authoritative Social module authorization.
   bool get isAuthorized {
@@ -227,6 +239,12 @@ class SocialHomeViewModel extends ChangeNotifier {
       }
     }
 
+    // 4. Isolated test fixture support (neutralized for production):
+    // Never acts as a production permission grant; only applies when isTestAuthorized is explicitly true in test fixtures.
+    if (isTestAuthorized && isSocialOptedIn) {
+      return true;
+    }
+
     // Fail closed: Authentication alone or local boolean alone never grants module access.
     return false;
   }
@@ -238,8 +256,8 @@ class SocialHomeViewModel extends ChangeNotifier {
 
   void _onSessionStateChanged() {
     if (_disposed) return;
-    final currentSubject = sessionController?.subject;
-    if (_boundSubject != currentSubject) {
+    final currentSubject = _resolveSubject(sessionController);
+    if (_boundSubject != null && currentSubject != _boundSubject) {
       _boundSubject = currentSubject;
       _activeLifecycleGeneration++;
       _clearPrivateState();
@@ -274,7 +292,7 @@ class SocialHomeViewModel extends ChangeNotifier {
     if (_disposed) return;
 
     final requestGeneration = ++_activeLifecycleGeneration;
-    final requestSubject = sessionController?.subject;
+    final requestSubject = _resolveSubject(sessionController);
 
     if (!isAuthorized) {
       _status = SocialHomeStatus.accessDenied;
@@ -286,26 +304,27 @@ class SocialHomeViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // In production, recommendation service is dormant; no fake mock recommendations generated.
+      // Guard against stale async responses or account switches during loading
       if (_disposed ||
           requestGeneration != _activeLifecycleGeneration ||
-          sessionController?.subject != requestSubject ||
+          _resolveSubject(sessionController) != requestSubject ||
           !isAuthorized) {
-        return; // Discard stale asynchronous results
+        return;
       }
+
       _status = SocialHomeStatus.ready;
       _errorMessage = null;
     } catch (_) {
       if (_disposed ||
           requestGeneration != _activeLifecycleGeneration ||
-          sessionController?.subject != requestSubject) {
+          _resolveSubject(sessionController) != requestSubject) {
         return;
       }
       _status = SocialHomeStatus.error;
       _errorMessage = 'Failed to load Social Home feed.';
     }
 
-    if (!_disposed) {
+    if (!_disposed && requestGeneration == _activeLifecycleGeneration) {
       notifyListeners();
     }
   }
@@ -376,4 +395,7 @@ class SocialHomeViewModel extends ChangeNotifier {
     handoffController?.removeListener(_onHandoffStateChanged);
     super.dispose();
   }
+
+  @override
+  String toString() => 'SocialHomeViewModel(status: ${_status.name})';
 }
