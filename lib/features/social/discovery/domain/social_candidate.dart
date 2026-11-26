@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart';
 
 /// Immutable domain model representing an eligible Social candidate card (SOC-02).
 ///
-/// Follows M5-FE-S09-DOM-01 architectural requirements:
+/// Follows Task 107 Fast Feature Delivery Governance:
 /// - Maps to backend `SocialExploreCandidateDto` without exposing confidential account identities,
 ///   matching weights, raw questionnaire answers, or unauthorized precise GPS coordinates.
+/// - Enforces strict validation: rejects missing/malformed required identifiers, missing display names,
+///   and non-adult ages (< 18).
+/// - Does not manufacture missing age (does not default to 18) or missing display names (no 'Explorer').
 /// - Defensive immutability: copies and freezes all collection properties upon construction.
-/// - Order-independent set hashing for consistent equality and hashing contracts.
-/// - Sanitized diagnostic string representation.
+/// - Sanitized diagnostic string representation (redacts candidate ID, names, ages, distances).
 @immutable
 class SocialCandidate {
   /// Social-scoped unique candidate profile identifier (GUID string).
@@ -56,7 +58,10 @@ class SocialCandidate {
     Iterable<String>? photoUrls,
     this.locationName,
     this.isVerified = false,
-  })  : _sharedLanguages = sharedLanguages == null
+  })  : assert(id.trim().isNotEmpty, 'Candidate ID cannot be empty'),
+        assert(displayName.trim().isNotEmpty, 'Candidate displayName cannot be empty'),
+        assert(age >= 18, 'Candidate must be an adult aged 18 or older'),
+        _sharedLanguages = sharedLanguages == null
             ? const <String>[]
             : List<String>.unmodifiable(List<String>.of(sharedLanguages)),
         _sharedConnectionGoals = sharedConnectionGoals == null
@@ -87,44 +92,68 @@ class SocialCandidate {
 
   /// Constructs a [SocialCandidate] from backend JSON payload.
   ///
-  /// Supports backend `SocialExploreCandidateDto` field naming conventions:
-  /// `candidateProfileId` or `id`, `displayName`, `age`, `approximateDistanceKm`,
-  /// `sharedLanguages`, and `sharedConnectionGoals`.
+  /// Rejects malformed or missing identifiers, missing names, or non-adult ages.
+  /// Does not manufacture synthetic defaults for required attributes.
   factory SocialCandidate.fromJson(Map<String, dynamic> json) {
-    final candidateId =
-        json['candidateProfileId']?.toString() ?? json['id']?.toString() ?? '';
-    final name = json['displayName']?.toString() ?? 'Explorer';
-    final candidateAge = json['age'] is num ? (json['age'] as num).toInt() : 18;
-    final distance = json['approximateDistanceKm'] is num
-        ? (json['approximateDistanceKm'] as num).toInt()
-        : null;
+    // 1. Required identifier validation
+    final rawId = json['candidateProfileId'] ?? json['id'];
+    if (rawId == null || rawId is! String || rawId.trim().isEmpty) {
+      throw const FormatException('Missing or invalid required candidate identifier.');
+    }
+    final candidateId = rawId.trim();
+
+    // 2. Required display name validation (do not default to 'Explorer')
+    final rawName = json['displayName'];
+    if (rawName == null || rawName is! String || rawName.trim().isEmpty) {
+      throw const FormatException('Missing or invalid required candidate display name.');
+    }
+    final name = rawName.trim();
+
+    // 3. Required age validation (do not default to 18; must be adult 18+)
+    final rawAge = json['age'];
+    if (rawAge == null || rawAge is! num) {
+      throw const FormatException('Missing or invalid candidate age: must be a number.');
+    }
+    final candidateAge = rawAge.toInt();
+    if (candidateAge < 18) {
+      throw const FormatException('Invalid candidate age: must be an adult 18 or older.');
+    }
+
+    // 4. Optional distance validation
+    int? distance;
+    if (json['approximateDistanceKm'] != null) {
+      if (json['approximateDistanceKm'] is num) {
+        distance = (json['approximateDistanceKm'] as num).toInt();
+        if (distance < 0) distance = null;
+      }
+    }
 
     final languages = (json['sharedLanguages'] as List<dynamic>?)
-            ?.map((e) => e.toString())
+            ?.whereType<String>()
             .toList() ??
         const <String>[];
 
     final goals = (json['sharedConnectionGoals'] as List<dynamic>?)
-            ?.map((e) => e.toString())
+            ?.whereType<String>()
             .toList() ??
         const <String>[];
 
-    final bio = json['biography']?.toString() ?? json['bio']?.toString();
+    final bio = (json['biography'] ?? json['bio'])?.toString();
 
     final interestItems = (json['interests'] as List<dynamic>?)
-            ?.map((e) => e.toString())
+            ?.whereType<String>()
             .toSet() ??
         const <String>{};
 
     final photos = (json['photoUrls'] as List<dynamic>?)
-            ?.map((e) => e.toString())
+            ?.whereType<String>()
             .toList() ??
         (json['photos'] as List<dynamic>?)
-            ?.map((e) => e.toString())
+            ?.whereType<String>()
             .toList() ??
         const <String>[];
 
-    final loc = json['locationName']?.toString() ?? json['location']?.toString();
+    final loc = (json['locationName'] ?? json['location'])?.toString();
     final verified = json['isVerified'] == true;
 
     return SocialCandidate(
@@ -191,14 +220,6 @@ class SocialCandidate {
     );
   }
 
-  static int _hashUnorderedSet(Set<Object?> elements) {
-    var hash = 0;
-    for (final element in elements) {
-      hash = (hash + (element?.hashCode ?? 0)) & 0x7FFFFFFF;
-    }
-    return hash;
-  }
-
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -208,13 +229,13 @@ class SocialCandidate {
           displayName == other.displayName &&
           age == other.age &&
           approximateDistanceKm == other.approximateDistanceKm &&
+          biography == other.biography &&
+          locationName == other.locationName &&
+          isVerified == other.isVerified &&
+          setEquals(_interests, other._interests) &&
           listEquals(_sharedLanguages, other._sharedLanguages) &&
           listEquals(_sharedConnectionGoals, other._sharedConnectionGoals) &&
-          biography == other.biography &&
-          setEquals(_interests, other._interests) &&
-          listEquals(_photoUrls, other._photoUrls) &&
-          locationName == other.locationName &&
-          isVerified == other.isVerified;
+          listEquals(_photoUrls, other._photoUrls);
 
   @override
   int get hashCode => Object.hash(
@@ -222,18 +243,16 @@ class SocialCandidate {
         displayName,
         age,
         approximateDistanceKm,
-        Object.hashAll(_sharedLanguages),
-        Object.hashAll(_sharedConnectionGoals),
         biography,
-        _hashUnorderedSet(_interests),
-        Object.hashAll(_photoUrls),
         locationName,
         isVerified,
+        Object.hashAllUnordered(_interests),
+        Object.hashAll(_sharedLanguages),
+        Object.hashAll(_sharedConnectionGoals),
+        Object.hashAll(_photoUrls),
       );
 
+  /// Redacted diagnostic representation that prevents private profile data leakage.
   @override
-  String toString() {
-    final distStr = approximateDistanceKm != null ? '${approximateDistanceKm}km' : 'unknown';
-    return 'SocialCandidate(id: $id, name: $displayName, age: $age, distance: $distStr, verified: $isVerified)';
-  }
+  String toString() => 'SocialCandidate(redacted)';
 }

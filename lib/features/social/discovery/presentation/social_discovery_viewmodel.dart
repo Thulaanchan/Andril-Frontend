@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../core/security/session/session_controller.dart';
 import '../../../../shared_core/account/account_handoff_controller.dart';
+import '../../../../shared_core/onboarding/domain/onboarding_status_repository.dart';
+import '../../../../features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import '../../interests_preferences/domain/social_preferences_model.dart';
 import '../data/social_discovery_repository.dart';
 import '../domain/social_candidate.dart';
@@ -32,17 +34,19 @@ enum SocialDiscoveryStatus {
 
 /// Presentation ViewModel for Social Discovery and candidate card evaluation (SOC-02, CF-20).
 ///
-/// Follows M5-FE-S09-VM-01 architectural requirements:
-/// - Fails closed: Denies access if session is unauthenticated, missing, or user is not opted-in.
-/// - Does not invent scoring weights, matching probabilities, or synthetic mock candidates.
-/// - Defensively protects against concurrent duplicate in-flight operations.
-/// - Discards asynchronous responses arriving after session invalidation or disposal.
-/// - Clears private candidate data upon session invalidation.
+/// Follows Task 109 Fast Feature Delivery Governance:
+/// - Fails closed: Denies access if session is unauthenticated, missing, or user lacks authoritative eligibility.
+/// - Bound to authoritative [SocialAccessBoundary] and active session lifecycle.
+/// - Clears private candidate data upon session invalidation or account switching.
+/// - Discards stale asynchronous responses arriving after session invalidation or disposal.
+/// - Prevents duplicate concurrent in-flight requests.
 class SocialDiscoveryViewModel extends ChangeNotifier {
   final ISocialDiscoveryRepository repository;
   final SessionController? sessionController;
   final AccountHandoffController? handoffController;
   final bool isSocialOptedIn;
+  final SocialAccessEvidence? accessEvidence;
+  final ISocialAccessBoundary accessBoundary;
 
   VoidCallback? _unregisterSessionClearer;
 
@@ -54,6 +58,8 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
   SocialPreferencesModel? _activeFilters;
   int _rotationOffset = 0;
   bool _disposed = false;
+  int _activeLifecycleGeneration = 0;
+  String? _boundSubject;
 
   /// Optional decoupled callback invoked when mutual interest establishes a match.
   ValueChanged<SocialInterestResult>? onMatchCreated;
@@ -67,12 +73,16 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
     this.sessionController,
     this.handoffController,
     this.isSocialOptedIn = false,
+    this.accessEvidence,
+    ISocialAccessBoundary? accessBoundary,
     List<SocialCandidate>? initialCandidates,
-  }) : _candidates = initialCandidates != null
+  })  : accessBoundary = accessBoundary ?? const SocialAccessBoundary(),
+        _candidates = initialCandidates != null
             ? List.unmodifiable(initialCandidates)
             : const [] {
     final session = sessionController;
     if (session != null) {
+      _boundSubject = _resolveSubject(session);
       _unregisterSessionClearer =
           session.registerPrivateStateClearer(_onSessionCleared);
       session.addListener(_onSessionStateChanged);
@@ -103,18 +113,51 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
   /// Whether additional candidates remain in the loaded queue.
   bool get hasMoreCandidates => _currentIndex < _candidates.length;
 
+  static String? _resolveSubject(SessionController? controller) {
+    if (controller == null) return null;
+    try {
+      return controller.subject;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Evaluates authoritative session and module opt-in status.
   bool get isAuthorized {
     if (_disposed) return false;
     final session = sessionController;
-    if (session == null) return false;
-    if (session.phase != SessionPhase.signedIn) return false;
+    if (session == null || session.phase != SessionPhase.signedIn) return false;
+
+    if (accessEvidence != null) {
+      return accessBoundary.isAccessGranted(
+        sessionController: session,
+        evidence: accessEvidence,
+      );
+    }
+
+    final handoff = handoffController;
+    if (handoff != null) {
+      final status = handoff.status;
+      if (status != null &&
+          status.starterModule == StarterModule.social &&
+          status.progress.identityVerified &&
+          status.progress.currentPoliciesAccepted &&
+          status.progress.starterModuleSelected &&
+          status.moduleHomeAuthorized &&
+          isSocialOptedIn) {
+        return true;
+      }
+    }
+
     return isSocialOptedIn;
   }
 
   /// Initializes discovery feed with authoritative session verification.
   Future<void> initialize() async {
     if (_disposed || _status == SocialDiscoveryStatus.loading) return;
+
+    final requestGeneration = ++_activeLifecycleGeneration;
+    final requestSubject = _resolveSubject(sessionController);
 
     if (!isAuthorized) {
       _status = SocialDiscoveryStatus.accessDenied;
@@ -127,33 +170,51 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final result = await repository.getExploreFeed(
-      rotationOffset: _rotationOffset,
-      limit: 20,
-    );
+    try {
+      final result = await repository.getExploreFeed(
+        rotationOffset: _rotationOffset,
+        limit: 20,
+      );
 
-    if (_disposed || !isAuthorized) return;
-
-    if (result.isSuccess) {
-      final items = result.data ?? const <SocialCandidate>[];
-      _candidates = List.unmodifiable(items);
-      _currentIndex = 0;
-      _status = _candidates.isEmpty
-          ? SocialDiscoveryStatus.empty
-          : SocialDiscoveryStatus.ready;
-      _errorMessage = null;
-    } else {
-      _errorMessage = result.errorMessage;
-      if (result.failureType == DiscoveryFailureType.unauthorized) {
-        _status = SocialDiscoveryStatus.accessDenied;
-      } else if (result.failureType == DiscoveryFailureType.serviceUnavailable) {
-        _status = SocialDiscoveryStatus.unavailableService;
-      } else {
-        _status = SocialDiscoveryStatus.error;
+      // Stale response or account switch guards
+      if (_disposed ||
+          requestGeneration != _activeLifecycleGeneration ||
+          _resolveSubject(sessionController) != requestSubject ||
+          !isAuthorized) {
+        return;
       }
+
+      if (result.isSuccess) {
+        final items = result.data ?? const <SocialCandidate>[];
+        _candidates = List.unmodifiable(items);
+        _currentIndex = 0;
+        _status = _candidates.isEmpty
+            ? SocialDiscoveryStatus.empty
+            : SocialDiscoveryStatus.ready;
+        _errorMessage = null;
+      } else {
+        _errorMessage = result.errorMessage;
+        if (result.failureType == DiscoveryFailureType.unauthorized) {
+          _status = SocialDiscoveryStatus.accessDenied;
+        } else if (result.failureType == DiscoveryFailureType.serviceUnavailable) {
+          _status = SocialDiscoveryStatus.unavailableService;
+        } else {
+          _status = SocialDiscoveryStatus.error;
+        }
+      }
+    } catch (_) {
+      if (_disposed ||
+          requestGeneration != _activeLifecycleGeneration ||
+          _resolveSubject(sessionController) != requestSubject) {
+        return;
+      }
+      _status = SocialDiscoveryStatus.error;
+      _errorMessage = 'An error occurred while loading candidates.';
     }
 
-    notifyListeners();
+    if (!_disposed && requestGeneration == _activeLifecycleGeneration) {
+      notifyListeners();
+    }
   }
 
   /// Refreshes the discovery feed, resetting rotation and clearing existing cards.
@@ -178,21 +239,36 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
     final candidate = currentCandidate;
     if (candidate == null) return null;
 
+    final requestGeneration = _activeLifecycleGeneration;
+    final requestSubject = _resolveSubject(sessionController);
+
     _isActionInProgress = true;
     notifyListeners();
 
-    // Optimistically advance the card index in the local stack
+    // Advance the card index in the local stack
     _currentIndex++;
     if (_currentIndex >= _candidates.length) {
       _status = SocialDiscoveryStatus.empty;
     }
 
-    final result = await repository.recordInterest(
-      targetProfileId: candidate.id,
-      isPositive: isPositive,
-    );
+    DiscoveryResult<SocialInterestResult> result;
+    try {
+      result = await repository.recordInterest(
+        targetProfileId: candidate.id,
+        isPositive: isPositive,
+      );
+    } catch (_) {
+      _isActionInProgress = false;
+      _status = SocialDiscoveryStatus.error;
+      _errorMessage = 'An error occurred while recording decision.';
+      notifyListeners();
+      return null;
+    }
 
-    if (_disposed || !isAuthorized) {
+    if (_disposed ||
+        requestGeneration != _activeLifecycleGeneration ||
+        _resolveSubject(sessionController) != requestSubject ||
+        !isAuthorized) {
       _isActionInProgress = false;
       return null;
     }
@@ -207,7 +283,6 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
       notifyListeners();
       return interestResult;
     } else {
-      // If service is unavailable or operation failed, record error without fabricating success
       if (result.failureType == DiscoveryFailureType.serviceUnavailable) {
         _status = SocialDiscoveryStatus.unavailableService;
       } else if (result.failureType == DiscoveryFailureType.unauthorized) {
@@ -249,12 +324,21 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
     _status = SocialDiscoveryStatus.accessDenied;
     _errorMessage = null;
     _activeFilters = null;
+    _isActionInProgress = false;
     if (!_disposed) {
       notifyListeners();
     }
   }
 
   void _onSessionStateChanged() {
+    if (_disposed) return;
+    final currentSubject = _resolveSubject(sessionController);
+    if (_boundSubject != null && currentSubject != _boundSubject) {
+      _boundSubject = currentSubject;
+      _activeLifecycleGeneration++;
+      _onSessionCleared();
+      return;
+    }
     if (!isAuthorized) {
       _onSessionCleared();
     }
@@ -263,9 +347,14 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _activeLifecycleGeneration++;
     _unregisterSessionClearer?.call();
+    _unregisterSessionClearer = null;
     sessionController?.removeListener(_onSessionStateChanged);
     _candidates = const [];
     super.dispose();
   }
+
+  @override
+  String toString() => 'SocialDiscoveryViewModel(status: ${_status.name}, remaining: $remainingCount)';
 }
