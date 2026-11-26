@@ -29,6 +29,7 @@ class SocialNavigationCoordinator extends ChangeNotifier {
   final bool _isSocialOptedIn;
   final ValueChanged<String>? _onChatHandoff;
 
+  SocialAccessEvidence? _accessEvidence;
   SocialDestination _currentDestination = SocialDestination.home;
   String? _navigationDeniedReason;
   VoidCallback? _unregisterSessionClearer;
@@ -38,11 +39,13 @@ class SocialNavigationCoordinator extends ChangeNotifier {
     ISocialMatchCommunicationBoundary communicationBoundary = const SocialMatchCommunicationBoundary(),
     SessionController? sessionController,
     bool isSocialOptedIn = false,
+    SocialAccessEvidence? accessEvidence,
     ValueChanged<String>? onChatHandoff,
   })  : _accessBoundary = accessBoundary,
         _communicationBoundary = communicationBoundary,
         _sessionController = sessionController,
         _isSocialOptedIn = isSocialOptedIn,
+        _accessEvidence = accessEvidence,
         _onChatHandoff = onChatHandoff {
     _unregisterSessionClearer = _sessionController?.registerPrivateStateClearer(_clearPrivateState);
   }
@@ -51,9 +54,35 @@ class SocialNavigationCoordinator extends ChangeNotifier {
   String? get navigationDeniedReason => _navigationDeniedReason;
   ISocialAccessBoundary get accessBoundary => _accessBoundary;
   ISocialMatchCommunicationBoundary get communicationBoundary => _communicationBoundary;
+  SocialAccessEvidence? get accessEvidence => _accessEvidence;
 
-  bool get isAuthorized =>
-      _sessionController?.phase == SessionPhase.signedIn && _isSocialOptedIn;
+  /// Updates or binds authoritative access evidence to this coordinator.
+  void updateAccessEvidence(SocialAccessEvidence? evidence) {
+    _accessEvidence = evidence;
+    if (!isAuthorized &&
+        _currentDestination != SocialDestination.accessDenied &&
+        _currentDestination != SocialDestination.home) {
+      _currentDestination = SocialDestination.accessDenied;
+      _navigationDeniedReason = 'Active adult opt-in is required to access Social features.';
+    }
+    notifyListeners();
+  }
+
+  /// Whether current caller context is authorized to navigate inside the Social module.
+  bool get isAuthorized {
+    if (_sessionController == null || _sessionController.phase != SessionPhase.signedIn) {
+      return false;
+    }
+
+    if (_accessEvidence != null) {
+      return _accessBoundary.isAccessGranted(
+        sessionController: _sessionController,
+        evidence: _accessEvidence,
+      );
+    }
+
+    return _isSocialOptedIn;
+  }
 
   /// Guarded navigation to an approved Social destination.
   bool navigateTo(SocialDestination destination) {
@@ -65,7 +94,15 @@ class SocialNavigationCoordinator extends ChangeNotifier {
 
     if (!isAuthorized) {
       _currentDestination = SocialDestination.accessDenied;
-      _navigationDeniedReason = 'Active adult opt-in is required to access Social features.';
+      if (_accessEvidence != null) {
+        final status = _accessBoundary.evaluateAccess(
+          sessionController: _sessionController,
+          evidence: _accessEvidence,
+        );
+        _navigationDeniedReason = 'Access denied: $status';
+      } else {
+        _navigationDeniedReason = 'Active adult opt-in is required to access Social features.';
+      }
       notifyListeners();
       return false;
     }
@@ -84,9 +121,17 @@ class SocialNavigationCoordinator extends ChangeNotifier {
       return false;
     }
 
-    final isClear = _communicationBoundary.canInitiateCommunication(evidence);
+    String? callerId;
+    try {
+      callerId = _sessionController?.subject;
+    } catch (_) {
+      callerId = null;
+    }
+    callerId ??= _accessEvidence?.userId;
+
+    final isClear = _communicationBoundary.canInitiateCommunication(evidence, callerId: callerId);
     if (!isClear) {
-      final status = _communicationBoundary.evaluateMatchCommunication(evidence);
+      final status = _communicationBoundary.evaluateMatchCommunication(evidence, callerId: callerId);
       _navigationDeniedReason = 'Chat handoff denied: $status';
       notifyListeners();
       return false;
@@ -99,6 +144,7 @@ class SocialNavigationCoordinator extends ChangeNotifier {
   }
 
   void _clearPrivateState() {
+    _accessEvidence = null;
     _currentDestination = SocialDestination.home;
     _navigationDeniedReason = null;
     notifyListeners();
