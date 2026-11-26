@@ -1,0 +1,131 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_match_communication_boundary.dart';
+
+void main() {
+  const boundary = SocialMatchCommunicationBoundary();
+
+  group('SocialMatchCommunicationBoundary (Task 088)', () {
+    test('authorizes communication when match is mutual and M4 authorized', () {
+      final evidence = MatchCommunicationEvidence.authorized(
+        matchId: 'match-101',
+        participantA: 'user-a',
+        participantB: 'user-b',
+        m4ChannelId: 'm4-ch-999',
+      );
+
+      final status = boundary.evaluateMatchCommunication(evidence);
+
+      expect(status, MatchCommunicationStatus.authorized);
+      expect(boundary.canInitiateCommunication(evidence), isTrue);
+    });
+
+    test('denies communication when evidence is null', () {
+      final status = boundary.evaluateMatchCommunication(null);
+
+      expect(status, MatchCommunicationStatus.unauthorized);
+      expect(boundary.canInitiateCommunication(null), isFalse);
+    });
+
+    test('denies communication with pendingMutualMatch when match is one-sided', () {
+      final evidence = MatchCommunicationEvidence.pending(
+        matchId: 'match-102',
+        participantA: 'user-a',
+        participantB: 'user-b',
+      );
+
+      final status = boundary.evaluateMatchCommunication(evidence);
+
+      expect(status, MatchCommunicationStatus.pendingMutualMatch);
+      expect(boundary.canInitiateCommunication(evidence), isFalse);
+    });
+
+    test('denies communication with blocked when connection is blocked', () {
+      final evidence = MatchCommunicationEvidence(
+        matchId: 'match-103',
+        participantA: 'user-a',
+        participantB: 'user-b',
+        isMutual: true,
+        isBlocked: true,
+        isUnmatched: false,
+        m4ChannelId: 'm4-ch-123',
+        verifiedAt: DateTime.now(),
+        isM4Authorized: true,
+      );
+
+      final status = boundary.evaluateMatchCommunication(evidence);
+
+      expect(status, MatchCommunicationStatus.blocked);
+      expect(boundary.canInitiateCommunication(evidence), isFalse);
+    });
+
+    test('denies communication with unmatched when connection is dissolved', () {
+      final evidence = MatchCommunicationEvidence(
+        matchId: 'match-104',
+        participantA: 'user-a',
+        participantB: 'user-b',
+        isMutual: true,
+        isBlocked: false,
+        isUnmatched: true,
+        m4ChannelId: 'm4-ch-123',
+        verifiedAt: DateTime.now(),
+        isM4Authorized: true,
+      );
+
+      final status = boundary.evaluateMatchCommunication(evidence);
+
+      expect(status, MatchCommunicationStatus.unmatched);
+      expect(boundary.canInitiateCommunication(evidence), isFalse);
+    });
+
+    test('denies communication with m4Unavailable when M4 authorization is missing or channel is empty', () {
+      final noM4Auth = MatchCommunicationEvidence(
+        matchId: 'match-105',
+        participantA: 'user-a',
+        participantB: 'user-b',
+        isMutual: true,
+        isBlocked: false,
+        isUnmatched: false,
+        m4ChannelId: 'm4-ch-123',
+        verifiedAt: DateTime.now(),
+        isM4Authorized: false,
+      );
+
+      expect(boundary.evaluateMatchCommunication(noM4Auth), MatchCommunicationStatus.m4Unavailable);
+      expect(boundary.canInitiateCommunication(noM4Auth), isFalse);
+
+      final emptyChannel = MatchCommunicationEvidence(
+        matchId: 'match-106',
+        participantA: 'user-a',
+        participantB: 'user-b',
+        isMutual: true,
+        isBlocked: false,
+        isUnmatched: false,
+        m4ChannelId: '',
+        verifiedAt: DateTime.now(),
+        isM4Authorized: true,
+      );
+
+      expect(boundary.evaluateMatchCommunication(emptyChannel), MatchCommunicationStatus.m4Unavailable);
+    });
+
+    test('JSON roundtrip preserves communication authorization evidence', () {
+      final original = MatchCommunicationEvidence.authorized(
+        matchId: 'match-json',
+        participantA: 'u-1',
+        participantB: 'u-2',
+        m4ChannelId: 'm4-channel-abc',
+        verifiedAt: DateTime.utc(2026, 11, 26, 14, 0, 0),
+      );
+
+      final json = original.toJson();
+      final restored = MatchCommunicationEvidence.fromJson(json);
+
+      expect(restored.matchId, original.matchId);
+      expect(restored.participantA, original.participantA);
+      expect(restored.participantB, original.participantB);
+      expect(restored.isMutual, isTrue);
+      expect(restored.isM4Authorized, isTrue);
+      expect(restored.m4ChannelId, 'm4-channel-abc');
+    });
+  });
+}
