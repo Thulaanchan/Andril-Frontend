@@ -4,6 +4,7 @@ import '../../../../app/themes/social/social_theme.dart';
 import '../../../../features/shared/presentation/widgets/andril_module_app_bar.dart';
 import '../domain/social_candidate.dart';
 import 'social_discovery_viewmodel.dart';
+import 'social_pass_confirmation.dart';
 
 /// Screen S09: Discover People / Ranked Discovery Feed (SOC-02).
 ///
@@ -20,6 +21,7 @@ class SocialDiscoveryScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final ValueChanged<SocialCandidate>? onViewProfileDetails;
   final VoidCallback? onOpenFilters;
+  final bool requirePassConfirmation;
 
   const SocialDiscoveryScreen({
     super.key,
@@ -27,6 +29,7 @@ class SocialDiscoveryScreen extends StatefulWidget {
     this.onBack,
     this.onViewProfileDetails,
     this.onOpenFilters,
+    this.requirePassConfirmation = false,
   });
 
   @override
@@ -382,7 +385,19 @@ class _SocialDiscoveryScreenState extends State<SocialDiscoveryScreen> {
             width: 60,
             height: 60,
             child: OutlinedButton(
-              onPressed: isBusy ? null : () => _vm.pass(),
+              onPressed: isBusy
+                  ? null
+                  : () {
+                      if (widget.requirePassConfirmation) {
+                        SocialPassConfirmationModal.show(
+                          context,
+                          candidateName: candidate.displayName,
+                          onConfirmPass: () => _vm.pass(),
+                        );
+                      } else {
+                        _vm.pass();
+                      }
+                    },
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFFE63946), width: 2),
                 shape: const CircleBorder(),
