@@ -15,6 +15,7 @@ class SocialConnectionsScreen extends StatefulWidget {
   final ValueChanged<SocialCandidate>? onViewProfile;
   final ValueChanged<String>? onOpenChat;
   final VoidCallback? onExplore;
+  final VoidCallback? onOpenMatchHistory;
 
   const SocialConnectionsScreen({
     super.key,
@@ -22,6 +23,7 @@ class SocialConnectionsScreen extends StatefulWidget {
     this.onViewProfile,
     this.onOpenChat,
     this.onExplore,
+    this.onOpenMatchHistory,
   });
 
   @override
@@ -80,6 +82,12 @@ class _SocialConnectionsScreenState extends State<SocialConnectionsScreen> {
       appBar: AppBar(
         title: const Text('My Connections'),
         actions: [
+          if (widget.onOpenMatchHistory != null)
+            IconButton(
+              icon: const Icon(Icons.history_rounded),
+              tooltip: 'Match History',
+              onPressed: widget.onOpenMatchHistory,
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
