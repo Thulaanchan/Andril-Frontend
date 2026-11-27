@@ -10,7 +10,7 @@ class SocialMatchHistoryRecord {
   final String? photoUrl;
   final DateTime matchedAt;
   final DateTime? endedAt;
-  final SocialRelationshipType status;
+  final SocialRelationshipState status;
 
   const SocialMatchHistoryRecord({
     required this.id,
@@ -86,7 +86,7 @@ class SocialMatchHistoryScreen extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final record = historyRecords[index];
-        final isActive = record.status == SocialRelationshipType.connected;
+        final isActive = record.status == SocialRelationshipState.matched;
 
         return Card(
           elevation: 0,
