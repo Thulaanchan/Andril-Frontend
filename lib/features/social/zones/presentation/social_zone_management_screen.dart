@@ -15,6 +15,7 @@ class SocialZoneManagementScreen extends StatefulWidget {
   final SocialZoneManagementViewModel viewModel;
   final VoidCallback? onBack;
   final VoidCallback? onManageMembers;
+  final VoidCallback? onModerateZone;
 
   const SocialZoneManagementScreen({
     super.key,
@@ -22,6 +23,7 @@ class SocialZoneManagementScreen extends StatefulWidget {
     required this.viewModel,
     this.onBack,
     this.onManageMembers,
+    this.onModerateZone,
   });
 
   @override
@@ -205,6 +207,19 @@ class _SocialZoneManagementScreenState extends State<SocialZoneManagementScreen>
                   title: const Text('Manage Members & Roles'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: widget.onManageMembers,
+                ),
+              ],
+              if (widget.onModerateZone != null) ...[
+                const SizedBox(height: 8),
+                ListTile(
+                  key: const Key('zone_moderation_tile'),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  tileColor: theme.colorScheme.surfaceContainerHighest.withAlpha(64),
+                  leading: const Icon(Icons.shield_outlined),
+                  title: const Text('Zone Moderation & Requests'),
+                  subtitle: const Text('Review join requests and manage zone activity'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: widget.onModerateZone,
                 ),
               ],
               const SizedBox(height: 24),
