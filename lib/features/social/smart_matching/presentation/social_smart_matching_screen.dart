@@ -40,6 +40,7 @@ class SocialSmartMatchingScreen extends StatelessWidget {
   final VoidCallback? onRetakeQuiz;
   final VoidCallback? onExplore;
   final VoidCallback? onRetry;
+  final VoidCallback? onBack;
 
   const SocialSmartMatchingScreen({
     super.key,
@@ -49,6 +50,7 @@ class SocialSmartMatchingScreen extends StatelessWidget {
     this.onRetakeQuiz,
     this.onExplore,
     this.onRetry,
+    this.onBack,
   });
 
   @override
@@ -58,6 +60,18 @@ class SocialSmartMatchingScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Why We Matched'),
+        leading: IconButton(
+          key: const Key('why_we_matched_back_button'),
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (onBack != null) {
+              onBack!();
+            } else {
+              Navigator.of(context).maybePop();
+            }
+          },
+        ),
       ),
       body: SafeArea(
         child: _buildContent(context, theme),
