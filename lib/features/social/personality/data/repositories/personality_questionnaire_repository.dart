@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/core/constants/app_config.dart';
+import 'package:andril_mobile/core/network/api_client/andril_api_client.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
 import '../../domain/entities/personality_questionnaire.dart';
 
@@ -51,36 +51,45 @@ abstract class IPersonalityQuestionnaireRepository {
   Future<QuestionnaireResult<PersonalityQuestionnaire>> getActiveQuestionnaire();
 }
 
-/// Implementation of [IPersonalityQuestionnaireRepository] adhering to M5 API readiness:
-/// - Connects to active endpoint: `GET /api/v1/social/questionnaires/active`
-/// - Respects `Cache-Control: no-store` behavior (never caches answers persistently).
-/// - Dormant submission operations are strictly blocked from production dispatch.
-/// - Redacts raw answers in diagnostics.
+/// Implementation of [IPersonalityQuestionnaireRepository] adhering to M5 API readiness & Task 151:
+/// - Connects to active endpoint: `GET /api/v1/social/questionnaires/active` via authenticated [AndrilApiClient].
+/// - Fails closed if session or configuration is missing or invalid.
+/// - Does not use any hard-coded fallback hosts.
+/// - Uses the configured API origin and active session's approved authenticated transport.
+/// - Redirects do not forward bearer credentials (followRedirects: false, maxRedirects: 0).
+/// - Discards responses if session changes or invalidates during the request.
+/// - Keeps request and response handling private, safe, and no-store (Cache-Control: no-store).
+/// - Redacts credentials, tokens, and raw response bodies from logs and diagnostics.
 class PersonalityQuestionnaireRepository implements IPersonalityQuestionnaireRepository {
   final SessionController _sessionController;
-  final Dio _dio;
-  final Uri _baseUrl;
+  final AndrilApiClient? _apiClient;
+  final bool _ownsApiClient;
 
   PersonalityQuestionnaireRepository({
     required SessionController sessionController,
-    Dio? dio,
+    AndrilApiClient? apiClient,
     AppConfig? config,
+    HttpClientAdapter? adapter,
   })  : _sessionController = sessionController,
-        _dio = dio ??
-            Dio(BaseOptions(
-              connectTimeout: const Duration(seconds: 8),
-              sendTimeout: const Duration(seconds: 8),
-              receiveTimeout: const Duration(seconds: 12),
-              headers: {
-                'Cache-Control': 'no-store, no-cache, max-age=0',
-                'Accept': 'application/json',
-              },
-            )),
-        _baseUrl = config?.apiBaseUrl ?? Uri.parse('https://api.andril.internal');
+        _apiClient = apiClient ?? _createApiClient(config, sessionController, adapter),
+        _ownsApiClient = apiClient == null;
+
+  static AndrilApiClient? _createApiClient(
+    AppConfig? config,
+    SessionController session,
+    HttpClientAdapter? adapter,
+  ) {
+    if (config == null) return null;
+    try {
+      return AndrilApiClient(config, session, adapter: adapter);
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Future<QuestionnaireResult<PersonalityQuestionnaire>> getActiveQuestionnaire() async {
-    // Verify caller session standing
+    // 1. Verify caller session standing
     if (_sessionController.phase != SessionPhase.signedIn) {
       return const QuestionnaireResult.failure(
         errorMessage: 'Caller must be signed in to access questionnaire.',
@@ -88,78 +97,93 @@ class PersonalityQuestionnaireRepository implements IPersonalityQuestionnaireRep
       );
     }
 
+    final session = _sessionController.backendSession;
+    if (session == null) {
+      return const QuestionnaireResult.failure(
+        errorMessage: 'Active backend session unavailable.',
+        failureType: QuestionnaireFailureType.unauthorized,
+      );
+    }
+
+    // 2. Verify API client configuration (fails closed if missing or invalid)
+    final client = _apiClient;
+    if (client == null) {
+      return const QuestionnaireResult.failure(
+        errorMessage: 'Questionnaire API client is not configured or origin is invalid.',
+        failureType: QuestionnaireFailureType.serviceUnavailable,
+      );
+    }
+
     try {
-      final endpointUri = _baseUrl.replace(path: '/api/v1/social/questionnaires/active');
-      final response = await _dio.getUri<String>(
-        endpointUri,
-        options: Options(
-          headers: {
-            'Cache-Control': 'no-store, no-cache, max-age=0',
-          },
-          responseType: ResponseType.plain,
-          validateStatus: (status) => true,
-        ),
+      final json = await client.requestSocial(
+        SocialEndpoint.activeQuestionnaire,
+        session,
       );
 
-      final statusCode = response.statusCode ?? 500;
-
-      if (statusCode == 200) {
-        final body = response.data;
-        if (body == null || body.trim().isEmpty) {
-          return const QuestionnaireResult.failure(
-            errorMessage: 'Empty questionnaire definition returned by server.',
-            failureType: QuestionnaireFailureType.unknown,
-          );
-        }
-
-        final decoded = jsonDecode(body);
-        if (decoded is! Map<String, dynamic>) {
-          return const QuestionnaireResult.failure(
-            errorMessage: 'Malformed questionnaire definition format.',
-            failureType: QuestionnaireFailureType.unknown,
-          );
-        }
-
-        final questionnaire = PersonalityQuestionnaire.fromJson(decoded);
-        return QuestionnaireResult.success(questionnaire);
-      }
-
-      if (statusCode == 401 || statusCode == 403) {
+      // 3. Verify session did not change or invalidate during the request
+      if (_sessionController.backendSession != session) {
         return const QuestionnaireResult.failure(
-          errorMessage: 'Access denied to personality questionnaire.',
+          errorMessage: 'Session changed during questionnaire request.',
           failureType: QuestionnaireFailureType.unauthorized,
         );
       }
 
-      if (statusCode == 404 || statusCode == 503) {
+      // 4. Decode payload into domain entity
+      try {
+        final questionnaire = PersonalityQuestionnaire.fromJson(json);
+        return QuestionnaireResult.success(questionnaire);
+      } catch (_) {
         return const QuestionnaireResult.failure(
-          errorMessage: 'Personality questionnaire service is currently preparing or unavailable.',
-          failureType: QuestionnaireFailureType.serviceUnavailable,
+          errorMessage: 'Malformed questionnaire definition format.',
+          failureType: QuestionnaireFailureType.unknown,
         );
       }
-
-      return QuestionnaireResult.failure(
-        errorMessage: 'Server returned unexpected status: $statusCode',
-        failureType: QuestionnaireFailureType.unknown,
-      );
-    } on DioException catch (dioErr) {
-      if (dioErr.type == DioExceptionType.connectionTimeout ||
-          dioErr.type == DioExceptionType.receiveTimeout ||
-          dioErr.type == DioExceptionType.connectionError) {
+    } on HandoffFailure catch (failure) {
+      // Session change during dispatch
+      if (_sessionController.backendSession != session) {
         return const QuestionnaireResult.failure(
-          errorMessage: 'Network connection error while loading questionnaire.',
-          failureType: QuestionnaireFailureType.networkError,
+          errorMessage: 'Session changed during questionnaire request.',
+          failureType: QuestionnaireFailureType.unauthorized,
         );
       }
-      return const QuestionnaireResult.failure(
-        errorMessage: 'Service unavailable.',
-        failureType: QuestionnaireFailureType.serviceUnavailable,
-      );
+      return _mapHandoffFailure(failure);
     } catch (_) {
       return const QuestionnaireResult.failure(
         errorMessage: 'An unexpected error occurred while loading questionnaire.',
         failureType: QuestionnaireFailureType.unknown,
       );
+    }
+  }
+
+  QuestionnaireResult<PersonalityQuestionnaire> _mapHandoffFailure(HandoffFailure failure) {
+    switch (failure.issue) {
+      case HandoffIssue.reauthenticationRequired:
+      case HandoffIssue.forbidden:
+      case HandoffIssue.verificationRequired:
+      case HandoffIssue.sessionChanged:
+        return const QuestionnaireResult.failure(
+          errorMessage: 'Access denied to personality questionnaire.',
+          failureType: QuestionnaireFailureType.unauthorized,
+        );
+      case HandoffIssue.unavailable:
+      case HandoffIssue.rateLimited:
+      case HandoffIssue.accountNotInitialized:
+        return const QuestionnaireResult.failure(
+          errorMessage: 'Personality questionnaire service is currently unavailable.',
+          failureType: QuestionnaireFailureType.serviceUnavailable,
+        );
+      case HandoffIssue.invalidResponse:
+        return const QuestionnaireResult.failure(
+          errorMessage: 'Malformed questionnaire definition format.',
+          failureType: QuestionnaireFailureType.unknown,
+        );
+    }
+  }
+
+  /// Closes owned resources if this repository created its own API client.
+  void dispose() {
+    if (_ownsApiClient) {
+      _apiClient?.close();
     }
   }
 }
