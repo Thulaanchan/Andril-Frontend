@@ -22,6 +22,8 @@ class SocialMemberProfileScreen extends StatefulWidget {
   final bool isBookmarked;
   final VoidCallback? onReport;
   final VoidCallback? onBlock;
+  final ValueChanged<int>? onPhotoTap;
+  final VoidCallback? onOpenGallery;
 
   const SocialMemberProfileScreen({
     super.key,
@@ -33,6 +35,8 @@ class SocialMemberProfileScreen extends StatefulWidget {
     this.isBookmarked = false,
     this.onReport,
     this.onBlock,
+    this.onPhotoTap,
+    this.onOpenGallery,
   });
 
   @override
@@ -137,10 +141,19 @@ class _SocialMemberProfileScreenState extends State<SocialMemberProfileScreen> {
                               });
                             },
                             itemBuilder: (context, index) {
-                              return Image.network(
-                                photos[index],
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _buildAvatarFallback(),
+                              return GestureDetector(
+                                onTap: () {
+                                  if (widget.onPhotoTap != null) {
+                                    widget.onPhotoTap!(index);
+                                  } else {
+                                    widget.onOpenGallery?.call();
+                                  }
+                                },
+                                child: Image.network(
+                                  photos[index],
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => _buildAvatarFallback(),
+                                ),
                               );
                             },
                           )
@@ -184,6 +197,33 @@ class _SocialMemberProfileScreenState extends State<SocialMemberProfileScreen> {
                             ),
                           ),
                         ),
+                        // Photo gallery badge if multiple photos
+                        if (photos.length > 1)
+                          Positioned(
+                            bottom: 16,
+                            right: 16,
+                            child: GestureDetector(
+                              onTap: () => widget.onOpenGallery?.call(),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.photo_library_outlined, size: 14, color: Colors.white),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${photos.length}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         // Photo dots indicator if multiple photos
                         if (photos.length > 1)
                           Positioned(
