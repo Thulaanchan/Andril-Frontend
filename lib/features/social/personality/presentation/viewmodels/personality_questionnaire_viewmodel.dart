@@ -156,6 +156,7 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
     }
 
     final opId = ++_activeOperationId;
+    final operationSubject = _resolveSubject();
     _status = PersonalityQuestionnaireStatus.loading;
     _errorMessage = null;
     notifyListeners();
@@ -164,21 +165,17 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
       final result = await _repository.getActiveQuestionnaire();
       if (_disposed || opId != _activeOperationId) return;
 
-      // Validate session continuity after async operation
+      // Validate session continuity and authorization after async operation
       final currentSubject = _resolveSubject();
-      if (_boundSubject != null && currentSubject != null && currentSubject != _boundSubject) {
+      if (operationSubject == null ||
+          currentSubject == null ||
+          currentSubject != operationSubject ||
+          _sessionController.phase != SessionPhase.signedIn ||
+          !isAuthorized) {
         _questionnaire = null;
         _clearPrivateDraft();
         _status = PersonalityQuestionnaireStatus.accessDenied;
-        _errorMessage = 'Session subject changed.';
-        notifyListeners();
-        return;
-      }
-      if (_sessionController.phase != SessionPhase.signedIn) {
-        _questionnaire = null;
-        _clearPrivateDraft();
-        _status = PersonalityQuestionnaireStatus.accessDenied;
-        _errorMessage = 'Session signed out.';
+        _errorMessage = 'Session signed out, switched, or authorization revoked.';
         notifyListeners();
         return;
       }
