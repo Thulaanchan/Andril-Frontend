@@ -43,7 +43,7 @@ class SocialSearchViewModel extends ChangeNotifier {
     required SessionController sessionController,
     ISocialAccessBoundary accessBoundary = const SocialAccessBoundary(),
     SocialAccessEvidence? accessEvidence,
-    bool isSocialOptedIn = true,
+    bool isSocialOptedIn = false,
   })  : _sessionController = sessionController,
         _accessBoundary = accessBoundary,
         _accessEvidence = accessEvidence,
@@ -61,6 +61,7 @@ class SocialSearchViewModel extends ChangeNotifier {
   String get currentQuery => _currentQuery;
   List<SocialCandidate> get results => _results;
   String? get errorMessage => _errorMessage;
+  bool get isSocialOptedIn => _isSocialOptedIn;
 
   bool get isLoading => _status == SocialSearchViewStatus.loading;
   bool get isReady => _status == SocialSearchViewStatus.ready;
@@ -79,7 +80,7 @@ class SocialSearchViewModel extends ChangeNotifier {
       );
     }
     // Fail-closed if no authoritative evidence provided
-    return _isSocialOptedIn && _boundSubject != null;
+    return false;
   }
 
   /// Executes member search with query sanitization, session validation, and stale response guards.
@@ -151,6 +152,7 @@ class SocialSearchViewModel extends ChangeNotifier {
 
       final normalizedQuery = trimmed.toLowerCase();
       final filtered = candidateSource.where((c) {
+        if (c.age < 18 || c.id.trim().isEmpty || c.displayName.trim().isEmpty) return false;
         final nameMatch = c.displayName.toLowerCase().contains(normalizedQuery);
         final bioMatch = c.biography?.toLowerCase().contains(normalizedQuery) ?? false;
         final interestMatch = c.interests.any((i) => i.toLowerCase().contains(normalizedQuery));
