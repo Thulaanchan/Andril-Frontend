@@ -132,6 +132,8 @@ class SocialDependenciesScope {
     _checkDisposed();
     return SocialHomeViewModel(
       sessionController: _sessionController,
+      accessEvidence: _accessEvidence,
+      accessBoundary: _accessBoundary,
       isSocialOptedIn: isSocialAuthorized,
     );
   }
