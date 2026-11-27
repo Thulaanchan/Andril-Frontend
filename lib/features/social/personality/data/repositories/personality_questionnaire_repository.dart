@@ -48,7 +48,8 @@ class QuestionnaireResult<T> {
 /// Authoritative repository abstraction for Personality Questionnaire operations.
 abstract class IPersonalityQuestionnaireRepository {
   /// Fetches the authoritative active personality questionnaire definition (GET /api/v1/social/questionnaires/active).
-  Future<QuestionnaireResult<PersonalityQuestionnaire>> getActiveQuestionnaire();
+  Future<QuestionnaireResult<PersonalityQuestionnaire>>
+      getActiveQuestionnaire();
 }
 
 /// Implementation of [IPersonalityQuestionnaireRepository] adhering to M5 API readiness & Task 151:
@@ -60,7 +61,8 @@ abstract class IPersonalityQuestionnaireRepository {
 /// - Discards responses if session changes or invalidates during the request.
 /// - Keeps request and response handling private, safe, and no-store (Cache-Control: no-store).
 /// - Redacts credentials, tokens, and raw response bodies from logs and diagnostics.
-class PersonalityQuestionnaireRepository implements IPersonalityQuestionnaireRepository {
+class PersonalityQuestionnaireRepository
+    implements IPersonalityQuestionnaireRepository {
   final SessionController _sessionController;
   final AndrilApiClient? _apiClient;
   final bool _ownsApiClient;
@@ -71,7 +73,8 @@ class PersonalityQuestionnaireRepository implements IPersonalityQuestionnaireRep
     AppConfig? config,
     HttpClientAdapter? adapter,
   })  : _sessionController = sessionController,
-        _apiClient = apiClient ?? _createApiClient(config, sessionController, adapter),
+        _apiClient =
+            apiClient ?? _createApiClient(config, sessionController, adapter),
         _ownsApiClient = apiClient == null;
 
   static AndrilApiClient? _createApiClient(
@@ -88,7 +91,8 @@ class PersonalityQuestionnaireRepository implements IPersonalityQuestionnaireRep
   }
 
   @override
-  Future<QuestionnaireResult<PersonalityQuestionnaire>> getActiveQuestionnaire() async {
+  Future<QuestionnaireResult<PersonalityQuestionnaire>>
+      getActiveQuestionnaire() async {
     // 1. Verify caller session standing
     if (_sessionController.phase != SessionPhase.signedIn) {
       return const QuestionnaireResult.failure(
@@ -109,7 +113,8 @@ class PersonalityQuestionnaireRepository implements IPersonalityQuestionnaireRep
     final client = _apiClient;
     if (client == null) {
       return const QuestionnaireResult.failure(
-        errorMessage: 'Questionnaire API client is not configured or origin is invalid.',
+        errorMessage:
+            'Questionnaire API client is not configured or origin is invalid.',
         failureType: QuestionnaireFailureType.serviceUnavailable,
       );
     }
@@ -149,13 +154,15 @@ class PersonalityQuestionnaireRepository implements IPersonalityQuestionnaireRep
       return _mapHandoffFailure(failure);
     } catch (_) {
       return const QuestionnaireResult.failure(
-        errorMessage: 'An unexpected error occurred while loading questionnaire.',
+        errorMessage:
+            'An unexpected error occurred while loading questionnaire.',
         failureType: QuestionnaireFailureType.unknown,
       );
     }
   }
 
-  QuestionnaireResult<PersonalityQuestionnaire> _mapHandoffFailure(HandoffFailure failure) {
+  QuestionnaireResult<PersonalityQuestionnaire> _mapHandoffFailure(
+      HandoffFailure failure) {
     switch (failure.issue) {
       case HandoffIssue.reauthenticationRequired:
       case HandoffIssue.forbidden:
@@ -169,12 +176,23 @@ class PersonalityQuestionnaireRepository implements IPersonalityQuestionnaireRep
       case HandoffIssue.rateLimited:
       case HandoffIssue.accountNotInitialized:
         return const QuestionnaireResult.failure(
-          errorMessage: 'Personality questionnaire service is currently unavailable.',
+          errorMessage:
+              'Personality questionnaire service is currently unavailable.',
           failureType: QuestionnaireFailureType.serviceUnavailable,
         );
       case HandoffIssue.invalidResponse:
         return const QuestionnaireResult.failure(
           errorMessage: 'Malformed questionnaire definition format.',
+          failureType: QuestionnaireFailureType.unknown,
+        );
+      case HandoffIssue.badRequest:
+        return const QuestionnaireResult.failure(
+          errorMessage: 'Invalid questionnaire request.',
+          failureType: QuestionnaireFailureType.badRequest,
+        );
+      case HandoffIssue.conflict:
+        return const QuestionnaireResult.failure(
+          errorMessage: 'Conflict encountered during questionnaire request.',
           failureType: QuestionnaireFailureType.unknown,
         );
     }
