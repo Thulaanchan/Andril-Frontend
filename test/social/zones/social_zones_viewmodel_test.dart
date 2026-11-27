@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import 'package:andril_mobile/features/social/zones/group_contracts/social_zone.dart';
 import 'package:andril_mobile/features/social/zones/group_contracts/social_zone_repository.dart';
 import 'package:andril_mobile/features/social/zones/presentation/social_zones_viewmodel.dart';
@@ -60,10 +61,19 @@ class MockSocialZoneRepository implements ISocialZoneRepository {
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'user-zones-01';
   final List<VoidCallback> _clearers = [];
 
   @override
   SessionPhase get phase => _phase;
+
+  @override
+  String? get subject => _subject;
+
+  set subject(String? s) {
+    _subject = s;
+    notifyListeners();
+  }
 
   set phase(SessionPhase newPhase) {
     _phase = newPhase;
@@ -205,6 +215,36 @@ void main() {
       expect(vm.status, SocialZonesStatus.initial);
       expect(vm.zones, isEmpty);
       expect(vm.selectedZone, isNull);
+    });
+
+    test('authorizes via SocialAccessEvidence when provided', () async {
+      final vm = SocialZonesViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-zones-01'),
+      );
+
+      expect(vm.isAuthorized, isTrue);
+      await vm.loadZones();
+      expect(vm.status, SocialZonesStatus.ready);
+      expect(vm.zones, isNotEmpty);
+    });
+
+    test('denies access and clears private state upon account switch', () async {
+      final vm = SocialZonesViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      await vm.loadZones();
+      expect(vm.zones, isNotEmpty);
+
+      fakeSession.subject = 'switched-zones-02';
+      expect(vm.zones, isEmpty);
+      expect(vm.isAuthorized, isFalse);
+      await vm.loadZones();
+      expect(vm.status, SocialZonesStatus.accessDenied);
     });
   });
 }
