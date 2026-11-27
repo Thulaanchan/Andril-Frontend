@@ -53,11 +53,7 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
         _isOnboarding = isOnboarding,
         _accessBoundary = accessBoundary,
         _accessEvidence = accessEvidence {
-    try {
-      _boundSubject = _sessionController.subject;
-    } catch (_) {
-      _boundSubject = null;
-    }
+    _boundSubject = _resolveSubject();
     _sessionController.addListener(_onSessionChanged);
     _sessionController.registerPrivateStateClearer(_clearPrivateProfile);
   }
@@ -82,11 +78,10 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
     if (_disposed) return false;
     if (_sessionController.phase != SessionPhase.signedIn) return false;
 
-    try {
-      if (_boundSubject != null && _sessionController.subject != _boundSubject) {
-        return false;
-      }
-    } catch (_) {}
+    final currentSubject = _resolveSubject();
+    if (_boundSubject != null && currentSubject != null && currentSubject != _boundSubject) {
+      return false;
+    }
 
     if (_isOnboarding) return true;
 
@@ -113,7 +108,21 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
   Future<void> loadProfile({bool refresh = false}) async {
     if (_disposed) return;
 
+    final currentSubject = _resolveSubject();
+    if (_boundSubject != null && currentSubject != null && currentSubject != _boundSubject) {
+      _clearPrivateProfile();
+      _boundSubject = currentSubject;
+      _status = SocialProfileManagementStatus.accessDenied;
+      _errorMessage = 'Session subject changed.';
+      notifyListeners();
+      return;
+    }
+    if (_boundSubject == null && currentSubject != null) {
+      _boundSubject = currentSubject;
+    }
+
     if (!isAuthorized) {
+      _clearPrivateProfile();
       _status = SocialProfileManagementStatus.accessDenied;
       _errorMessage = 'Adult eligibility verification and Social opt-in are required.';
       notifyListeners();
@@ -125,6 +134,7 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
     }
 
     final opId = ++_activeOperationId;
+    final operationSubject = _resolveSubject();
     _status = SocialProfileManagementStatus.loading;
     _errorMessage = null;
     notifyListeners();
@@ -132,6 +142,19 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
     try {
       final result = await _repository.getProfile();
       if (_disposed || opId != _activeOperationId) return;
+
+      final postSubject = _resolveSubject();
+      if (operationSubject == null ||
+          postSubject == null ||
+          postSubject != operationSubject ||
+          _sessionController.phase != SessionPhase.signedIn ||
+          !isAuthorized) {
+        _clearPrivateProfile();
+        _status = SocialProfileManagementStatus.accessDenied;
+        _errorMessage = 'Session signed out, switched, or authorization revoked.';
+        notifyListeners();
+        return;
+      }
 
       if (result is SocialProfileSuccess) {
         _serverDraft = result.draft;
@@ -147,7 +170,9 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
       _errorMessage = 'An unexpected error occurred while loading profile.';
     }
 
-    notifyListeners();
+    if (!_disposed && opId == _activeOperationId) {
+      notifyListeners();
+    }
   }
 
   /// Updates the editing draft display name.
@@ -184,6 +209,20 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
   /// Saves the current editing draft to the server.
   Future<bool> saveProfile() async {
     if (_disposed || _isSaving || !canSave) return false;
+
+    final currentSubject = _resolveSubject();
+    if (_boundSubject != null && currentSubject != null && currentSubject != _boundSubject) {
+      _clearPrivateProfile();
+      _boundSubject = currentSubject;
+      _status = SocialProfileManagementStatus.accessDenied;
+      _errorMessage = 'Session subject changed.';
+      notifyListeners();
+      return false;
+    }
+    if (_boundSubject == null && currentSubject != null) {
+      _boundSubject = currentSubject;
+    }
+
     if (!isAuthorized) {
       _status = SocialProfileManagementStatus.accessDenied;
       _errorMessage = 'Adult eligibility verification and Social opt-in are required.';
@@ -193,6 +232,7 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
 
     _isSaving = true;
     final opId = ++_activeOperationId;
+    final operationSubject = _resolveSubject();
     _status = SocialProfileManagementStatus.saving;
     _errorMessage = null;
     notifyListeners();
@@ -200,6 +240,20 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
     try {
       final result = await _repository.updateProfile(_editingDraft);
       if (_disposed || opId != _activeOperationId) return false;
+
+      final postSubject = _resolveSubject();
+      if (operationSubject == null ||
+          postSubject == null ||
+          postSubject != operationSubject ||
+          _sessionController.phase != SessionPhase.signedIn ||
+          !isAuthorized) {
+        _isSaving = false;
+        _clearPrivateProfile();
+        _status = SocialProfileManagementStatus.accessDenied;
+        _errorMessage = 'Session signed out, switched, or authorization revoked.';
+        notifyListeners();
+        return false;
+      }
 
       _isSaving = false;
       if (result is SocialProfileSuccess) {
@@ -244,19 +298,33 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
 
   void _onSessionChanged() {
     if (_disposed) return;
-    String? currentSubject;
-    try {
-      currentSubject = _sessionController.subject;
-    } catch (_) {
-      currentSubject = null;
-    }
+    final currentSubject = _resolveSubject();
 
-    if (_sessionController.phase != SessionPhase.signedIn ||
-        (_boundSubject != null && currentSubject != _boundSubject)) {
+    if (_boundSubject != null && currentSubject != null && currentSubject != _boundSubject) {
+      _boundSubject = currentSubject;
       _clearPrivateProfile();
       _status = SocialProfileManagementStatus.accessDenied;
       _errorMessage = 'Session signed out or account switched.';
       notifyListeners();
+      return;
+    }
+    if (_boundSubject == null && currentSubject != null) {
+      _boundSubject = currentSubject;
+    }
+
+    if (_sessionController.phase != SessionPhase.signedIn) {
+      _clearPrivateProfile();
+      _status = SocialProfileManagementStatus.accessDenied;
+      _errorMessage = 'Session signed out or account switched.';
+      notifyListeners();
+    }
+  }
+
+  String? _resolveSubject() {
+    try {
+      return _sessionController.subject;
+    } catch (_) {
+      return null;
     }
   }
 
