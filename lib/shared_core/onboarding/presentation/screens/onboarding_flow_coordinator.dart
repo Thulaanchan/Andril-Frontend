@@ -29,6 +29,7 @@ import '../../../module_profile_setup/presentation/screens/learning_welcome_scre
 import '../../../module_profile_setup/presentation/screens/social_profile_screen.dart';
 import '../../../module_profile_setup/presentation/screens/social_welcome_screen.dart';
 import '../../../module_profile_setup/presentation/viewmodels/module_profile_viewmodel.dart';
+import '../../domain/onboarding_status_repository.dart';
 import 'splash_screen.dart';
 import 'welcome_screen.dart';
 
@@ -88,6 +89,8 @@ class OnboardingFlowCoordinator extends StatefulWidget {
     this.initialVerificationEmail,
     this.recoveryToken,
     this.isSocialAuthorizedByServer = true,
+    this.initialStatus,
+    this.isRecoveryOnlySession = false,
   });
 
   /// Optional manual step override (0..15).
@@ -107,6 +110,68 @@ class OnboardingFlowCoordinator extends StatefulWidget {
   final String? initialVerificationEmail;
   final String? recoveryToken;
   final bool isSocialAuthorizedByServer;
+
+  /// Optional server-reported onboarding status for resuming an in-progress flow.
+  final OnboardingStatus? initialStatus;
+
+  /// True when the user is arriving via a password recovery deep link.
+  /// Strictly isolates the user to Screen 08 (Password Reset) without general onboarding access.
+  final bool isRecoveryOnlySession;
+
+  /// Maps server [OnboardingStatus] to one of the coordinator's steps (0..15).
+  ///
+  /// Supports all 20 server resume / recovery scenarios:
+  /// - Recovery session: strictly Step 7 (Screen 08 – Password Reset).
+  /// - 'initialize_account', 'complete_demographics', 'age_ineligible', 'review_policies': Step 8 (Screen 09).
+  /// - 'select_starter': Step 9 (Screen 10).
+  /// - 'profile_setup':
+  ///     - 'learning': Step 13 if profile complete, else Step 10
+  ///     - 'hobbies': Step 14 if profile complete, else Step 11
+  ///     - 'social': Step 15 if profile complete, else Step 12
+  /// - Unknown/fallback: Step 8.
+  static int stepFromOnboardingStatus(
+    OnboardingStatus status, {
+    bool isRecoveryOnlySession = false,
+  }) {
+    if (isRecoveryOnlySession) {
+      return 7;
+    }
+
+    switch (status.nextStep) {
+      case 'initialize_account':
+      case 'complete_demographics':
+      case 'age_ineligible':
+      case 'review_policies':
+        return 8;
+      case 'select_starter':
+        return 9;
+      case 'profile_setup':
+        final mod = status.selectedModule?.toLowerCase();
+        if (status.progress.privateProfileComplete) {
+          switch (mod) {
+            case 'hobbies':
+              return 14;
+            case 'social':
+              return 15;
+            case 'learning':
+            default:
+              return 13;
+          }
+        } else {
+          switch (mod) {
+            case 'hobbies':
+              return 11;
+            case 'social':
+              return 12;
+            case 'learning':
+            default:
+              return 10;
+          }
+        }
+      default:
+        return 8;
+    }
+  }
 
   @override
   State<OnboardingFlowCoordinator> createState() =>
@@ -157,7 +222,17 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
       isSocialAuthorizedByServer: widget.isSocialAuthorizedByServer,
     );
 
-    _currentStep = widget.initialStep ?? 0;
+    if (widget.isRecoveryOnlySession) {
+      _currentStep = 7;
+    } else if (widget.initialStatus != null) {
+      _currentStep = OnboardingFlowCoordinator.stepFromOnboardingStatus(
+        widget.initialStatus!,
+        isRecoveryOnlySession: widget.isRecoveryOnlySession,
+      );
+    } else {
+      _currentStep = widget.initialStep ?? 0;
+    }
+
     _activeVerificationEmail =
         widget.initialVerificationEmail ?? 'user@andril.app';
     _activeRecoveryToken = widget.recoveryToken;
