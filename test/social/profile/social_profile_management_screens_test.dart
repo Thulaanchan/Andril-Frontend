@@ -34,6 +34,9 @@ class FakeSessionController extends ChangeNotifier implements SessionController 
   SessionPhase get phase => SessionPhase.signedIn;
 
   @override
+  String? get subject => 'test_user_01';
+
+  @override
   VoidCallback registerPrivateStateClearer(VoidCallback clearer) => () {};
 
   @override
@@ -91,6 +94,27 @@ void main() {
 
       await tester.tap(find.byTooltip('Settings'));
       expect(settingsTriggered, isTrue);
+    });
+
+    testWidgets('renders default Social Member and empty bio when profile has no name', (tester) async {
+      mockRepo.getResult = const SocialProfileResult.success(SocialProfileDraft(
+        displayName: '',
+        bio: null,
+        visibility: 'private',
+      ));
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      await tester.pumpWidget(buildTestHost(SocialMyProfileScreen(
+        viewModel: vm,
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Social Member'), findsOneWidget);
+      expect(find.text('No bio added yet. Tell other members about yourself!'), findsOneWidget);
     });
 
     testWidgets('displays access denied when user is not opted-in', (tester) async {
@@ -209,6 +233,37 @@ void main() {
 
       expect(cancelled, isTrue);
       expect(vm.hasUnsavedChanges, isFalse);
+    });
+
+    testWidgets('displays error banner and preserves user input on save failure', (tester) async {
+      mockRepo.updateResult = const SocialProfileResult.failure(SocialProfileFailure(
+        type: SocialProfileFailureType.displayNameUnavailable,
+        message: 'The display name is already taken.',
+      ));
+
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+      await vm.loadProfile();
+
+      await tester.pumpWidget(buildTestHost(SocialEditProfileScreen(
+        viewModel: vm,
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('display_name_field')), 'TakenName');
+      await tester.enterText(find.byKey(const Key('bio_field')), 'My preserved bio');
+      await tester.pumpAndSettle();
+
+      final saveBtn = find.byKey(const Key('save_profile_button'));
+      await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('The display name is already taken.'), findsOneWidget);
+      expect(find.text('TakenName'), findsOneWidget);
+      expect(find.text('My preserved bio'), findsOneWidget);
     });
   });
 
