@@ -130,10 +130,10 @@ class _SocialUnmatchConfirmationModalState extends State<SocialUnmatchConfirmati
           const SizedBox(height: 10),
 
           // Description
-          Text(
+          const Text(
             'They will be removed from your connections, and you will no longer be able to message each other. This action cannot be undone.',
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               color: Color(0xFF6B7280),
               height: 1.45,
