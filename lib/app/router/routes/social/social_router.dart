@@ -286,14 +286,9 @@ class SocialRouter {
       SocialRoutes.personalityQuestionnaire =>
         args is PersonalityQuestionnaireViewModel
             ? PersonalityQuestionnaireScreen(viewModel: args)
-            : scope.createPersonalityQuestionnaireViewModel() != null
-                ? PersonalityQuestionnaireScreen(
-                    viewModel:
-                        scope.createPersonalityQuestionnaireViewModel()!,
-                  )
-                : const SocialAccessDeniedScreen(
-                    message: 'Personality assessment unavailable.',
-                  ),
+            : PersonalityQuestionnaireScreen(
+                viewModel: scope.createPersonalityQuestionnaireViewModel(),
+              ),
       SocialRoutes.personalityReview => args
               is PersonalityQuestionnaireViewModel
           ? PersonalityReviewScreen(viewModel: args)
@@ -305,24 +300,14 @@ class SocialRouter {
       SocialRoutes.smartMatching => const SocialSmartMatchingScreen(),
       SocialRoutes.myProfile => args is SocialProfileManagementViewModel
           ? SocialMyProfileScreen(viewModel: args)
-          : scope.createProfileManagementViewModel() != null
-              ? SocialMyProfileScreen(
-                  viewModel: scope.createProfileManagementViewModel()!,
-                )
-              : const SocialAccessDeniedScreen(
-                  message:
-                      'Profile management requires active profile draft.',
-                ),
+          : SocialMyProfileScreen(
+              viewModel: scope.createProfileManagementViewModel(),
+            ),
       SocialRoutes.editProfile => args is SocialProfileManagementViewModel
           ? SocialEditProfileScreen(viewModel: args)
-          : scope.createProfileManagementViewModel() != null
-              ? SocialEditProfileScreen(
-                  viewModel: scope.createProfileManagementViewModel()!,
-                )
-              : const SocialAccessDeniedScreen(
-                  message:
-                      'Profile management requires active profile draft.',
-                ),
+          : SocialEditProfileScreen(
+              viewModel: scope.createProfileManagementViewModel(),
+            ),
       SocialRoutes.createProfile => args is SocialProfileViewModel
           ? CreateSocialProfileScreen(viewModel: args)
           : const SocialAccessDeniedScreen(
