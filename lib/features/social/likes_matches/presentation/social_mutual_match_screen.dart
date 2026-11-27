@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../domain/authorization/social_match_communication_boundary.dart';
 import '../domain/social_relationship.dart';
 
 /// Presentation screen for Authoritative Server-Confirmed Mutual Matches (S12 It's a Match!).
@@ -12,12 +13,16 @@ class SocialMutualMatchScreen extends StatelessWidget {
   final SocialRelationship relationship;
   final ValueChanged<SocialRelationship>? onSendMessage;
   final VoidCallback? onKeepExploring;
+  final ISocialMatchCommunicationBoundary? communicationBoundary;
+  final MatchCommunicationEvidence? communicationEvidence;
 
   const SocialMutualMatchScreen({
     super.key,
     required this.relationship,
     this.onSendMessage,
     this.onKeepExploring,
+    this.communicationBoundary,
+    this.communicationEvidence,
   });
 
   @override
@@ -148,7 +153,22 @@ class SocialMutualMatchScreen extends StatelessWidget {
                           key: const Key('send_message_button'),
                           icon: const Icon(Icons.chat_bubble_outline),
                           label: const Text('Send Message'),
-                          onPressed: () => onSendMessage?.call(relationship),
+                          onPressed: () {
+                            if (communicationBoundary != null && communicationEvidence != null) {
+                              final isAllowed = communicationBoundary!.canInitiateCommunication(
+                                communicationEvidence,
+                              );
+                              if (!isAllowed) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Communication is not authorized for this match.'),
+                                  ),
+                                );
+                                return;
+                              }
+                            }
+                            onSendMessage?.call(relationship);
+                          },
                         ),
                       ),
                       const SizedBox(height: 12),
