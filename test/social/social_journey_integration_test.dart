@@ -100,6 +100,14 @@ void main() {
                 appBar: AppBar(title: const Text('Search Surface')),
                 body: const Center(child: Text('Search Screen Mock')),
               ),
+            SocialDestination.savedProfiles => Scaffold(
+                appBar: AppBar(title: const Text('Saved Profiles Surface')),
+                body: const Center(child: Text('Saved Profiles Screen Mock')),
+              ),
+            SocialDestination.preferences => Scaffold(
+                appBar: AppBar(title: const Text('Preferences Surface')),
+                body: const Center(child: Text('Preferences Screen Mock')),
+              ),
             SocialDestination.accessDenied => Scaffold(
                 appBar: AppBar(title: const Text('Access Denied')),
                 body: const Center(child: Text('Restricted Access')),
