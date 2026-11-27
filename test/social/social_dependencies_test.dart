@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/app/dependencies/registrations/social/social_dependencies.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import 'package:andril_mobile/features/social/home/viewmodels/social_navigation_coordinator.dart';
 import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
 class _FakeSessionController extends ChangeNotifier implements SessionController {
@@ -165,6 +166,30 @@ void main() {
       expect(() => scope.createHomeViewModel(), throwsA(isA<StateError>()));
       expect(() => scope.accessBoundary, throwsA(isA<StateError>()));
       expect(() => scope.communicationBoundary, throwsA(isA<StateError>()));
+      expect(() => scope.createNavigationCoordinator(), throwsA(isA<StateError>()));
+    });
+  });
+
+  group('SocialDependenciesScope Navigation Coordinator Scoping (Tasks 123 & 124)', () {
+    test('createNavigationCoordinator provides scoped singleton with matching access evidence', () {
+      final evidence = SocialAccessEvidence.authorized(userId: 'user-test-uuid');
+      final scope = SocialDependenciesScope(
+        sessionController: sessionController,
+        isSocialOptedIn: true,
+        accessEvidence: evidence,
+      );
+
+      final coordinator1 = scope.createNavigationCoordinator();
+      final coordinator2 = scope.createNavigationCoordinator();
+
+      expect(identical(coordinator1, coordinator2), isTrue);
+      expect(coordinator1.isAuthorized, isTrue);
+      expect(coordinator1.accessEvidence?.userId, 'user-test-uuid');
+      expect(coordinator1.currentDestination, SocialDestination.home);
+
+      scope.dispose();
+      expect(scope.isDisposed, isTrue);
+      expect(() => scope.createNavigationCoordinator(), throwsA(isA<StateError>()));
     });
   });
 
