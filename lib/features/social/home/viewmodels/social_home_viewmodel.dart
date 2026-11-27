@@ -108,7 +108,6 @@ class SocialHomeViewModel extends ChangeNotifier {
   final SessionController? sessionController;
   final AccountHandoffController? handoffController;
   final bool isSocialOptedIn;
-  final bool isTestAuthorized;
   final SocialAccessEvidence? accessEvidence;
   final ISocialAccessBoundary accessBoundary;
 
@@ -160,7 +159,6 @@ class SocialHomeViewModel extends ChangeNotifier {
     this.sessionController,
     this.handoffController,
     this.isSocialOptedIn = false,
-    this.isTestAuthorized = false,
     this.accessEvidence,
     ISocialAccessBoundary? accessBoundary,
     String? initialDisplayName,
@@ -237,12 +235,6 @@ class SocialHomeViewModel extends ChangeNotifier {
           isSocialOptedIn) {
         return true;
       }
-    }
-
-    // 4. Isolated test fixture support (neutralized for production):
-    // Never acts as a production permission grant; only applies when isTestAuthorized is explicitly true in test fixtures.
-    if (isTestAuthorized && isSocialOptedIn) {
-      return true;
     }
 
     // Fail closed: Authentication alone or local boolean alone never grants module access.

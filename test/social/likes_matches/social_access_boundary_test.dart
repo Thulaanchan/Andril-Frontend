@@ -48,11 +48,15 @@ void main() {
 
   setUp(() {
     fakeSession = FakeSessionController();
+    fakeSession.setSession(subject: 'u-eligible-1', epoch: 1);
   });
 
   group('SocialAccessBoundary (Tasks 086 & 096)', () {
     test('grants access when session is signed in and evidence is authoritative adult opt-in', () {
-      final evidence = SocialAccessEvidence.authorized(userId: 'u-eligible-1');
+      final evidence = SocialAccessEvidence.authorized(
+        userId: 'u-eligible-1',
+        sessionEpoch: 1,
+      );
 
       final status = boundary.evaluateAccess(
         sessionController: fakeSession,
@@ -61,6 +65,41 @@ void main() {
 
       expect(status, SocialAccessStatus.granted);
       expect(boundary.isAccessGranted(sessionController: fakeSession, evidence: evidence), isTrue);
+    });
+
+    test('denies access with unauthenticated when session subject is missing or whitespace', () {
+      fakeSession.subject = null;
+      final evidence = SocialAccessEvidence.authorized(userId: 'u-eligible-1', sessionEpoch: 1);
+      expect(boundary.evaluateAccess(sessionController: fakeSession, evidence: evidence), SocialAccessStatus.unauthenticated);
+
+      fakeSession.subject = '   ';
+      expect(boundary.evaluateAccess(sessionController: fakeSession, evidence: evidence), SocialAccessStatus.unauthenticated);
+    });
+
+    test('denies access with unavailable when evidence timestamp is invalid or zero', () {
+      final zeroEvidence = SocialAccessEvidence(
+        userId: 'u-eligible-1',
+        isAdult: true,
+        isOptedIn: true,
+        verifiedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        isAuthoritative: true,
+        sessionEpoch: 1,
+      );
+      expect(boundary.evaluateAccess(sessionController: fakeSession, evidence: zeroEvidence), SocialAccessStatus.unavailable);
+    });
+
+    test('denies access with mismatched when evidence userId is empty', () {
+      final emptyIdEvidence = SocialAccessEvidence.authorized(
+        userId: '',
+        sessionEpoch: 1,
+      );
+      expect(boundary.evaluateAccess(sessionController: fakeSession, evidence: emptyIdEvidence), SocialAccessStatus.mismatched);
+    });
+
+    test('redacts private identity in toString diagnostics', () {
+      final evidence = SocialAccessEvidence.authorized(userId: 'u-private-99');
+      expect(evidence.toString(), contains('userId: redacted'));
+      expect(evidence.toString(), isNot(contains('u-private-99')));
     });
 
     test('grants access when session subject matches evidence and epoch matches', () {
@@ -153,11 +192,12 @@ void main() {
 
     test('denies access with underage when adult verification is false', () {
       final underageEvidence = SocialAccessEvidence(
-        userId: 'u-teen-1',
+        userId: 'u-eligible-1',
         isAdult: false,
         isOptedIn: true,
         verifiedAt: DateTime.now(),
         isAuthoritative: true,
+        sessionEpoch: 1,
       );
 
       final status = boundary.evaluateAccess(
@@ -171,11 +211,12 @@ void main() {
 
     test('denies access with optInRequired when user has not opted into social', () {
       final noOptInEvidence = SocialAccessEvidence(
-        userId: 'u-adult-no-opt',
+        userId: 'u-eligible-1',
         isAdult: true,
         isOptedIn: false,
         verifiedAt: DateTime.now(),
         isAuthoritative: true,
+        sessionEpoch: 1,
       );
 
       final status = boundary.evaluateAccess(
@@ -189,12 +230,13 @@ void main() {
 
     test('denies access with revoked when module participation is suspended or revoked', () {
       final suspendedEvidence = SocialAccessEvidence(
-        userId: 'u-suspended',
+        userId: 'u-eligible-1',
         isAdult: true,
         isOptedIn: true,
         isModuleGranted: false,
         verifiedAt: DateTime.now(),
         isAuthoritative: true,
+        sessionEpoch: 1,
       );
 
       expect(
@@ -202,7 +244,9 @@ void main() {
         SocialAccessStatus.revoked,
       );
 
-      final revokedEvidence = SocialAccessEvidence.revoked(userId: 'u-revoked');
+      final revokedEvidence = SocialAccessEvidence.revoked(
+        userId: 'u-eligible-1',
+      );
       expect(
         boundary.evaluateAccess(sessionController: fakeSession, evidence: revokedEvidence),
         SocialAccessStatus.revoked,

@@ -67,7 +67,7 @@ void main() {
         sessionController: fakeSession,
         accessBoundary: const SocialAccessBoundary(),
         communicationBoundary: const SocialMatchCommunicationBoundary(),
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-active-1'),
       );
 
       expect(coordinator.currentDestination, SocialDestination.home);
@@ -144,7 +144,7 @@ void main() {
       fakeSession.subject = 'u-1';
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-1'),
         onChatHandoff: (channelId) => handedOffChannelId = channelId,
       );
 
@@ -165,7 +165,7 @@ void main() {
       fakeSession.subject = 'u-intruder';
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-intruder'),
         onChatHandoff: (channelId) => handedOffChannelId = channelId,
       );
 
@@ -187,7 +187,7 @@ void main() {
       fakeSession.subject = 'u-1';
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-1'),
         onChatHandoff: (channelId) => handedOffChannelId = channelId,
       );
 

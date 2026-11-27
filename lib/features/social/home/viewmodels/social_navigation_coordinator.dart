@@ -55,6 +55,7 @@ class SocialNavigationCoordinator extends ChangeNotifier {
   ISocialAccessBoundary get accessBoundary => _accessBoundary;
   ISocialMatchCommunicationBoundary get communicationBoundary => _communicationBoundary;
   SocialAccessEvidence? get accessEvidence => _accessEvidence;
+  bool get isSocialOptedIn => _isSocialOptedIn;
 
   /// Updates or binds authoritative access evidence to this coordinator.
   void updateAccessEvidence(SocialAccessEvidence? evidence) {
@@ -81,7 +82,7 @@ class SocialNavigationCoordinator extends ChangeNotifier {
       );
     }
 
-    return _isSocialOptedIn;
+    return false;
   }
 
   /// Guarded navigation to an approved Social destination.

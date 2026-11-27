@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import 'package:andril_mobile/features/social/personality/data/repositories/personality_questionnaire_repository.dart';
 import 'package:andril_mobile/features/social/personality/domain/entities/personality_questionnaire.dart';
 import 'package:andril_mobile/features/social/personality/presentation/screens/personality_intro_screen.dart';
@@ -42,6 +43,9 @@ class MockQuestionnaireRepository implements IPersonalityQuestionnaireRepository
 class FakeSessionController extends ChangeNotifier implements SessionController {
   @override
   SessionPhase get phase => SessionPhase.signedIn;
+
+  @override
+  String? get subject => 'user-test-123';
 
   @override
   VoidCallback registerPrivateStateClearer(VoidCallback clearer) => () {};
@@ -100,7 +104,7 @@ void main() {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
 
       bool completed = false;
@@ -146,7 +150,7 @@ void main() {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
       await vm.loadQuestionnaire();
       vm.selectOption('1'); // answer Q1
@@ -218,7 +222,7 @@ void main() {
       final vm = PersonalityQuestionnaireViewModel(
         repository: mockRepo,
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
       );
       await vm.loadQuestionnaire();
       vm.selectOption('1');

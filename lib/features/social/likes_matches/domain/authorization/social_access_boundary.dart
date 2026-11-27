@@ -130,7 +130,7 @@ class SocialAccessEvidence {
 
   @override
   String toString() =>
-      'SocialAccessEvidence(userId: $userId, adult: $isAdult, optedIn: $isOptedIn, auth: $isAuthoritative, epoch: $sessionEpoch, revoked: $isRevoked)';
+      'SocialAccessEvidence(userId: ${userId.isEmpty ? 'none' : 'redacted'}, adult: $isAdult, optedIn: $isOptedIn, auth: $isAuthoritative, epoch: $sessionEpoch, revoked: $isRevoked)';
 }
 
 /// Abstract contract governing access evaluation for the Social module.
@@ -167,47 +167,57 @@ class SocialAccessBoundary implements ISocialAccessBoundary {
       return SocialAccessStatus.unauthenticated;
     }
 
-    // 2. Authoritative evidence check: Missing or unauthoritative evidence fails closed
-    if (evidence == null || !evidence.isAuthoritative) {
-      return SocialAccessStatus.unavailable;
-    }
-
-    // 3. Subject binding check: When session subject is available, evidence must match caller identity
+    // 2. Session subject check: Missing, empty, or whitespace-only subject never authorizes
     String? sessionSubject;
     try {
       sessionSubject = sessionController.subject;
     } catch (_) {
       sessionSubject = null;
     }
-    if (sessionSubject != null && sessionSubject.isNotEmpty && evidence.userId.isNotEmpty) {
-      if (evidence.userId != sessionSubject) {
-        return SocialAccessStatus.mismatched;
-      }
+    if (sessionSubject == null || sessionSubject.trim().isEmpty) {
+      return SocialAccessStatus.unauthenticated;
     }
 
-    // 4. Session lifecycle / epoch binding check: If evidence carries sessionEpoch, verify against active backendSession
+    // 3. Authoritative evidence check: Missing or unauthoritative evidence fails closed
+    if (evidence == null || !evidence.isAuthoritative) {
+      return SocialAccessStatus.unavailable;
+    }
+
+    // 4. Timestamp validity check: Zero, negative or invalid timestamp fails closed
+    if (evidence.verifiedAt.millisecondsSinceEpoch <= 0) {
+      return SocialAccessStatus.unavailable;
+    }
+
+    // 5. Subject binding check: Empty or mismatched identity denies access
+    if (evidence.userId.trim().isEmpty || evidence.userId != sessionSubject) {
+      return SocialAccessStatus.mismatched;
+    }
+
+    // 6. Revocation check: Revoked module participation denies access immediately
+    if (!evidence.isModuleGranted || evidence.isRevoked) {
+      return SocialAccessStatus.revoked;
+    }
+
+    // 7. Session lifecycle / epoch binding check:
     try {
       final backendSession = sessionController.backendSession;
       if (backendSession != null && evidence.sessionEpoch != null) {
         if (evidence.sessionEpoch != backendSession.epoch) {
           return SocialAccessStatus.stale;
         }
+      } else if (sessionController.supportsBackend && backendSession == null) {
+        return SocialAccessStatus.stale;
       }
     } catch (_) {
       // Mock resilience
     }
 
-    // 5. Revocation check: Revoked module participation denies access immediately
-    if (!evidence.isModuleGranted || evidence.isRevoked) {
-      return SocialAccessStatus.revoked;
-    }
-
-    // 6. Adult check: Must be verified adult
+    // 8. Adult check: Must be verified adult
     if (!evidence.isAdult) {
       return SocialAccessStatus.underage;
     }
 
-    // 7. Opt-in check: Must have opted in to social module
+    // 9. Opt-in check: Must have opted in to social module
     if (!evidence.isOptedIn) {
       return SocialAccessStatus.optInRequired;
     }

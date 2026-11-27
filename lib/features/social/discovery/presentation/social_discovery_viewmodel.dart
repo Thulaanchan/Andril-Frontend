@@ -78,7 +78,9 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
     List<SocialCandidate>? initialCandidates,
   })  : accessBoundary = accessBoundary ?? const SocialAccessBoundary(),
         _candidates = initialCandidates != null
-            ? List.unmodifiable(initialCandidates)
+            ? List.unmodifiable(initialCandidates.where(
+                (c) => c.age >= 18 && c.id.trim().isNotEmpty && c.displayName.trim().isNotEmpty,
+              ))
             : const [] {
     final session = sessionController;
     if (session != null) {
@@ -149,7 +151,7 @@ class SocialDiscoveryViewModel extends ChangeNotifier {
       }
     }
 
-    return isSocialOptedIn;
+    return false;
   }
 
   /// Initializes discovery feed with authoritative session verification.
