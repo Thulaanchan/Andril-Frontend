@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:andril_mobile/core/constants/app_config.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
 import 'package:andril_mobile/features/social/personality/data/repositories/personality_questionnaire_repository.dart';
+import 'package:andril_mobile/features/social/personality/domain/entities/personality_questionnaire.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -359,6 +360,100 @@ void main() {
       expect(result.errorMessage, isNot(contains(_originalToken)));
       expect(result.errorMessage, isNot(contains('synthetic-secret-payload')));
       expect(result.errorMessage, isNot(contains('https://')));
+    });
+
+    group('submitAnswers (Task 154)', () {
+      test('valid session sends POST to /api/v1/social/questionnaires/responses with draft payload', () async {
+        final f = await _setup();
+        f.transport.reply = (options) {
+          expect(options.method, 'POST');
+          expect(options.path, 'https://andril.invalid:8443/api/v1/social/questionnaires/responses');
+          expect(options.headers['Authorization'], 'Bearer fake.a.original');
+          final decoded = jsonDecode(options.data as String) as Map<String, dynamic>;
+          expect(decoded['version'], 'v1.0');
+          expect(decoded['skip'], false);
+          expect(decoded['answers'], hasLength(2));
+          return _response(200, {'responseId': 'b6d46d2a-4df8-4f10-b74c-47ea1e37e96b', 'status': 'Active'});
+        };
+
+        final draft = PersonalityAnswerDraft(
+          questionnaireVersion: 'v1.0',
+          answers: {'q01': 'opt1', 'q02': 'opt2'},
+        );
+
+        final result = await f.repo.submitAnswers(draft);
+        expect(result.isSuccess, isTrue);
+        expect(result.data, isTrue);
+      });
+
+      test('dormant backend endpoint (404/503) maps to serviceUnavailable', () async {
+        final f = await _setup();
+        f.transport.reply = (_) => _response(404, {'status': 404, 'title': 'Not Found'});
+
+        final draft = PersonalityAnswerDraft(
+          questionnaireVersion: 'v1.0',
+          answers: {'q01': 'opt1'},
+        );
+
+        final result = await f.repo.submitAnswers(draft);
+        expect(result.isSuccess, isFalse);
+        expect(result.failureType, QuestionnaireFailureType.serviceUnavailable);
+      });
+
+      test('session change during inflight submission returns unauthorized', () async {
+        final f = await _setup();
+        final completer = Completer<ResponseBody>();
+        f.transport.reply = (_) => completer.future;
+
+        final draft = PersonalityAnswerDraft(
+          questionnaireVersion: 'v1.0',
+          answers: {'q01': 'opt1'},
+        );
+
+        final futureResult = f.repo.submitAnswers(draft);
+        f.source.switchUser('user-b', 'fake.b.token');
+        completer.complete(_response(200, {'responseId': 'test-id', 'status': 'Active'}));
+
+        final result = await futureResult;
+        expect(result.isSuccess, isFalse);
+        expect(result.failureType, QuestionnaireFailureType.unauthorized);
+      });
+    });
+
+    group('getSavedAnswers (Task 154)', () {
+      test('valid session retrieves saved questionnaire answers', () async {
+        final f = await _setup();
+        f.transport.reply = (options) {
+          expect(options.method, 'GET');
+          expect(options.path, 'https://andril.invalid:8443/api/v1/social/questionnaires/responses/me');
+          expect(options.headers['Authorization'], 'Bearer fake.a.original');
+          return _response(200, {
+            'responseId': 'b6d46d2a-4df8-4f10-b74c-47ea1e37e96b',
+            'version': 'v1.0',
+            'status': 'Active',
+            'createdAtUtc': '2026-11-27T12:00:00Z',
+            'answers': [
+              {'questionId': 'q01', 'optionId': 'opt1'},
+              {'questionId': 'q02', 'optionId': 'opt2'},
+            ],
+          });
+        };
+
+        final result = await f.repo.getSavedAnswers();
+        expect(result.isSuccess, isTrue);
+        expect(result.data?.questionnaireVersion, 'v1.0');
+        expect(result.data?.answers['q01'], 'opt1');
+        expect(result.data?.answers['q02'], 'opt2');
+      });
+
+      test('dormant backend endpoint (404/503) maps to serviceUnavailable', () async {
+        final f = await _setup();
+        f.transport.reply = (_) => _response(404, {'status': 404, 'title': 'Not Found'});
+
+        final result = await f.repo.getSavedAnswers();
+        expect(result.isSuccess, isFalse);
+        expect(result.failureType, QuestionnaireFailureType.serviceUnavailable);
+      });
     });
   });
 }

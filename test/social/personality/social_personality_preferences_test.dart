@@ -39,6 +39,17 @@ class MockQuestionnaireRepo implements IPersonalityQuestionnaireRepository {
 
   @override
   Future<QuestionnaireResult<PersonalityQuestionnaire>> getActiveQuestionnaire() async => result;
+
+  @override
+  Future<QuestionnaireResult<bool>> submitAnswers(
+    PersonalityAnswerDraft draft, {
+    bool skip = false,
+  }) async =>
+      const QuestionnaireResult.success(true);
+
+  @override
+  Future<QuestionnaireResult<PersonalityAnswerDraft>> getSavedAnswers() async =>
+      QuestionnaireResult.success(PersonalityAnswerDraft(questionnaireVersion: 'v1.0'));
 }
 
 class FakeSessionController extends ChangeNotifier implements SessionController {

@@ -34,12 +34,29 @@ class MockQuestionnaireRepository implements IPersonalityQuestionnaireRepository
   ));
 
   int callCount = 0;
+  int submitCount = 0;
+  QuestionnaireResult<bool> submitResult = const QuestionnaireResult.success(true);
+  QuestionnaireResult<PersonalityAnswerDraft> savedResult =
+      QuestionnaireResult.success(PersonalityAnswerDraft(questionnaireVersion: 'v1.0'));
 
   @override
   Future<QuestionnaireResult<PersonalityQuestionnaire>> getActiveQuestionnaire() async {
     callCount++;
     return result;
   }
+
+  @override
+  Future<QuestionnaireResult<bool>> submitAnswers(
+    PersonalityAnswerDraft draft, {
+    bool skip = false,
+  }) async {
+    submitCount++;
+    return submitResult;
+  }
+
+  @override
+  Future<QuestionnaireResult<PersonalityAnswerDraft>> getSavedAnswers() async =>
+      savedResult;
 }
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
@@ -328,6 +345,104 @@ void main() {
       expect(vm.isError, isTrue);
       expect(vm.errorMessage, 'Malformed questionnaire definition format.');
     });
+
+    group('submitAnswers & loadSavedAnswers (Task 154)', () {
+      test('submitting complete answers succeeds and clears submitting flag', () async {
+        final mockRepo = MockQuestionnaireRepository();
+        final fakeSession = FakeSessionController();
+        final vm = PersonalityQuestionnaireViewModel(
+          repository: mockRepo,
+          sessionController: fakeSession,
+          accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+        );
+
+        await vm.loadQuestionnaire();
+        vm.selectOption('1'); // q01 answered (required)
+
+        expect(vm.isComplete, isTrue);
+        final success = await vm.submitAnswers();
+        expect(success, isTrue);
+        expect(mockRepo.submitCount, 1);
+        expect(vm.isSubmitting, isFalse);
+      });
+
+      test('submitting incomplete answers fails before dispatch unless skipped', () async {
+        final mockRepo = MockQuestionnaireRepository();
+        final fakeSession = FakeSessionController();
+        final vm = PersonalityQuestionnaireViewModel(
+          repository: mockRepo,
+          sessionController: fakeSession,
+          accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+        );
+
+        await vm.loadQuestionnaire();
+        // q01 is required, not answered yet
+        expect(vm.isComplete, isFalse);
+
+        final failed = await vm.submitAnswers();
+        expect(failed, isFalse);
+        expect(mockRepo.submitCount, 0);
+
+        final skipped = await vm.submitAnswers(skip: true);
+        expect(skipped, isTrue);
+        expect(mockRepo.submitCount, 1);
+      });
+
+      test('submitting answers fails when unauthorized', () async {
+        final mockRepo = MockQuestionnaireRepository();
+        final fakeSession = FakeSessionController(phase: SessionPhase.signedOut);
+        final vm = PersonalityQuestionnaireViewModel(
+          repository: mockRepo,
+          sessionController: fakeSession,
+        );
+
+        final success = await vm.submitAnswers(skip: true);
+        expect(success, isFalse);
+        expect(vm.isAccessDenied, isTrue);
+      });
+
+      test('serviceUnavailable failure during submission sets serviceUnavailable status', () async {
+        final mockRepo = MockQuestionnaireRepository();
+        mockRepo.submitResult = const QuestionnaireResult.failure(
+          errorMessage: 'Personality questionnaire service is currently unavailable.',
+          failureType: QuestionnaireFailureType.serviceUnavailable,
+        );
+        final fakeSession = FakeSessionController();
+        final vm = PersonalityQuestionnaireViewModel(
+          repository: mockRepo,
+          sessionController: fakeSession,
+          accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+        );
+
+        await vm.loadQuestionnaire();
+        vm.selectOption('1');
+
+        final success = await vm.submitAnswers();
+        expect(success, isFalse);
+        expect(vm.isServiceUnavailable, isTrue);
+        expect(vm.errorMessage, contains('unavailable'));
+      });
+
+      test('loadSavedAnswers restores existing draft from backend', () async {
+        final mockRepo = MockQuestionnaireRepository();
+        mockRepo.savedResult = QuestionnaireResult.success(PersonalityAnswerDraft(
+          questionnaireVersion: 'v1.0',
+          answers: {'q01': '1', 'q02': '1'},
+        ));
+        final fakeSession = FakeSessionController();
+        final vm = PersonalityQuestionnaireViewModel(
+          repository: mockRepo,
+          sessionController: fakeSession,
+          accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+        );
+
+        await vm.loadQuestionnaire();
+        final loaded = await vm.loadSavedAnswers();
+        expect(loaded, isTrue);
+        expect(vm.selectedOptionForQuestion('q01'), '1');
+        expect(vm.selectedOptionForQuestion('q02'), '1');
+      });
+    });
   });
 }
 
@@ -337,4 +452,15 @@ class _DelayedMockRepo implements IPersonalityQuestionnaireRepository {
 
   @override
   Future<QuestionnaireResult<PersonalityQuestionnaire>> getActiveQuestionnaire() => completer.future;
+
+  @override
+  Future<QuestionnaireResult<bool>> submitAnswers(PersonalityAnswerDraft draft, {bool skip = false}) async =>
+      const QuestionnaireResult.success(true);
+
+  @override
+  Future<QuestionnaireResult<PersonalityAnswerDraft>> getSavedAnswers() async =>
+      const QuestionnaireResult.failure(
+        errorMessage: 'Not implemented',
+        failureType: QuestionnaireFailureType.unknown,
+      );
 }

@@ -37,6 +37,7 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
   int _currentQuestionIndex = 0;
   String? _errorMessage;
   int _activeOperationId = 0;
+  bool _isSubmitting = false;
   bool _disposed = false;
   String? _boundSubject;
 
@@ -66,6 +67,7 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
   int get currentQuestionIndex => _currentQuestionIndex;
   String? get errorMessage => _errorMessage;
   bool get isSocialOptedIn => _isSocialOptedIn;
+  bool get isSubmitting => _isSubmitting;
 
   bool get isLoading => _status == PersonalityQuestionnaireStatus.loading;
   bool get isReady => _status == PersonalityQuestionnaireStatus.ready;
@@ -250,7 +252,100 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Submits the current answer draft to the authoritative backend endpoint.
+  Future<bool> submitAnswers({bool skip = false}) async {
+    if (_disposed) return false;
+    if (!isAuthorized) {
+      _status = PersonalityQuestionnaireStatus.accessDenied;
+      _errorMessage = 'Adult eligibility verification and Social opt-in are required.';
+      notifyListeners();
+      return false;
+    }
+
+    final draft = _answerDraft;
+    if (draft == null || (!skip && !isComplete)) {
+      return false;
+    }
+
+    final opId = ++_activeOperationId;
+    final operationSubject = _resolveSubject();
+    _isSubmitting = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _repository.submitAnswers(draft, skip: skip);
+      if (_disposed || opId != _activeOperationId) return false;
+
+      final currentSubject = _resolveSubject();
+      if (operationSubject == null ||
+          currentSubject == null ||
+          currentSubject != operationSubject ||
+          _sessionController.phase != SessionPhase.signedIn ||
+          !isAuthorized) {
+        _isSubmitting = false;
+        _questionnaire = null;
+        _clearPrivateDraft();
+        _status = PersonalityQuestionnaireStatus.accessDenied;
+        _errorMessage = 'Session signed out, switched, or authorization revoked.';
+        notifyListeners();
+        return false;
+      }
+
+      _isSubmitting = false;
+      if (result.isSuccess) {
+        _errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        _handleFailure(result.failureType, result.errorMessage);
+        notifyListeners();
+        return false;
+      }
+    } catch (_) {
+      if (_disposed || opId != _activeOperationId) return false;
+      _isSubmitting = false;
+      _status = PersonalityQuestionnaireStatus.error;
+      _errorMessage = 'Failed to submit questionnaire answers.';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Loads saved questionnaire answers from the authoritative backend endpoint.
+  Future<bool> loadSavedAnswers() async {
+    if (_disposed) return false;
+    if (!isAuthorized) return false;
+
+    final opId = ++_activeOperationId;
+    final operationSubject = _resolveSubject();
+
+    try {
+      final result = await _repository.getSavedAnswers();
+      if (_disposed || opId != _activeOperationId) return false;
+
+      final currentSubject = _resolveSubject();
+      if (operationSubject == null ||
+          currentSubject == null ||
+          currentSubject != operationSubject ||
+          _sessionController.phase != SessionPhase.signedIn ||
+          !isAuthorized) {
+        return false;
+      }
+
+      if (result.isSuccess && result.data != null) {
+        _answerDraft = result.data;
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _clearPrivateDraft({bool resetToEmptyDraft = false}) {
+    _isSubmitting = false;
     if (resetToEmptyDraft && _questionnaire != null) {
       _answerDraft = PersonalityAnswerDraft(questionnaireVersion: _questionnaire!.version);
     } else {
