@@ -1,16 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import '../../../../features/social/discovery/data/social_discovery_repository.dart';
+import '../../../../features/social/discovery/presentation/social_discovery_viewmodel.dart';
+import '../../../../features/social/discovery/presentation/social_search_viewmodel.dart';
 import '../../../../features/social/home/viewmodels/social_home_viewmodel.dart';
 import '../../../../features/social/home/viewmodels/social_navigation_coordinator.dart';
+import '../../../../features/social/likes_matches/data/social_relationship_repository.dart';
 import '../../../../features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import '../../../../features/social/likes_matches/domain/authorization/social_match_communication_boundary.dart';
+import '../../../../features/social/likes_matches/presentation/social_relationship_viewmodel.dart';
+import '../../../../features/social/personality/data/repositories/personality_questionnaire_repository.dart';
+import '../../../../features/social/personality/presentation/viewmodels/personality_questionnaire_viewmodel.dart';
+import '../../../../features/social/profile/viewmodels/social_profile_management_repository.dart';
+import '../../../../features/social/profile/viewmodels/social_profile_management_viewmodel.dart';
 import '../../../../features/social/zones/group_contracts/social_zone_repository.dart';
 import '../../../../features/social/zones/presentation/social_zone_management_viewmodel.dart';
 import '../../../../features/social/zones/presentation/social_zones_viewmodel.dart';
 
 /// Scoped dependency container managing lifecycle and instances of Social module services.
 ///
-/// Follows M5 Fast Feature Delivery Governance (Task 103):
+/// Follows M5 Fast Feature Delivery Governance (Task 103, 148):
 /// - Reuses approved SessionController without constructing fake fallback production sessions.
 /// - Requires authoritative Social access evidence bound to active session; fails closed otherwise.
 /// - Signed-in state alone or local opt-in boolean alone does not authorize Social.
@@ -22,12 +31,19 @@ class SocialDependenciesScope {
   final SocialAccessEvidence? _accessEvidence;
   final ISocialAccessBoundary _accessBoundary;
   final ISocialMatchCommunicationBoundary _communicationBoundary;
+  final ISocialProfileManagementRepository? _profileManagementRepository;
+  final IPersonalityQuestionnaireRepository? _questionnaireRepository;
 
   // Lazily initialized instances within the scope
   ISocialZoneRepository? _zoneRepository;
   SocialZonesViewModel? _zonesViewModel;
   SocialZoneManagementViewModel? _zoneManagementViewModel;
   SocialNavigationCoordinator? _navigationCoordinator;
+  SocialDiscoveryViewModel? _discoveryViewModel;
+  SocialRelationshipViewModel? _relationshipViewModel;
+  SocialSearchViewModel? _searchViewModel;
+  SocialProfileManagementViewModel? _profileManagementViewModel;
+  PersonalityQuestionnaireViewModel? _personalityViewModel;
 
   VoidCallback? _unregisterSessionClearer;
   bool _isDisposed = false;
@@ -38,11 +54,15 @@ class SocialDependenciesScope {
     SocialAccessEvidence? accessEvidence,
     ISocialAccessBoundary? accessBoundary,
     ISocialMatchCommunicationBoundary? communicationBoundary,
+    ISocialProfileManagementRepository? profileManagementRepository,
+    IPersonalityQuestionnaireRepository? questionnaireRepository,
   })  : _sessionController = sessionController,
         _isSocialOptedIn = isSocialOptedIn,
         _accessEvidence = accessEvidence,
         _accessBoundary = accessBoundary ?? const SocialAccessBoundary(),
-        _communicationBoundary = communicationBoundary ?? const SocialMatchCommunicationBoundary() {
+        _communicationBoundary = communicationBoundary ?? const SocialMatchCommunicationBoundary(),
+        _profileManagementRepository = profileManagementRepository,
+        _questionnaireRepository = questionnaireRepository {
     _unregisterSessionClearer = _sessionController?.registerPrivateStateClearer(dispose);
   }
 
@@ -53,6 +73,18 @@ class SocialDependenciesScope {
     if (_isDisposed) {
       throw StateError('SocialDependenciesScope has already been disposed and cannot be accessed.');
     }
+  }
+
+  /// Session controller associated with this scope.
+  SessionController? get sessionController {
+    _checkDisposed();
+    return _sessionController;
+  }
+
+  /// Authoritative Social access evidence.
+  SocialAccessEvidence? get accessEvidence {
+    _checkDisposed();
+    return _accessEvidence;
   }
 
   /// Raw unauthoritative client opt-in preference flag.
@@ -71,8 +103,6 @@ class SocialDependenciesScope {
     if (session == null || session.phase != SessionPhase.signedIn) {
       return false;
     }
-    // Signed-in state alone does NOT authorize. Local opt-in boolean alone does NOT authorize.
-    // Must evaluate authoritative evidence through ISocialAccessBoundary.
     final evidence = _accessEvidence;
     if (evidence == null) {
       return false; // Fails closed without authoritative evidence
@@ -96,8 +126,6 @@ class SocialDependenciesScope {
   }
 
   /// Dormant-safe Social Zone Repository.
-  ///
-  /// Fails closed if SessionController is not provided, rather than inventing fake sessions.
   ISocialZoneRepository get zoneRepository {
     _checkDisposed();
     final session = _sessionController;
@@ -157,6 +185,81 @@ class SocialDependenciesScope {
     );
   }
 
+  /// Creates a scoped [SocialDiscoveryViewModel].
+  SocialDiscoveryViewModel createDiscoveryViewModel({ISocialDiscoveryRepository? repository}) {
+    _checkDisposed();
+    return _discoveryViewModel ??= SocialDiscoveryViewModel(
+      repository: repository ?? const SocialDiscoveryRepository(isBackendActivated: false),
+      sessionController: _sessionController,
+      accessEvidence: _accessEvidence,
+      accessBoundary: _accessBoundary,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
+  /// Creates a scoped [SocialRelationshipViewModel].
+  SocialRelationshipViewModel createRelationshipViewModel({ISocialRelationshipRepository? repository}) {
+    _checkDisposed();
+    return _relationshipViewModel ??= SocialRelationshipViewModel(
+      repository: repository ?? const SocialRelationshipRepository(isBackendActivated: false),
+      sessionController: _sessionController,
+      accessEvidence: _accessEvidence,
+      accessBoundary: _accessBoundary,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
+  /// Creates a scoped [SocialSearchViewModel].
+  SocialSearchViewModel createSearchViewModel() {
+    _checkDisposed();
+    final session = _sessionController;
+    if (session == null) {
+      throw StateError('Cannot initialize SocialSearchViewModel without an authentic SessionController.');
+    }
+    return _searchViewModel ??= SocialSearchViewModel(
+      sessionController: session,
+      accessBoundary: _accessBoundary,
+      accessEvidence: _accessEvidence,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
+  /// Creates a scoped [SocialProfileManagementViewModel].
+  SocialProfileManagementViewModel? createProfileManagementViewModel({
+    ISocialProfileManagementRepository? repository,
+    bool isOnboarding = false,
+  }) {
+    _checkDisposed();
+    final session = _sessionController;
+    if (session == null) return null;
+    final repo = repository ?? _profileManagementRepository;
+    if (repo == null) return null;
+    return _profileManagementViewModel ??= SocialProfileManagementViewModel(
+      repository: repo,
+      sessionController: session,
+      accessBoundary: _accessBoundary,
+      accessEvidence: _accessEvidence,
+      isSocialOptedIn: isSocialAuthorized,
+      isOnboarding: isOnboarding,
+    );
+  }
+
+  /// Creates a scoped [PersonalityQuestionnaireViewModel].
+  PersonalityQuestionnaireViewModel? createPersonalityQuestionnaireViewModel({
+    IPersonalityQuestionnaireRepository? repository,
+  }) {
+    _checkDisposed();
+    final session = _sessionController;
+    if (session == null) return null;
+    return _personalityViewModel ??= PersonalityQuestionnaireViewModel(
+      repository: repository ?? _questionnaireRepository ?? PersonalityQuestionnaireRepository(sessionController: session),
+      sessionController: session,
+      accessBoundary: _accessBoundary,
+      accessEvidence: _accessEvidence,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
   /// Idempotently disposes all created ViewModels, unregisters listeners, and clears private dependencies.
   void dispose() {
     if (_isDisposed) return;
@@ -170,6 +273,21 @@ class SocialDependenciesScope {
 
     _zoneManagementViewModel?.dispose();
     _zoneManagementViewModel = null;
+
+    _discoveryViewModel?.dispose();
+    _discoveryViewModel = null;
+
+    _relationshipViewModel?.dispose();
+    _relationshipViewModel = null;
+
+    _searchViewModel?.dispose();
+    _searchViewModel = null;
+
+    _profileManagementViewModel?.dispose();
+    _profileManagementViewModel = null;
+
+    _personalityViewModel?.dispose();
+    _personalityViewModel = null;
 
     _zoneRepository = null;
 
