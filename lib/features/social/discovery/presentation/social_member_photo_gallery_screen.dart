@@ -58,7 +58,7 @@ class SocialMemberPhotoGalleryScreen extends StatelessWidget {
                 '${photoUrls.length} ${photoUrls.length == 1 ? 'photo' : 'photos'}',
                 style: const TextStyle(
                   fontSize: 12,
-                  color: AndrilSocialColors.warmGrey,
+                  color: Color(0xFF6B7280),
                 ),
               ),
           ],
@@ -131,7 +131,7 @@ class SocialMemberPhotoGalleryScreen extends StatelessWidget {
                           child: Icon(
                             Icons.broken_image_outlined,
                             size: 32,
-                            color: AndrilSocialColors.warmGrey,
+                            color: Color(0xFF6B7280),
                           ),
                         ),
                       );
@@ -200,7 +200,7 @@ class SocialMemberPhotoGalleryScreen extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 14,
-                color: AndrilSocialColors.warmGrey,
+                color: Color(0xFF6B7280),
               ),
             ),
           ],
@@ -244,7 +244,7 @@ class SocialMemberPhotoGalleryScreen extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: AndrilSocialColors.warmGrey,
+                color: Color(0xFF6B7280),
               ),
             ),
           ],
