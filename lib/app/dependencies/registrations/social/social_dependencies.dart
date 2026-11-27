@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:andril_mobile/core/constants/app_config.dart';
+import 'package:andril_mobile/core/network/api_client/andril_api_client.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
 import '../../../../features/social/discovery/data/social_discovery_repository.dart';
 import '../../../../features/social/discovery/presentation/social_discovery_viewmodel.dart';
@@ -56,6 +58,8 @@ class SocialDependenciesScope {
   final ISocialMatchCommunicationBoundary _communicationBoundary;
   final ISocialProfileManagementRepository? _profileManagementRepository;
   final IPersonalityQuestionnaireRepository? _questionnaireRepository;
+  final AndrilApiClient? _apiClient;
+  final AppConfig? _appConfig;
 
   // Lazily initialized instances within the scope
   ISocialZoneRepository? _zoneRepository;
@@ -79,13 +83,17 @@ class SocialDependenciesScope {
     ISocialMatchCommunicationBoundary? communicationBoundary,
     ISocialProfileManagementRepository? profileManagementRepository,
     IPersonalityQuestionnaireRepository? questionnaireRepository,
+    AndrilApiClient? apiClient,
+    AppConfig? appConfig,
   })  : _sessionController = sessionController,
         _isSocialOptedIn = isSocialOptedIn,
         _accessEvidence = accessEvidence,
         _accessBoundary = accessBoundary ?? const SocialAccessBoundary(),
         _communicationBoundary = communicationBoundary ?? const SocialMatchCommunicationBoundary(),
         _profileManagementRepository = profileManagementRepository,
-        _questionnaireRepository = questionnaireRepository {
+        _questionnaireRepository = questionnaireRepository,
+        _apiClient = apiClient,
+        _appConfig = appConfig {
     _unregisterSessionClearer = _sessionController?.registerPrivateStateClearer(dispose);
   }
 
@@ -277,7 +285,13 @@ class SocialDependenciesScope {
       throw StateError('Cannot initialize PersonalityQuestionnaireViewModel without an authentic SessionController.');
     }
     return _personalityViewModel ??= PersonalityQuestionnaireViewModel(
-      repository: repository ?? _questionnaireRepository ?? PersonalityQuestionnaireRepository(sessionController: session),
+      repository: repository ??
+          _questionnaireRepository ??
+          PersonalityQuestionnaireRepository(
+            sessionController: session,
+            apiClient: _apiClient,
+            config: _appConfig,
+          ),
       sessionController: session,
       accessBoundary: _accessBoundary,
       accessEvidence: _accessEvidence,

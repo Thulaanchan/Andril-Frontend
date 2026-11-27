@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
@@ -241,5 +243,98 @@ void main() {
       await future;
       expect(vm.isLoading, isTrue); // Was loading when disposed
     });
+
+    test('session change while loadQuestionnaire() is in flight discards late response and sets accessDenied', () async {
+      final completer = Completer<QuestionnaireResult<PersonalityQuestionnaire>>();
+      mockRepo.result = const QuestionnaireResult.failure(
+        failureType: QuestionnaireFailureType.serviceUnavailable,
+        errorMessage: 'temp',
+      );
+
+      // Create a delayed mock repo
+      final delayedRepo = _DelayedMockRepo(completer);
+      final vm = PersonalityQuestionnaireViewModel(
+        repository: delayedRepo,
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+      );
+
+      final future = vm.loadQuestionnaire();
+      expect(vm.isLoading, isTrue);
+
+      // Switch user while request is in flight
+      fakeSession.subject = 'switched-user-456';
+
+      // Server returns questionnaire for the previous user
+      completer.complete(QuestionnaireResult.success(PersonalityQuestionnaire(
+        version: 'v1.0',
+        questions: [
+          PersonalityQuestion(
+            id: 'q01',
+            prompt: 'Question 1',
+            isRequired: true,
+            options: [
+              PersonalityOption(id: '1', label: 'Option 1'),
+            ],
+          ),
+        ],
+      )));
+
+      await future;
+
+      expect(vm.status, PersonalityQuestionnaireStatus.accessDenied);
+      expect(vm.questionnaire, isNull);
+      expect(vm.answerDraft, isNull);
+    });
+
+    test('repository failure clears existing questionnaire and draft answers', () async {
+      final vm = PersonalityQuestionnaireViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+      );
+
+      await vm.loadQuestionnaire();
+      expect(vm.status, PersonalityQuestionnaireStatus.ready);
+      expect(vm.questionnaire, isNotNull);
+
+      // Subsequent refresh fails
+      mockRepo.result = const QuestionnaireResult.failure(
+        failureType: QuestionnaireFailureType.unauthorized,
+        errorMessage: 'Session revoked',
+      );
+
+      await vm.loadQuestionnaire(refresh: true);
+
+      expect(vm.status, PersonalityQuestionnaireStatus.accessDenied);
+      expect(vm.questionnaire, isNull);
+      expect(vm.answerDraft, isNull);
+    });
+
+    test('malformed payload failure maps to error state', () async {
+      mockRepo.result = const QuestionnaireResult.failure(
+        failureType: QuestionnaireFailureType.unknown,
+        errorMessage: 'Malformed questionnaire definition format.',
+      );
+
+      final vm = PersonalityQuestionnaireViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-test-123'),
+      );
+
+      await vm.loadQuestionnaire();
+      expect(vm.status, PersonalityQuestionnaireStatus.error);
+      expect(vm.isError, isTrue);
+      expect(vm.errorMessage, 'Malformed questionnaire definition format.');
+    });
   });
+}
+
+class _DelayedMockRepo implements IPersonalityQuestionnaireRepository {
+  final Completer<QuestionnaireResult<PersonalityQuestionnaire>> completer;
+  _DelayedMockRepo(this.completer);
+
+  @override
+  Future<QuestionnaireResult<PersonalityQuestionnaire>> getActiveQuestionnaire() => completer.future;
 }
