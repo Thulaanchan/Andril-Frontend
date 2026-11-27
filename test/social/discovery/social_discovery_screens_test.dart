@@ -9,16 +9,24 @@ import 'package:andril_mobile/features/social/discovery/presentation/social_disc
 import 'package:andril_mobile/features/social/discovery/presentation/social_member_profile_screen.dart';
 import 'package:andril_mobile/features/social/discovery/presentation/social_saved_profiles_screen.dart';
 import 'package:andril_mobile/features/social/interests_preferences/domain/social_preferences_model.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
 class FakeScreenSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _stubPhase;
+  final String? _subject;
   final Set<VoidCallback> _clearers = {};
 
-  FakeScreenSessionController({SessionPhase phase = SessionPhase.signedIn})
-      : _stubPhase = phase;
+  FakeScreenSessionController({
+    SessionPhase phase = SessionPhase.signedIn,
+    String? subject = 'user_test_subject',
+  })  : _stubPhase = phase,
+        _subject = subject;
 
   @override
   SessionPhase get phase => _stubPhase;
+
+  @override
+  String? get subject => _subject;
 
   @override
   bool get moduleHomeAuthorized => false;
@@ -116,7 +124,7 @@ void main() {
       final vm = SocialDiscoveryViewModel(
         repository: repo,
         sessionController: session,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_test_subject'),
       );
       await vm.initialize();
 
@@ -150,7 +158,7 @@ void main() {
       final vm = SocialDiscoveryViewModel(
         repository: repo,
         sessionController: session,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_test_subject'),
       );
       await vm.initialize();
 
@@ -178,7 +186,7 @@ void main() {
       final vm = SocialDiscoveryViewModel(
         repository: repo,
         sessionController: session,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_test_subject'),
       );
       await vm.initialize();
 
@@ -212,7 +220,7 @@ void main() {
       final vm = SocialDiscoveryViewModel(
         repository: repo,
         sessionController: session,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_test_subject'),
       );
       await vm.initialize();
 
@@ -236,7 +244,7 @@ void main() {
       final vm = SocialDiscoveryViewModel(
         repository: repo,
         sessionController: session,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_test_subject'),
       );
       await vm.initialize();
 
@@ -284,7 +292,7 @@ void main() {
       final vm = SocialDiscoveryViewModel(
         repository: repo,
         sessionController: session,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_test_subject'),
       );
       await vm.initialize();
 
