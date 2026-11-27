@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import '../../../../app/router/routes/social/social_routes.dart';
 import '../../likes_matches/domain/authorization/social_access_boundary.dart';
 import '../../likes_matches/domain/authorization/social_match_communication_boundary.dart';
 
@@ -12,6 +13,8 @@ enum SocialDestination {
   profile,
   personality,
   search,
+  savedProfiles,
+  preferences,
   accessDenied,
 }
 
@@ -69,14 +72,16 @@ class SocialNavigationCoordinator extends ChangeNotifier {
 
   /// Resolves approved route path for a given [SocialDestination].
   static String routeForDestination(SocialDestination destination) => switch (destination) {
-        SocialDestination.home => '/social/home',
-        SocialDestination.discovery => '/social/discovery',
-        SocialDestination.connections => '/social/connections',
-        SocialDestination.zones => '/social/zones',
-        SocialDestination.profile => '/social/profile',
-        SocialDestination.personality => '/social/personality/intro',
-        SocialDestination.search => '/social/search',
-        SocialDestination.accessDenied => '/social/access-denied',
+        SocialDestination.home => SocialRoutes.home,
+        SocialDestination.discovery => SocialRoutes.discovery,
+        SocialDestination.connections => SocialRoutes.connections,
+        SocialDestination.zones => SocialRoutes.zones,
+        SocialDestination.profile => SocialRoutes.myProfile,
+        SocialDestination.personality => SocialRoutes.personalityIntro,
+        SocialDestination.search => SocialRoutes.search,
+        SocialDestination.savedProfiles => SocialRoutes.savedProfiles,
+        SocialDestination.preferences => SocialRoutes.preferences,
+        SocialDestination.accessDenied => SocialRoutes.accessDenied,
       };
 
   /// Updates or binds authoritative access evidence to this coordinator.
@@ -113,6 +118,17 @@ class SocialNavigationCoordinator extends ChangeNotifier {
     return false;
   }
 
+  /// Validates whether a target route path is accessible under current authorization.
+  bool canNavigateToPath(String path, {Object? arguments}) {
+    if (!SocialRouteRegistry.isApproved(path)) {
+      return false;
+    }
+    if (SocialRouteRegistry.isGuarded(path) && !isAuthorized) {
+      return false;
+    }
+    return SocialRouteRegistry.validateArguments(path, arguments);
+  }
+
   /// Guarded navigation to an approved Social destination.
   bool navigateTo(SocialDestination destination) {
     if (destination == SocialDestination.accessDenied) {
@@ -141,6 +157,17 @@ class SocialNavigationCoordinator extends ChangeNotifier {
     notifyListeners();
     return true;
   }
+
+  /// Dedicated shortcut navigators.
+  bool navigateToHome() => navigateTo(SocialDestination.home);
+  bool navigateToDiscovery() => navigateTo(SocialDestination.discovery);
+  bool navigateToConnections() => navigateTo(SocialDestination.connections);
+  bool navigateToZones() => navigateTo(SocialDestination.zones);
+  bool navigateToProfile() => navigateTo(SocialDestination.profile);
+  bool navigateToPersonality() => navigateTo(SocialDestination.personality);
+  bool navigateToSearch() => navigateTo(SocialDestination.search);
+  bool navigateToSavedProfiles() => navigateTo(SocialDestination.savedProfiles);
+  bool navigateToPreferences() => navigateTo(SocialDestination.preferences);
 
   /// Guarded handoff to M4 peer messaging for matched connections.
   bool navigateToChat(MatchCommunicationEvidence evidence) {

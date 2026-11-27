@@ -47,8 +47,8 @@ class _SocialDiscoveryFiltersScreenState
   void _initializeFromModel(SocialPreferencesModel model) {
     _showMe = model.showMe;
     _ageRange = RangeValues(
-      model.minAge.toDouble().clamp(18.0, 99.0),
-      model.maxAge.toDouble().clamp(18.0, 99.0),
+      model.minAge.toDouble().clamp(18.0, 80.0),
+      model.maxAge.toDouble().clamp(18.0, 80.0),
     );
     _distanceKm = model.maxDistanceKm.toDouble().clamp(5.0, 100.0);
     _selectedGoals = Set<String>.of(model.relationshipGoals);
