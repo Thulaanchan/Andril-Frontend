@@ -6,6 +6,8 @@ import '../../domain/entities/classroom_join_request.dart';
 import '../../domain/entities/learning_classroom.dart';
 import '../widgets/classroom_card.dart';
 import '../widgets/classroom_filter_bar.dart';
+import '../widgets/create_classroom_dialog.dart';
+import '../widgets/host_classroom_requests_dialog.dart';
 import '../widgets/request_to_join_dialog.dart';
 
 /// Presentation screen for Learning Classrooms Hub & Discovery (CF-06 / CF-07, BRD v2.4-R1, pages 7 and 15).
@@ -58,6 +60,7 @@ class _LearningClassroomsHubScreenState
 
   late List<LearningClassroom> _classrooms;
   final List<ClassroomJoinRequest> _pendingRequests = [];
+  final Map<String, List<ClassroomJoinRequest>> _hostAdmissionRequests = {};
   String? _confirmationBannerMessage;
 
   @override
@@ -69,6 +72,16 @@ class _LearningClassroomsHubScreenState
   void _initData() {
     _classrooms =
         List.of(widget.initialClassrooms ?? LearningClassroom.sampleClassrooms);
+    _hostAdmissionRequests.clear();
+    // Seed sample pending admission request for hosted classroom to enable host review workflow
+    _hostAdmissionRequests['cls_my_mentorship_classroom_06'] = [
+      ClassroomJoinRequest.create(
+        requestId: 'req_seed_host_01',
+        classroomId: 'cls_my_mentorship_classroom_06',
+        applicantProfileId: 'prof_applicant_charlie',
+        note: 'Looking forward to participating in the architecture labs.',
+      ),
+    ];
   }
 
   @override
@@ -81,6 +94,7 @@ class _LearningClassroomsHubScreenState
       _selectedTabIndex = 0;
       _confirmationBannerMessage = null;
       _pendingRequests.clear();
+      _hostAdmissionRequests.clear();
       _initData();
     }
   }
@@ -148,6 +162,76 @@ class _LearningClassroomsHubScreenState
       }
       _confirmationBannerMessage = 'Admission request cancelled.';
     });
+  }
+
+  void _openCreateClassroomDialog() {
+    CreateClassroomDialog.show(
+      context,
+      onCreate: ({
+        required String name,
+        required String description,
+        required String category,
+        required ClassroomPrivacy privacy,
+        int? capacity,
+        List<String> tags = const [],
+      }) async {
+        final newClassroom = LearningClassroom.create(
+          id: 'cls_${DateTime.now().millisecondsSinceEpoch}',
+          name: name,
+          description: description,
+          category: category,
+          privacy: privacy,
+          memberCount: 1,
+          capacity: capacity,
+          hostProfileId: widget.currentUserId,
+          hostDisplayName: widget.currentDisplayName,
+          membershipStatus: ClassroomMembershipStatus.host,
+          tags: tags,
+          isDiscoverable: privacy != ClassroomPrivacy.closed,
+          createdAt: DateTime.now(),
+        );
+
+        setState(() {
+          _classrooms.insert(0, newClassroom);
+          _confirmationBannerMessage =
+              'Classroom "$name" created successfully.';
+        });
+        return true;
+      },
+    );
+  }
+
+  void _handleManageHostRequests(LearningClassroom classroom) {
+    final requests = List<ClassroomJoinRequest>.of(
+        _hostAdmissionRequests[classroom.id] ?? const []);
+    HostClassroomRequestsDialog.show(
+      context,
+      classroom: classroom,
+      pendingRequests: requests,
+      onApprove: (req) {
+        setState(() {
+          _hostAdmissionRequests[classroom.id]
+              ?.removeWhere((r) => r.requestId == req.requestId);
+          final idx = _classrooms.indexWhere((c) => c.id == classroom.id);
+          if (idx != -1) {
+            final current = _classrooms[idx];
+            _classrooms[idx] = current.copyWith(
+              memberCount: current.memberCount + 1,
+            );
+          }
+          _confirmationBannerMessage =
+              'Approved applicant for "${classroom.name}".';
+        });
+      },
+      onDecline: (req) {
+        setState(() {
+          _hostAdmissionRequests[classroom.id]
+              ?.removeWhere((r) => r.requestId == req.requestId);
+          _confirmationBannerMessage =
+              'Declined applicant request for "${classroom.name}".';
+        });
+      },
+    );
   }
 
   List<LearningClassroom> _getFilteredClassrooms() {
@@ -301,6 +385,12 @@ class _LearningClassroomsHubScreenState
                         onJoin: () => _handleJoinPublicClassroom(classroom),
                         onRequestToJoin: () => _handleRequestToJoin(classroom),
                         onCancelRequest: () => _handleCancelRequest(classroom),
+                        onManageRequests: classroom.membershipStatus ==
+                                ClassroomMembershipStatus.host
+                            ? () => _handleManageHostRequests(classroom)
+                            : null,
+                        pendingRequestsCount:
+                            _hostAdmissionRequests[classroom.id]?.length ?? 0,
                       );
                     },
                   ),
@@ -326,6 +416,17 @@ class _LearningClassroomsHubScreenState
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18.0),
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          TextButton.icon(
+            key: const ValueKey('btn_appbar_create_classroom'),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Create'),
+            style: TextButton.styleFrom(
+              foregroundColor: LearningColors.primary,
+            ),
+            onPressed: _openCreateClassroomDialog,
+          ),
+        ],
         elevation: 0.5,
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF1E293B),

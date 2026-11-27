@@ -169,6 +169,8 @@ class LearningDependenciesScope {
       repository: const LearningCirclesRepository(),
       sessionController: _sessionController,
       isLearningActivated: _sessionController?.moduleHomeAuthorized ?? false,
+      currentProfileId: _sessionController?.subject ?? 'current_learner_prof',
+      currentDisplayName: 'Current Learner',
     );
   }
 
