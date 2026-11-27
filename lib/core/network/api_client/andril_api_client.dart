@@ -26,6 +26,20 @@ enum SocialEndpoint {
   final String path;
 }
 
+enum LearningEndpoint {
+  setup('GET', '/api/v1/learning/setup'),
+  setupSelections('PUT', '/api/v1/learning/setup/selections'),
+  setupGoalCreate('POST', '/api/v1/learning/setup/goals'),
+  profileDraft('PUT', '/api/v1/account/profiles/learning'),
+  profileGet('GET', '/api/v1/account/profiles/learning'),
+  currentPhoto('GET', '/api/v1/account/profiles/learning/photos/current'),
+  cvImportReviews('POST', '/api/v1/learning/cv-imports/reviews');
+
+  const LearningEndpoint(this.method, this.path);
+  final String method;
+  final String path;
+}
+
 enum HandoffIssue {
   reauthenticationRequired,
   verificationRequired,
@@ -35,6 +49,8 @@ enum HandoffIssue {
   unavailable,
   invalidResponse,
   sessionChanged,
+  badRequest,
+  conflict,
 }
 
 /// Exposes only allowlisted error information, never a Dio error or body.
@@ -101,20 +117,40 @@ class AndrilApiClient {
   }
 
   Future<Map<String, Object?>> request(
-      AccountEndpoint endpoint, BackendSession session) =>
+          AccountEndpoint endpoint, BackendSession session) =>
       _sendAndInterpret(endpoint.method, endpoint.path, session,
           isMeEndpoint: endpoint == AccountEndpoint.me);
 
   Future<Map<String, Object?>> requestSocial(
-      SocialEndpoint endpoint, BackendSession session,
-      {Map<String, Object?>? body}) =>
+          SocialEndpoint endpoint, BackendSession session,
+          {Object? body}) =>
       _sendAndInterpret(endpoint.method, endpoint.path, session,
-          isMeEndpoint: false, data: body);
+          isMeEndpoint: false, body: body);
+
+  Future<Map<String, Object?>> requestLearning(
+          LearningEndpoint endpoint, BackendSession session,
+          {Object? body, Map<String, String>? headers}) =>
+      _sendAndInterpret(endpoint.method, endpoint.path, session,
+          isMeEndpoint: false, body: body, headers: headers);
+
+  Future<Map<String, Object?>> requestLearningPath(
+      String method, String path, BackendSession session,
+      {Object? body, Map<String, String>? headers}) {
+    if (!path.startsWith('/api/v1/learning/') &&
+        !path.startsWith('/api/v1/account/profiles/learning')) {
+      throw ArgumentError('Path must be an approved learning path: ' + path);
+    }
+    return _sendAndInterpret(method, path, session,
+        isMeEndpoint: false, body: body, headers: headers);
+  }
 
   Future<Map<String, Object?>> _sendAndInterpret(
       String method, String path, BackendSession session,
-      {required bool isMeEndpoint, Object? data}) async {
-    final initial = await _send(method, path, session, data: data);
+      {required bool isMeEndpoint,
+      Object? body,
+      Map<String, String>? headers}) async {
+    final initial =
+        await _send(method, path, session, body: body, headers: headers);
     final dispatched = initial.credential;
     var response = initial.response;
     // Automatic replay is limited to reads. An uncertain initialize can be
@@ -126,7 +162,9 @@ class AndrilApiClient {
       }
       final replacement = _credential(session);
       if (replacement.accessToken != dispatched.accessToken) {
-        response = (await _send(method, path, session, data: data)).response;
+        response =
+            (await _send(method, path, session, body: body, headers: headers))
+                .response;
       }
     }
     return _interpret(path, response, isMeEndpoint: isMeEndpoint);
@@ -150,20 +188,26 @@ class AndrilApiClient {
 
   Future<({Response<String> response, BackendCredential credential})> _send(
       String method, String path, BackendSession session,
-      {Object? data}) async {
+      {Object? body, Map<String, String>? headers}) async {
     _credential(session);
     final dispatch = _Dispatch(session);
     Response<String> response;
     try {
+      final requestHeaders = <String, String>{
+        'Accept': 'application/json, application/problem+json',
+        if (headers != null) ...headers,
+      };
+      String? data;
+      if (body != null) {
+        data = jsonEncode(body);
+        requestHeaders['Content-Type'] = 'application/json';
+      }
       response = await _dio.requestUri<String>(
         _origin.replace(path: path),
-        data: data == null ? null : jsonEncode(data),
+        data: data,
         options: Options(
           method: method,
-          headers: {
-            'Accept': 'application/json, application/problem+json',
-            if (data != null) 'Content-Type': 'application/json',
-          },
+          headers: requestHeaders,
           extra: {_Dispatch.key: dispatch},
           responseType: ResponseType.plain,
           validateStatus: (_) => true,
@@ -179,8 +223,7 @@ class AndrilApiClient {
     return (response: response, credential: dispatch.credential!);
   }
 
-  Map<String, Object?> _interpret(
-      String path, Response<String> response,
+  Map<String, Object?> _interpret(String path, Response<String> response,
       {required bool isMeEndpoint}) {
     final status = response.statusCode;
     final contentTypes = response.headers['content-type'];
@@ -191,9 +234,14 @@ class AndrilApiClient {
     if (status == 200 && mediaType == 'application/json' && json != null) {
       return json;
     }
+    if (status == 204) {
+      return const <String, Object?>{};
+    }
     final problem =
         mediaType == 'application/problem+json' && json?['status'] == status;
     switch (status) {
+      case 400:
+        throw HandoffFailure(HandoffIssue.badRequest, statusCode: status);
       case 401:
         throw HandoffFailure(HandoffIssue.reauthenticationRequired, statusCode: status);
       case 403:
@@ -209,6 +257,8 @@ class AndrilApiClient {
           throw HandoffFailure(HandoffIssue.accountNotInitialized, statusCode: status);
         }
         throw HandoffFailure(HandoffIssue.unavailable, statusCode: status);
+      case 409:
+        throw HandoffFailure(HandoffIssue.conflict, statusCode: status);
       case 429:
         final values = response.headers['retry-after'];
         final value = values?.length == 1 ? values!.single.trim() : null;

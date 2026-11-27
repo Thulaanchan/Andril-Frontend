@@ -325,6 +325,16 @@ class SocialProfileManagementRepository implements ISocialProfileManagementRepos
           type: SocialProfileFailureType.unknown,
           message: 'Malformed response returned by server.',
         ));
+      case HandoffIssue.badRequest:
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.validationFailure,
+          message: 'Invalid profile draft format.',
+        ));
+      case HandoffIssue.conflict:
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.displayNameUnavailable,
+          message: 'The display name is already taken.',
+        ));
     }
   }
 
