@@ -146,13 +146,13 @@ class SocialDiscoveryEmptyState extends StatelessWidget {
       };
 
   String get _titleText => switch (type) {
-        SocialDiscoveryEmptyType.noCandidates => 'No One Nearby Right Now',
+        SocialDiscoveryEmptyType.noCandidates => 'No Profiles Found',
         SocialDiscoveryEmptyType.endOfDeck => 'You\'re All Caught Up',
       };
 
   String get _bodyText => switch (type) {
         SocialDiscoveryEmptyType.noCandidates =>
-          'We couldn\'t find anyone matching your current filters. Try expanding your search distance or relaxing preference settings.',
+          'You have reviewed all available profiles for your current filters. Adjust your radius or preferences to see more people.',
         SocialDiscoveryEmptyType.endOfDeck =>
           'You\'ve reviewed all available discovery profiles for today. Check back later as new members join and update their profiles!',
       };
