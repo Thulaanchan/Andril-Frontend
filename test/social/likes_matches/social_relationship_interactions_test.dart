@@ -28,10 +28,7 @@ class _FakeRelationshipViewModel extends ChangeNotifier implements SocialRelatio
   SocialConnectionCategory get selectedCategory => SocialConnectionCategory.all;
 
   @override
-  bool isOperationPending(String targetProfileId) => false;
-
-  @override
-  void setCategory(SocialConnectionCategory category) {}
+  bool isOperationInProgress(String targetProfileId) => false;
 
   @override
   List<SocialRelationship> get connections => [
