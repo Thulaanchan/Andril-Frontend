@@ -294,6 +294,47 @@ void main() {
         expect(err.failure.type, SocialProfileFailureType.unknown);
       });
 
+      test('empty JSON object 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        f.transport.reply = (_) => _response(200, <String, dynamic>{});
+
+        final result = await f.repo.getProfile();
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('empty'));
+      });
+
+      test('wrong-module 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        f.transport.reply = (_) => _response(200, {
+              ..._validProfileJson,
+              'module': 'learning',
+            });
+
+        final result = await f.repo.getProfile();
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('module'));
+      });
+
+      test('missing visibility field in 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        final missingVisibility = Map<String, dynamic>.from(_validProfileJson)
+          ..remove('visibility');
+        f.transport.reply = (_) => _response(200, missingVisibility);
+
+        final result = await f.repo.getProfile();
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('visibility'));
+      });
+
       test('session change during inflight GET discards late response and returns sessionExpired', () async {
         final f = await _setup();
         final completer = Completer<ResponseBody>();
@@ -309,6 +350,75 @@ void main() {
         expect(result, isA<SocialProfileError>());
         final err = result as SocialProfileError;
         expect(err.failure.type, SocialProfileFailureType.sessionExpired);
+      });
+
+      test('PUT: empty JSON object 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        f.transport.reply = (_) => _response(200, <String, dynamic>{});
+
+        const draftToSave = SocialProfileDraft(displayName: 'Elena', bio: 'My bio');
+        final result = await f.repo.updateProfile(draftToSave);
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('empty'));
+      });
+
+      test('PUT: wrong-module 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        f.transport.reply = (_) => _response(200, {
+              ..._validProfileJson,
+              'module': 'payments',
+            });
+
+        const draftToSave = SocialProfileDraft(displayName: 'Elena');
+        final result = await f.repo.updateProfile(draftToSave);
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('module'));
+      });
+
+      test('PUT: missing visibility field in 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        final missingVisibility = Map<String, dynamic>.from(_validProfileJson)
+          ..remove('visibility');
+        f.transport.reply = (_) => _response(200, missingVisibility);
+
+        const draftToSave = SocialProfileDraft(displayName: 'Elena');
+        final result = await f.repo.updateProfile(draftToSave);
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('visibility'));
+      });
+
+      test('PUT: server-cleared bio (null) is authoritative over client draft bio', () async {
+        // Verifies Bug #2 fix: when the server returns bio: null after PUT,
+        // the saved draft must have bio == null, not the original client draft bio.
+        final f = await _setup();
+        f.transport.reply = (_) => _response(200, {
+              ..._validProfileJson,
+              'displayName': 'ElenaR',
+              'bio': null, // server clears bio
+            });
+
+        const draftToSave = SocialProfileDraft(
+          displayName: 'ElenaR',
+          bio: 'My old bio that should be cleared',
+        );
+        final result = await f.repo.updateProfile(draftToSave);
+
+        expect(result, isA<SocialProfileSuccess>());
+        final saved = (result as SocialProfileSuccess).draft;
+        expect(saved.displayName, 'ElenaR');
+        // Server returned null — saved state must reflect the cleared bio, not the client draft value.
+        expect(saved.bio, isNull,
+            reason: 'Server-returned bio: null must clear the saved bio, '
+                'not fall back to the client draft bio.');
       });
     });
 
@@ -430,6 +540,75 @@ void main() {
         expect(result, isA<SocialProfileError>());
         final err = result as SocialProfileError;
         expect(err.failure.type, SocialProfileFailureType.sessionExpired);
+      });
+
+      test('PUT: empty JSON object 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        f.transport.reply = (_) => _response(200, <String, dynamic>{});
+
+        const draftToSave = SocialProfileDraft(displayName: 'Elena', bio: 'My bio');
+        final result = await f.repo.updateProfile(draftToSave);
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('empty'));
+      });
+
+      test('PUT: wrong-module 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        f.transport.reply = (_) => _response(200, {
+              ..._validProfileJson,
+              'module': 'payments',
+            });
+
+        const draftToSave = SocialProfileDraft(displayName: 'Elena');
+        final result = await f.repo.updateProfile(draftToSave);
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('module'));
+      });
+
+      test('PUT: missing visibility field in 200 response is rejected as unknown failure', () async {
+        final f = await _setup();
+        final missingVisibility = Map<String, dynamic>.from(_validProfileJson)
+          ..remove('visibility');
+        f.transport.reply = (_) => _response(200, missingVisibility);
+
+        const draftToSave = SocialProfileDraft(displayName: 'Elena');
+        final result = await f.repo.updateProfile(draftToSave);
+
+        expect(result, isA<SocialProfileError>());
+        final err = result as SocialProfileError;
+        expect(err.failure.type, SocialProfileFailureType.unknown);
+        expect(err.failure.message, contains('visibility'));
+      });
+
+      test('PUT: server-cleared bio (null) is authoritative over client draft bio', () async {
+        // Verifies Bug #2 fix: when the server returns bio: null after PUT,
+        // the saved draft must have bio == null, not the original client draft bio.
+        final f = await _setup();
+        f.transport.reply = (_) => _response(200, {
+              ..._validProfileJson,
+              'displayName': 'ElenaR',
+              'bio': null, // server clears bio
+            });
+
+        const draftToSave = SocialProfileDraft(
+          displayName: 'ElenaR',
+          bio: 'My old bio that should be cleared',
+        );
+        final result = await f.repo.updateProfile(draftToSave);
+
+        expect(result, isA<SocialProfileSuccess>());
+        final saved = (result as SocialProfileSuccess).draft;
+        expect(saved.displayName, 'ElenaR');
+        // Server returned null — saved state must reflect the cleared bio, not the client draft value.
+        expect(saved.bio, isNull,
+            reason: 'Server-returned bio: null must clear the saved bio, '
+                'not fall back to the client draft bio.');
       });
     });
 
