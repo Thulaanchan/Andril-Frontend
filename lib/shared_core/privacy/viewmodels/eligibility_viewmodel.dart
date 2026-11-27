@@ -19,6 +19,8 @@ class EligibilityViewModel extends ChangeNotifier {
   bool _isServiceUnavailable = false;
   String? _errorMessage;
 
+  String _languageCode = 'en';
+
   DateTime? get dateOfBirth => _dateOfBirth;
   GenderType? get gender => _gender;
   bool get termsAccepted => _termsAccepted;
@@ -26,6 +28,46 @@ class EligibilityViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isServiceUnavailable => _isServiceUnavailable;
   String? get errorMessage => _errorMessage;
+  String get languageCode => _languageCode;
+
+  /// ISO-8601 YYYY-MM-DD representation of the selected date of birth.
+  String? get dateOfBirthIso {
+    if (_dateOfBirth == null) return null;
+    final y = _dateOfBirth!.year.toString().padLeft(4, '0');
+    final m = _dateOfBirth!.month.toString().padLeft(2, '0');
+    final d = _dateOfBirth!.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  void setLanguageCode(String code) {
+    _languageCode = code;
+    notifyListeners();
+  }
+
+  /// Sets DOB from an ISO YYYY-MM-DD string with strict calendar validity (e.g. leap years).
+  void setDateOfBirthFromIso(String isoString) {
+    try {
+      final parts = isoString.split('-');
+      if (parts.length != 3) {
+        _errorMessage = 'Invalid date format. Expected YYYY-MM-DD.';
+        notifyListeners();
+        return;
+      }
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+      final parsed = DateTime(year, month, day);
+      if (parsed.year != year || parsed.month != month || parsed.day != day) {
+        _errorMessage = 'Invalid calendar date.';
+        notifyListeners();
+        return;
+      }
+      setDateOfBirth(parsed);
+    } catch (_) {
+      _errorMessage = 'Invalid date format. Expected YYYY-MM-DD.';
+      notifyListeners();
+    }
+  }
 
   /// Calculates user age locally strictly for display guidance (Rule 01 & 02).
   int? get calculatedAge {
