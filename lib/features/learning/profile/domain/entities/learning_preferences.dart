@@ -79,6 +79,38 @@ class LearningPreferences {
     );
   }
 
+  /// Deserializes a [LearningPreferences] from JSON map.
+  factory LearningPreferences.fromJson(Map<String, dynamic> json) {
+    return LearningPreferences(
+      languages: (json['languages'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const ['English'],
+      learningStyles: (json['learningStyles'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          (json['learning_styles'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      availability: json['availability']?.toString(),
+      notifications: (json['notifications'] as Map<dynamic, dynamic>?)?.map(
+            (k, v) => MapEntry(k.toString(), v == true),
+          ) ??
+          const {},
+    );
+  }
+
+  /// Serializes this [LearningPreferences] to a JSON-compatible map.
+  Map<String, Object?> toJson() {
+    return {
+      'languages': languages,
+      'learningStyles': learningStyles,
+      if (availability != null) 'availability': availability,
+      'notifications': notifications,
+    };
+  }
+
   /// Factory creating a synthetic sample preferences configuration for previews and tests.
   factory LearningPreferences.syntheticSample() {
     return const LearningPreferences(

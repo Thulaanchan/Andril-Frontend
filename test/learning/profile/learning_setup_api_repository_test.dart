@@ -80,6 +80,8 @@ class _FakeRemoteDataSource implements ILearningRemoteDataSource {
     required String displayName,
     String? bio,
     String visibility = 'private',
+    Map<String, Object?>? preferences,
+    String? avatarUrl,
   }) async =>
       {'displayName': displayName, 'bio': bio, 'visibility': visibility};
 

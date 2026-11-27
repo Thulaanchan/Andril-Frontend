@@ -131,6 +131,7 @@ class LearningDependenciesScope {
     return _profileRepository ??= LearningProfileApiRepository(
       sessionController: session,
       remoteDataSource: remote,
+      setupRepository: setupRepository,
     );
   }
 
