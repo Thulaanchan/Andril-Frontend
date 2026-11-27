@@ -122,14 +122,14 @@ class MatchCommunicationEvidence {
       isUnmatched: json['isUnmatched'] as bool? ?? false,
       isExpired: json['isExpired'] as bool? ?? false,
       m4ChannelId: json['m4ChannelId'] as String?,
-      verifiedAt: DateTime.tryParse(json['verifiedAt'] as String? ?? '') ?? DateTime.now(),
+      verifiedAt: DateTime.tryParse(json['verifiedAt'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
       isM4Authorized: json['isM4Authorized'] as bool? ?? false,
     );
   }
 
   @override
   String toString() =>
-      'MatchCommunicationEvidence(matchId: $matchId, mutual: $isMutual, m4Auth: $isM4Authorized, expired: $isExpired)';
+      'MatchCommunicationEvidence(matchId: ${matchId.isEmpty ? 'none' : 'redacted'}, mutual: $isMutual, m4Auth: $isM4Authorized, expired: $isExpired)';
 }
 
 /// Abstract contract governing peer communication clearance between matched members.
@@ -167,16 +167,21 @@ class SocialMatchCommunicationBoundary implements ISocialMatchCommunicationBound
       return MatchCommunicationStatus.unauthorized;
     }
 
+    // Invalid timestamp check: zero or negative epoch is invalid
+    if (evidence.verifiedAt.millisecondsSinceEpoch <= 0) {
+      return MatchCommunicationStatus.unauthorized;
+    }
+
     // Identity validity check: participants must be distinct non-empty IDs
-    if (evidence.participantA.isEmpty ||
-        evidence.participantB.isEmpty ||
+    if (evidence.participantA.trim().isEmpty ||
+        evidence.participantB.trim().isEmpty ||
         evidence.participantA == evidence.participantB) {
       return MatchCommunicationStatus.unauthorized;
     }
 
     // Caller binding check: if callerId is provided, caller must be one of the participants
     if (callerId != null &&
-        callerId.isNotEmpty &&
+        callerId.trim().isNotEmpty &&
         callerId != evidence.participantA &&
         callerId != evidence.participantB) {
       return MatchCommunicationStatus.unauthorized;
