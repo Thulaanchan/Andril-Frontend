@@ -13,34 +13,11 @@ import '../../../../features/social/likes_matches/domain/authorization/social_ma
 import '../../../../features/social/likes_matches/presentation/social_relationship_viewmodel.dart';
 import '../../../../features/social/personality/data/repositories/personality_questionnaire_repository.dart';
 import '../../../../features/social/personality/presentation/viewmodels/personality_questionnaire_viewmodel.dart';
-import '../../../../features/social/profile/viewmodels/social_profile_draft.dart';
 import '../../../../features/social/profile/viewmodels/social_profile_management_repository.dart';
 import '../../../../features/social/profile/viewmodels/social_profile_management_viewmodel.dart';
-import '../../../../features/social/profile/viewmodels/social_profile_repository.dart';
 import '../../../../features/social/zones/group_contracts/social_zone_repository.dart';
 import '../../../../features/social/zones/presentation/social_zone_management_viewmodel.dart';
 import '../../../../features/social/zones/presentation/social_zones_viewmodel.dart';
-
-/// Dormant-safe fallback repository for profile management when external backend is unconfigured.
-class _DormantSocialProfileManagementRepository implements ISocialProfileManagementRepository {
-  const _DormantSocialProfileManagementRepository();
-
-  @override
-  Future<SocialProfileResult> getProfile() async {
-    return const SocialProfileResult.failure(SocialProfileFailure(
-      type: SocialProfileFailureType.dependencyFailure,
-      message: 'Profile management endpoint is dormant.',
-    ));
-  }
-
-  @override
-  Future<SocialProfileResult> updateProfile(SocialProfileDraft draft) async {
-    return const SocialProfileResult.failure(SocialProfileFailure(
-      type: SocialProfileFailureType.dependencyFailure,
-      message: 'Profile management endpoint is dormant.',
-    ));
-  }
-}
 
 /// Scoped dependency container managing lifecycle and instances of Social module services.
 ///
@@ -266,7 +243,13 @@ class SocialDependenciesScope {
       throw StateError('Cannot initialize SocialProfileManagementViewModel without an authentic SessionController.');
     }
     return _profileManagementViewModel ??= SocialProfileManagementViewModel(
-      repository: repository ?? _profileManagementRepository ?? const _DormantSocialProfileManagementRepository(),
+      repository: repository ??
+          _profileManagementRepository ??
+          SocialProfileManagementRepository(
+            sessionController: session,
+            apiClient: _apiClient,
+            config: _appConfig,
+          ),
       sessionController: session,
       accessBoundary: _accessBoundary,
       accessEvidence: _accessEvidence,
