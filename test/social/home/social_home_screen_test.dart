@@ -4,15 +4,23 @@ import 'package:andril_mobile/core/security/session/session_controller.dart';
 import 'package:andril_mobile/features/shared/presentation/widgets/andril_module_app_bar.dart';
 import 'package:andril_mobile/features/social/home/screens/social_home_screen.dart';
 import 'package:andril_mobile/features/social/home/viewmodels/social_home_viewmodel.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
 class FakeScreenSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _stubPhase;
+  final String? _subject;
 
-  FakeScreenSessionController({SessionPhase phase = SessionPhase.signedIn})
-      : _stubPhase = phase;
+  FakeScreenSessionController({
+    SessionPhase phase = SessionPhase.signedIn,
+    String? subject = 'user_fixture_01',
+  })  : _stubPhase = phase,
+        _subject = subject;
 
   @override
   SessionPhase get phase => _stubPhase;
+
+  @override
+  String? get subject => _subject;
 
   @override
   bool get moduleHomeAuthorized => false;
@@ -42,8 +50,7 @@ void main() {
 
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
         initialDisplayName: 'Amara K.',
         initialUnreadNotifications: 2,
         initialRecommendations: fixtureRecommendations,
@@ -112,8 +119,7 @@ void main() {
 
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
         initialDisplayName: 'Amara K.',
         initialRecommendations: fixtureRecommendations,
       );
@@ -155,8 +161,7 @@ void main() {
 
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
         initialDisplayName: 'Amara K.',
         initialRecommendations: fixtureRecommendations,
       );
@@ -189,8 +194,7 @@ void main() {
       final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
         initialDisplayName: 'TabletUser',
       );
       await vm.initialize();
@@ -223,8 +227,7 @@ void main() {
       final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
       );
       await vm.initialize();
 
@@ -256,8 +259,7 @@ void main() {
       final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
-        isTestAuthorized: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
       );
       await vm.initialize();
 
