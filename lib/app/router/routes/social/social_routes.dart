@@ -139,4 +139,16 @@ class SocialRouteRegistry {
   static SocialRouteDescriptor? findByPath(String path) {
     return approvedRoutes.where((r) => r.path == path).firstOrNull;
   }
+
+  /// Whether the route requires authentication, adult verification, and Social opt-in.
+  static bool isGuarded(String path) {
+    final descriptor = findByPath(path);
+    if (descriptor == null) return true;
+    return descriptor.requiresAuth || descriptor.requiresAdult || descriptor.requiresOptIn;
+  }
+
+  /// Finds route descriptor by name.
+  static SocialRouteDescriptor? findByName(String name) {
+    return approvedRoutes.where((r) => r.name == name).firstOrNull;
+  }
 }
