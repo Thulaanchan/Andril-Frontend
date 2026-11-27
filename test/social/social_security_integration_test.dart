@@ -12,10 +12,19 @@ import 'package:andril_mobile/features/social/zones/presentation/social_zones_vi
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'u-minor-1';
   final List<VoidCallback> _clearers = [];
 
   @override
   SessionPhase get phase => _phase;
+
+  @override
+  String? get subject => _subject;
+
+  set subject(String? s) {
+    _subject = s;
+    notifyListeners();
+  }
 
   set phase(SessionPhase newPhase) {
     _phase = newPhase;
@@ -126,6 +135,7 @@ void main() {
 
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: fakeSession.subject ?? 'u-minor-1'),
         isSocialOptedIn: true,
       );
       coordinator.navigateTo(SocialDestination.zones);
