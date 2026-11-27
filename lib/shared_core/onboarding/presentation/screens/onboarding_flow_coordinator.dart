@@ -193,6 +193,7 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
   bool _hasNavigatedFromSplash = false;
   String _activeVerificationEmail = '';
   String? _activeRecoveryToken;
+  String _selectedLanguageCode = 'en';
 
   @override
   void initState() {
@@ -255,6 +256,7 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
       final savedCode = await _languageRepository.getSavedLanguage();
       if (AppLanguage.isValidCode(savedCode)) {
         _hasValidSavedLanguage = true;
+        _selectedLanguageCode = savedCode!;
       } else {
         _hasValidSavedLanguage = false;
       }
@@ -276,7 +278,13 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
     });
   }
 
-  void _goToWelcome() {
+  Future<void> _goToWelcome() async {
+    try {
+      final savedCode = await _languageRepository.getSavedLanguage();
+      if (AppLanguage.isValidCode(savedCode)) {
+        _selectedLanguageCode = savedCode!;
+      }
+    } catch (_) {}
     if (!mounted) return;
     setState(() => _currentStep = 2);
   }
@@ -413,11 +421,15 @@ class _OnboardingFlowCoordinatorState extends State<OnboardingFlowCoordinator> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 350),
-      switchInCurve: Curves.easeInOut,
-      switchOutCurve: Curves.easeInOut,
-      child: _buildCurrentScreen(),
+    return Localizations.override(
+      context: context,
+      locale: Locale(_selectedLanguageCode),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        child: _buildCurrentScreen(),
+      ),
     );
   }
 

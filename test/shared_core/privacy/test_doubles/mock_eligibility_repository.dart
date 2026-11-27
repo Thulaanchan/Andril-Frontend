@@ -1,17 +1,26 @@
 import 'package:andril_mobile/shared_core/privacy/domain/entities/eligibility_result.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/entities/gender_type.dart';
+import 'package:andril_mobile/shared_core/privacy/domain/entities/policy_document.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/repositories/eligibility_repository.dart';
 
 /// Test double for [EligibilityRepository] enforcing Rules 01, 02, and 04.
 class MockEligibilityRepository implements EligibilityRepository {
   MockEligibilityRepository({
     this.isServiceUnavailable = false,
-  });
+    List<PolicyDocument>? initialPolicies,
+  }) : policyDocuments = initialPolicies ?? [];
 
   bool isServiceUnavailable;
   EligibilityResult? forcedResult;
   bool lastTermsAccepted = false;
   bool lastPrivacyAccepted = false;
+  List<PolicyDocument> policyDocuments;
+
+  @override
+  Future<List<PolicyDocument>> getPolicyDocuments() async {
+    if (isServiceUnavailable) return const [];
+    return policyDocuments;
+  }
 
   @override
   Future<EligibilityResult> submitEligibility({

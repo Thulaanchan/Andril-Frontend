@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/entities/eligibility_result.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/entities/gender_type.dart';
+import 'package:andril_mobile/shared_core/privacy/domain/entities/policy_document.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/repositories/eligibility_repository.dart';
 import 'package:andril_mobile/shared_core/privacy/viewmodels/eligibility_viewmodel.dart';
 
@@ -8,6 +9,9 @@ class PolicyAcceptanceMockRepo implements EligibilityRepository {
   bool return503 = false;
   bool termsAgreedRecorded = false;
   bool privacyAcknowledgedRecorded = false;
+
+  @override
+  Future<List<PolicyDocument>> getPolicyDocuments() async => const [];
 
   @override
   Future<EligibilityResult> submitEligibility({
