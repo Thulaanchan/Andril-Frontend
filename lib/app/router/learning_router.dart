@@ -26,6 +26,7 @@ import '../../features/learning/growth_mentorship/presentation/screens/topic_gap
 import '../../features/learning/growth_mentorship/presentation/viewmodels/learning_growth_viewmodel.dart';
 import '../../features/learning/growth_mentorship/presentation/viewmodels/learning_mentorship_viewmodel.dart';
 import '../../features/learning/growth_mentorship/presentation/viewmodels/learning_topic_gap_viewmodel.dart';
+import '../../features/learning/home/screens/learning_home_container.dart';
 import '../../features/learning/pacts/data/repositories/learning_pacts_repository.dart';
 import '../../features/learning/pacts/presentation/screens/learning_pacts_hub_screen.dart';
 import '../../features/learning/pacts/presentation/screens/learning_pact_progress_screen.dart';
@@ -329,10 +330,9 @@ GoRouter createLearningRouter({
               GoRoute(
                 path: '/learning/home',
                 name: 'learning-home',
-                builder: (context, state) =>
-                    const _LearningDestinationPlaceholder(
-                  destinationName: 'Home',
-                  icon: Icons.home_rounded,
+                builder: (context, state) => LearningHomeContainer(
+                  dependencies: dependencies,
+                  accessPolicy: accessPolicy,
                 ),
               ),
             ],
