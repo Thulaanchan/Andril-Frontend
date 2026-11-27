@@ -4,6 +4,7 @@ import 'package:andril_mobile/core/security/session/session_controller.dart';
 import 'package:andril_mobile/features/social/home/screens/social_home_screen.dart';
 import 'package:andril_mobile/features/social/home/viewmodels/social_home_viewmodel.dart';
 import 'package:andril_mobile/features/social/home/viewmodels/social_navigation_coordinator.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import 'package:andril_mobile/features/social/zones/group_contracts/social_zone.dart';
 import 'package:andril_mobile/features/social/zones/group_contracts/social_zone_repository.dart';
 import 'package:andril_mobile/features/social/zones/presentation/social_zones_screen.dart';
@@ -39,6 +40,9 @@ class MockSocialZoneRepository implements ISocialZoneRepository {
 class FakeSessionController extends ChangeNotifier implements SessionController {
   @override
   SessionPhase get phase => SessionPhase.signedIn;
+
+  @override
+  String? get subject => 'journey_user_id';
 
   @override
   VoidCallback registerPrivateStateClearer(VoidCallback clearer) => () {};
@@ -110,11 +114,11 @@ void main() {
     testWidgets('executes complete journey from Home to Zones and Discovery', (tester) async {
       final coordinator = SocialNavigationCoordinator(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'journey_user_id'),
       );
       final homeVm = SocialHomeViewModel(
         sessionController: fakeSession,
-        isSocialOptedIn: true,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'journey_user_id'),
       );
       await homeVm.initialize();
 
