@@ -19,7 +19,9 @@ enum AccountEndpoint {
 enum SocialEndpoint {
   activeQuestionnaire('GET', '/api/v1/social/questionnaires/active'),
   profile('GET', '/api/v1/account/profiles/social'),
-  updateProfile('PUT', '/api/v1/account/profiles/social');
+  updateProfile('PUT', '/api/v1/account/profiles/social'),
+  submitQuestionnaireResponse('POST', '/api/v1/social/questionnaires/responses'),
+  myQuestionnaireResponse('GET', '/api/v1/social/questionnaires/responses/me');
 
   const SocialEndpoint(this.method, this.path);
   final String method;
