@@ -17,7 +17,9 @@ enum AccountEndpoint {
 }
 
 enum SocialEndpoint {
-  activeQuestionnaire('GET', '/api/v1/social/questionnaires/active');
+  activeQuestionnaire('GET', '/api/v1/social/questionnaires/active'),
+  profile('GET', '/api/v1/account/profiles/social'),
+  updateProfile('PUT', '/api/v1/account/profiles/social');
 
   const SocialEndpoint(this.method, this.path);
   final String method;
@@ -53,9 +55,10 @@ enum HandoffIssue {
 
 /// Exposes only allowlisted error information, never a Dio error or body.
 class HandoffFailure implements Exception {
-  const HandoffFailure(this.issue, {this.retryAfter});
+  const HandoffFailure(this.issue, {this.retryAfter, this.statusCode});
   final HandoffIssue issue;
   final Duration? retryAfter;
+  final int? statusCode;
 
   @override
   String toString() => 'HandoffFailure(' + issue.name + ')';
@@ -119,9 +122,10 @@ class AndrilApiClient {
           isMeEndpoint: endpoint == AccountEndpoint.me);
 
   Future<Map<String, Object?>> requestSocial(
-          SocialEndpoint endpoint, BackendSession session) =>
+          SocialEndpoint endpoint, BackendSession session,
+          {Object? body}) =>
       _sendAndInterpret(endpoint.method, endpoint.path, session,
-          isMeEndpoint: false);
+          isMeEndpoint: false, body: body);
 
   Future<Map<String, Object?>> requestLearning(
           LearningEndpoint endpoint, BackendSession session,
@@ -237,23 +241,24 @@ class AndrilApiClient {
         mediaType == 'application/problem+json' && json?['status'] == status;
     switch (status) {
       case 400:
-        throw const HandoffFailure(HandoffIssue.badRequest);
+        throw HandoffFailure(HandoffIssue.badRequest, statusCode: status);
       case 401:
-        throw const HandoffFailure(HandoffIssue.reauthenticationRequired);
+        throw HandoffFailure(HandoffIssue.reauthenticationRequired, statusCode: status);
       case 403:
         throw HandoffFailure(
             problem && json?['title'] == 'Email confirmation required'
                 ? HandoffIssue.verificationRequired
-                : HandoffIssue.forbidden);
+                : HandoffIssue.forbidden,
+            statusCode: status);
       case 404:
         if (isMeEndpoint &&
             problem &&
             json?['title'] == 'Account not initialized') {
-          throw const HandoffFailure(HandoffIssue.accountNotInitialized);
+          throw HandoffFailure(HandoffIssue.accountNotInitialized, statusCode: status);
         }
-        throw const HandoffFailure(HandoffIssue.unavailable);
+        throw HandoffFailure(HandoffIssue.unavailable, statusCode: status);
       case 409:
-        throw const HandoffFailure(HandoffIssue.conflict);
+        throw HandoffFailure(HandoffIssue.conflict, statusCode: status);
       case 429:
         final values = response.headers['retry-after'];
         final value = values?.length == 1 ? values!.single.trim() : null;
@@ -261,11 +266,12 @@ class AndrilApiClient {
             ? int.tryParse(value)
             : null;
         throw HandoffFailure(HandoffIssue.rateLimited,
-            retryAfter: seconds == null ? null : Duration(seconds: seconds));
+            retryAfter: seconds == null ? null : Duration(seconds: seconds),
+            statusCode: status);
       case 200:
-        throw const HandoffFailure(HandoffIssue.invalidResponse);
+        throw HandoffFailure(HandoffIssue.invalidResponse, statusCode: status);
       default:
-        throw const HandoffFailure(HandoffIssue.unavailable);
+        throw HandoffFailure(HandoffIssue.unavailable, statusCode: status);
     }
   }
 
