@@ -2,11 +2,14 @@ import 'package:andril_mobile/features/learning/cv_maker/presentation/screens/cv
 import 'package:andril_mobile/features/learning/portfolio_maker/domain/entities/portfolio_cv_import_result.dart';
 import 'package:andril_mobile/features/learning/portfolio_maker/domain/models/portfolio_models.dart';
 import 'package:andril_mobile/features/learning/portfolio_maker/domain/services/i_portfolio_cv_import_service.dart';
+import 'learning_cv_import_api_adapter.dart';
 
 /// Concrete implementation of [IPortfolioCvImportService] for private, owner-scoped CV import
 /// per ANDRIL LRN-06, PORT-01..05 & CV-01..05.
 class PortfolioCvImportService implements IPortfolioCvImportService {
-  const PortfolioCvImportService();
+  final ILearningCvImportRemoteDataSource? remoteDataSource;
+
+  const PortfolioCvImportService({this.remoteDataSource});
 
   @override
   Future<PortfolioCvImportResult> importProjectsIntoCv({
