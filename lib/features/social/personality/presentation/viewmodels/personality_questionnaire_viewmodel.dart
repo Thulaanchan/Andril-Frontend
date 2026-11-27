@@ -65,6 +65,7 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
   PersonalityAnswerDraft? get answerDraft => _answerDraft;
   int get currentQuestionIndex => _currentQuestionIndex;
   String? get errorMessage => _errorMessage;
+  bool get isSocialOptedIn => _isSocialOptedIn;
 
   bool get isLoading => _status == PersonalityQuestionnaireStatus.loading;
   bool get isReady => _status == PersonalityQuestionnaireStatus.ready;
@@ -108,7 +109,7 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
         evidence: _accessEvidence,
       );
     }
-    return _isSocialOptedIn;
+    return false;
   }
 
   String? selectedOptionForCurrentQuestion() {
