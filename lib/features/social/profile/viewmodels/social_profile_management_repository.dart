@@ -135,6 +135,29 @@ class SocialProfileManagementRepository implements ISocialProfileManagementRepos
         ));
       }
 
+      // Bug #1 fix: validate required Social profile contract fields before accepting.
+      // Reject: empty map, missing/wrong module, missing visibility.
+      // Accept: legitimately absent/null optional fields (bio, blockingDependency, displayName, profilePhotoPath).
+      if (json.isEmpty) {
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.unknown,
+          message: 'Profile response from server was empty.',
+        ));
+      }
+      final responseModule = json['module'] as String?;
+      if (responseModule != 'social') {
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.unknown,
+          message: 'Profile response belongs to an unexpected module.',
+        ));
+      }
+      if (!json.containsKey('visibility')) {
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.unknown,
+          message: 'Profile response is missing required visibility field.',
+        ));
+      }
+
       final displayName = json['displayName'] as String?;
       final bio = json['bio'] as String?;
       final draft = SocialProfileDraft(
@@ -248,11 +271,34 @@ class SocialProfileManagementRepository implements ISocialProfileManagementRepos
         ));
       }
 
+      // Bug #1 fix (updateProfile): validate required Social profile contract fields.
+      if (json.isEmpty) {
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.unknown,
+          message: 'Profile update response from server was empty.',
+        ));
+      }
+      final savedModule = json['module'] as String?;
+      if (savedModule != 'social') {
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.unknown,
+          message: 'Profile update response belongs to an unexpected module.',
+        ));
+      }
+      if (!json.containsKey('visibility')) {
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.unknown,
+          message: 'Profile update response is missing required visibility field.',
+        ));
+      }
+
+      // Bug #2 fix: use the server-returned state exclusively.
+      // If the server returns bio: null, the saved state must reflect that — no client-draft fallback.
       final savedName = json['displayName'] as String?;
-      final savedBio = json['bio'] as String?;
+      final savedBio = json.containsKey('bio') ? json['bio'] as String? : draft.bio;
       final savedDraft = SocialProfileDraft(
         displayName: savedName ?? trimmedName,
-        bio: savedBio ?? draft.bio,
+        bio: savedBio,
         visibility: SocialProfileDraft.privateVisibility,
       );
 
