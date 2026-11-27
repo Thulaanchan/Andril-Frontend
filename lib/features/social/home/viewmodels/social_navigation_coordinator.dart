@@ -28,6 +28,7 @@ class SocialNavigationCoordinator extends ChangeNotifier {
   final SessionController? _sessionController;
   final bool _isSocialOptedIn;
   final ValueChanged<String>? _onChatHandoff;
+  String? _boundSubject;
 
   SocialAccessEvidence? _accessEvidence;
   SocialDestination _currentDestination = SocialDestination.home;
@@ -47,6 +48,12 @@ class SocialNavigationCoordinator extends ChangeNotifier {
         _isSocialOptedIn = isSocialOptedIn,
         _accessEvidence = accessEvidence,
         _onChatHandoff = onChatHandoff {
+    try {
+      _boundSubject = _sessionController?.subject;
+    } catch (_) {
+      _boundSubject = null;
+    }
+    _sessionController?.addListener(_onSessionStateChanged);
     _unregisterSessionClearer = _sessionController?.registerPrivateStateClearer(_clearPrivateState);
   }
 
@@ -56,6 +63,21 @@ class SocialNavigationCoordinator extends ChangeNotifier {
   ISocialMatchCommunicationBoundary get communicationBoundary => _communicationBoundary;
   SocialAccessEvidence? get accessEvidence => _accessEvidence;
   bool get isSocialOptedIn => _isSocialOptedIn;
+
+  /// Route path for current destination matching approved SocialRoutes.
+  String get currentRoutePath => routeForDestination(_currentDestination);
+
+  /// Resolves approved route path for a given [SocialDestination].
+  static String routeForDestination(SocialDestination destination) => switch (destination) {
+        SocialDestination.home => '/social/home',
+        SocialDestination.discovery => '/social/discovery',
+        SocialDestination.connections => '/social/connections',
+        SocialDestination.zones => '/social/zones',
+        SocialDestination.profile => '/social/profile',
+        SocialDestination.personality => '/social/personality/intro',
+        SocialDestination.search => '/social/search',
+        SocialDestination.accessDenied => '/social/access-denied',
+      };
 
   /// Updates or binds authoritative access evidence to this coordinator.
   void updateAccessEvidence(SocialAccessEvidence? evidence) {
@@ -74,6 +96,12 @@ class SocialNavigationCoordinator extends ChangeNotifier {
     if (_sessionController == null || _sessionController.phase != SessionPhase.signedIn) {
       return false;
     }
+
+    try {
+      if (_boundSubject != null && _sessionController.subject != _boundSubject) {
+        return false;
+      }
+    } catch (_) {}
 
     if (_accessEvidence != null) {
       return _accessBoundary.isAccessGranted(
@@ -151,8 +179,23 @@ class SocialNavigationCoordinator extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onSessionStateChanged() {
+    String? currentSubject;
+    try {
+      currentSubject = _sessionController?.subject;
+    } catch (_) {
+      currentSubject = null;
+    }
+
+    if (_sessionController?.phase != SessionPhase.signedIn ||
+        (_boundSubject != null && currentSubject != _boundSubject)) {
+      _clearPrivateState();
+    }
+  }
+
   @override
   void dispose() {
+    _sessionController?.removeListener(_onSessionStateChanged);
     _unregisterSessionClearer?.call();
     _unregisterSessionClearer = null;
     super.dispose();
