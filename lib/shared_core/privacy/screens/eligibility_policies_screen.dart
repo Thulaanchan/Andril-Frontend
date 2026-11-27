@@ -4,6 +4,8 @@ import '../../../../app/themes/shared_core/colors/m2_colors.dart';
 import '../../../../app/themes/shared_core/components/m2_background_scaffold.dart';
 import '../../../../app/themes/shared_core/components/m2_buttons.dart';
 import '../../../../app/themes/shared_core/spacing/m2_spacing.dart';
+import '../../language_selection/domain/models/app_language.dart';
+import '../../onboarding/presentation/localization/onboarding_localizations.dart';
 import '../domain/entities/eligibility_result.dart';
 import '../domain/entities/gender_type.dart';
 import '../domain/entities/policy_document.dart';
@@ -58,27 +60,16 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
           repository: widget.repository!,
         );
     _viewModel.addListener(_onViewModelChanged);
+    _viewModel.loadPolicyDocuments();
 
     _guidelinesRecognizer = TapGestureRecognizer()
-      ..onTap = () => _openPolicyDocument(
-            PolicyDocument.communityGuidelines(
-              languageCode: _viewModel.languageCode,
-            ),
-          );
+      ..onTap = () => _openPolicyDocumentById('community_guidelines');
 
     _termsRecognizer = TapGestureRecognizer()
-      ..onTap = () => _openPolicyDocument(
-            PolicyDocument.termsOfService(
-              languageCode: _viewModel.languageCode,
-            ),
-          );
+      ..onTap = () => _openPolicyDocumentById('terms_of_service');
 
     _privacyRecognizer = TapGestureRecognizer()
-      ..onTap = () => _openPolicyDocument(
-            PolicyDocument.privacyPolicy(
-              languageCode: _viewModel.languageCode,
-            ),
-          );
+      ..onTap = () => _openPolicyDocumentById('privacy_policy');
   }
 
   void _onViewModelChanged() {
@@ -97,7 +88,112 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
     super.dispose();
   }
 
-  void _openPolicyDocument(PolicyDocument document) {
+  void _openPolicyDocumentById(String documentId) {
+    final l10n = OnboardingLocalizations.of(context);
+    final doc = _viewModel.getPolicyDocument(documentId);
+
+    // Rule 04: If document is null, service unavailable, or URL is not valid HTTPS, show 503 fail-closed sheet.
+    if (doc == null || _viewModel.policiesUnavailable || !doc.hasValidHttpsUrl) {
+      _showPoliciesUnavailableSheet(l10n);
+      return;
+    }
+
+    _showPolicyMetadataSheet(doc, l10n);
+  }
+
+  void _showPoliciesUnavailableSheet(OnboardingLocalizations l10n) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24.0, 16.0, 24.0, 32.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 48.0,
+                  height: 4.0,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2.0),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24.0),
+              const Center(
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  size: 48.0,
+                  color: Color(0xFFD97706),
+                ),
+              ),
+              const SizedBox(height: 16.0),
+              const Text(
+                'Policies Temporarily Unavailable',
+                style: TextStyle(
+                  fontSize: 20.0,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F3E48),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8.0),
+              Text(
+                'Official policy documents could not be verified from the server at this time (HTTP 503). Progression remains protected.',
+                style: TextStyle(
+                  fontSize: 14.0,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24.0),
+              M2PrimaryButton(
+                text: l10n.retryButton,
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  _viewModel.loadPolicyDocuments();
+                },
+              ),
+              const SizedBox(height: 8.0),
+              M2SecondaryButton(
+                text: l10n.closeButton,
+                onPressed: () => Navigator.of(sheetContext).pop(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showPolicyMetadataSheet(PolicyDocument document, OnboardingLocalizations l10n) {
+    final advisoryText = switch (l10n.language) {
+      AppLanguage.tamil =>
+        'அதிகாரப்பூர்வ கொள்கை ஆவணங்கள் ஆங்கிலத்தில் பராமரிக்கப்படுகின்றன. முழு ஆவணத்தைப் பார்க்க கீழே உள்ள இணைப்பைப் பயன்படுத்தவும்.',
+      AppLanguage.sinhala =>
+        'නිල ප්‍රතිපත්ති ලේඛන ඉංග්‍රීසි භාෂාවෙන් පවත්වාගෙන යනු ලැබේ. සම්පූර්ණ ලේඛනය බැලීමට පහත සබැඳිය භාවිතා කරන්න.',
+      AppLanguage.english =>
+        'Official policy documents are maintained in English. Review the authoritative link below for the complete document.',
+    };
+
+    final explicitNotice = switch (l10n.language) {
+      AppLanguage.tamil =>
+        'இந்த ஆவணத்தைப் பார்ப்பது தானாகவே ஒப்புதலாகாது. படிவத்தில் உள்ள தேர்வுப்பெட்டியைத் தேர்ந்தெடுத்து மட்டுமே உறுதிப்படுத்த வேண்டும்.',
+      AppLanguage.sinhala =>
+        'මෙම ලේඛනය නැරඹීමෙන් පමණක් එකඟතාව තහවුරු නොවේ. ඉදිරියට යාමට තිරයේ ඇති අදාළ කොටුව සලකුණු කළ යුතුය.',
+      AppLanguage.english =>
+        'Viewing this document does not constitute agreement. Agreement must be explicitly given using the checkbox on the eligibility screen.',
+    };
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -116,7 +212,6 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Drag handle
               Center(
                 child: Container(
                   width: 48.0,
@@ -128,8 +223,6 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                 ),
               ),
               const SizedBox(height: 16.0),
-
-              // Title and Badges
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -147,7 +240,7 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                         ),
                         const SizedBox(height: 4.0),
                         Text(
-                          'Version ${document.version} • Effective ${document.effectiveDate}',
+                          'Version ${document.version}',
                           style: TextStyle(
                             fontSize: 12.0,
                             color: Colors.grey.shade600,
@@ -157,6 +250,25 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                       ],
                     ),
                   ),
+                  if (document.isSynthetic) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(6.0),
+                        border: Border.all(color: const Color(0xFFF59E0B)),
+                      ),
+                      child: const Text(
+                        'TEST FIXTURE',
+                        style: TextStyle(
+                          fontSize: 10.0,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6.0),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8.0,
@@ -177,9 +289,7 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12.0),
-
-              // Summary card
+              const SizedBox(height: 16.0),
               Container(
                 padding: const EdgeInsets.all(12.0),
                 decoration: BoxDecoration(
@@ -188,7 +298,7 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Text(
-                  document.summary,
+                  advisoryText,
                   style: const TextStyle(
                     fontSize: 13.0,
                     color: Color(0xFF334155),
@@ -196,23 +306,22 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12.0),
-
-              // Official URL link
+              const SizedBox(height: 16.0),
               Row(
                 children: [
                   const Icon(
                     Icons.lock_outline_rounded,
-                    size: 14.0,
+                    size: 16.0,
                     color: M2Colors.primaryTeal,
                   ),
-                  const SizedBox(width: 4.0),
+                  const SizedBox(width: 6.0),
                   Expanded(
                     child: Text(
                       document.url,
                       style: const TextStyle(
-                        fontSize: 12.0,
+                        fontSize: 13.0,
                         color: M2Colors.primaryTeal,
+                        fontWeight: FontWeight.w600,
                         decoration: TextDecoration.underline,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -221,26 +330,24 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                 ],
               ),
               const SizedBox(height: 16.0),
-
-              // Full content
-              Flexible(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Text(
-                    document.content,
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      height: 1.5,
-                      color: Color(0xFF1E293B),
-                    ),
+              Container(
+                padding: const EdgeInsets.all(12.0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(8.0),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Text(
+                  explicitNotice,
+                  style: const TextStyle(
+                    fontSize: 12.0,
+                    color: Color(0xFF166534),
                   ),
                 ),
               ),
-              const SizedBox(height: 20.0),
-
-              // Close button
+              const SizedBox(height: 24.0),
               M2PrimaryButton(
-                text: 'Close',
+                text: l10n.closeButton,
                 onPressed: () => Navigator.of(sheetContext).pop(),
               ),
             ],
@@ -298,6 +405,8 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = OnboardingLocalizations.of(context);
+
     return M2BackgroundScaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -322,13 +431,13 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                             size: 24.0,
                           ),
                           onPressed: widget.onBack,
-                          tooltip: 'Back',
+                          tooltip: l10n.backButton,
                         ),
                       ),
-                    const Center(
+                    Center(
                       child: Text(
-                        'Eligibility & Policies',
-                        style: TextStyle(
+                        l10n.eligibilityTitle,
+                        style: const TextStyle(
                           fontSize: 18.0,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF0F3E48),
@@ -389,9 +498,9 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
               const SizedBox(height: M2Spacing.md),
 
               // Hero Titles
-              const Text(
-                'Before You Continue',
-                style: TextStyle(
+              Text(
+                l10n.beforeYouContinue,
+                style: const TextStyle(
                   fontSize: 28.0,
                   fontWeight: FontWeight.w900,
                   fontStyle: FontStyle.italic,
@@ -401,9 +510,9 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: M2Spacing.xs),
-              const Text(
-                'A few important details to keep you safe and welcoming.',
-                style: TextStyle(
+              Text(
+                l10n.eligibilitySubtitle,
+                style: const TextStyle(
                   fontSize: 14.5,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF2D4B54),
@@ -425,31 +534,31 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                     width: 1.2,
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.shield_outlined,
                       size: 28.0,
                       color: Color(0xFF0D9488),
                     ),
-                    SizedBox(width: M2Spacing.sm),
+                    const SizedBox(width: M2Spacing.sm),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Social is 18+ only',
-                            style: TextStyle(
+                            l10n.social18CalloutTitle,
+                            style: const TextStyle(
                               fontSize: 15.0,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF0F3E48),
                             ),
                           ),
-                          SizedBox(height: 2.0),
+                          const SizedBox(height: 2.0),
                           Text(
-                            'Under 18? You can still explore Learning and Hobbies.',
-                            style: TextStyle(
+                            l10n.social18CalloutSubtitle,
+                            style: const TextStyle(
                               fontSize: 13.0,
                               fontWeight: FontWeight.w500,
                               color: Color(0xFF24525D),
@@ -487,14 +596,14 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                     Expanded(
                       child: Text.rich(
                         TextSpan(
-                          text: 'Our community values respect and safety. ',
+                          text: l10n.communityGuidelinesCard,
                           style: const TextStyle(
                             fontSize: 12.5,
                             color: Color(0xFF334155),
                           ),
                           children: [
                             TextSpan(
-                              text: 'Community Guidelines',
+                              text: l10n.communityGuidelinesLink,
                               recognizer: _guidelinesRecognizer,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w700,
@@ -558,9 +667,9 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
               ],
 
               // Date of Birth Section
-              const Text(
-                'Date of Birth',
-                style: TextStyle(
+              Text(
+                l10n.dateOfBirthLabel,
+                style: const TextStyle(
                   fontSize: 15.0,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF0F3E48),
@@ -589,7 +698,7 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                         child: Text(
                           _viewModel.dateOfBirth != null
                               ? _formatDate(_viewModel.dateOfBirth!)
-                              : 'Select your date of birth',
+                              : l10n.selectDateOfBirthHint,
                           style: TextStyle(
                             fontSize: 14.5,
                             color: _viewModel.dateOfBirth != null
@@ -614,9 +723,9 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
               const SizedBox(height: M2Spacing.md),
 
               // Gender Section
-              const Text(
-                'Gender',
-                style: TextStyle(
+              Text(
+                l10n.genderLabel,
+                style: const TextStyle(
                   fontSize: 15.0,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF0F3E48),
@@ -637,9 +746,9 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<GenderType>(
                     value: _viewModel.gender,
-                    hint: const Text(
-                      'Select your gender',
-                      style: TextStyle(
+                    hint: Text(
+                      l10n.selectGenderHint,
+                      style: const TextStyle(
                         fontSize: 14.5,
                         color: M2Colors.textMuted,
                       ),
@@ -695,14 +804,14 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                   Expanded(
                     child: Text.rich(
                       TextSpan(
-                        text: 'I agree to the ',
+                        text: l10n.termsAgreementPrefix,
                         style: const TextStyle(
                           fontSize: 13.5,
                           color: Color(0xFF334155),
                         ),
                         children: [
                           TextSpan(
-                            text: 'Terms of Service',
+                            text: l10n.termsOfServiceLink,
                             recognizer: _termsRecognizer,
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
@@ -741,14 +850,14 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
                   Expanded(
                     child: Text.rich(
                       TextSpan(
-                        text: 'I have reviewed the ',
+                        text: l10n.privacyAgreementPrefix,
                         style: const TextStyle(
                           fontSize: 13.5,
                           color: Color(0xFF334155),
                         ),
                         children: [
                           TextSpan(
-                            text: 'Privacy Policy',
+                            text: l10n.privacyPolicyLink,
                             recognizer: _privacyRecognizer,
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
@@ -767,7 +876,7 @@ class _EligibilityPoliciesScreenState extends State<EligibilityPoliciesScreen> {
 
               // Primary "Continue" Button
               M2PrimaryButton(
-                text: 'Continue',
+                text: l10n.continueButton,
                 isLoading: _viewModel.isLoading,
                 onPressed: _viewModel.canSubmit ? _handleContinue : null,
               ),

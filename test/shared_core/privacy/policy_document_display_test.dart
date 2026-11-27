@@ -1,13 +1,24 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:andril_mobile/shared_core/privacy/data/repositories/unconfigured_eligibility_repository.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/entities/eligibility_result.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/entities/gender_type.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/entities/policy_document.dart';
 import 'package:andril_mobile/shared_core/privacy/domain/repositories/eligibility_repository.dart';
 import 'package:andril_mobile/shared_core/privacy/screens/eligibility_policies_screen.dart';
+import 'fixtures/synthetic_policy_fixtures.dart';
 
 class StubEligibilityRepository implements EligibilityRepository {
+  StubEligibilityRepository({
+    this.policies = const [],
+    this.failClosed = false,
+  });
+
+  final List<PolicyDocument> policies;
+  final bool failClosed;
+
   @override
   Future<EligibilityResult> submitEligibility({
     required DateTime dateOfBirth,
@@ -19,7 +30,13 @@ class StubEligibilityRepository implements EligibilityRepository {
   }
 
   @override
-  Future<bool> checkPolicyAvailability() async => true;
+  Future<bool> checkPolicyAvailability() async => !failClosed;
+
+  @override
+  Future<List<PolicyDocument>> getPolicyDocuments() async {
+    if (failClosed) return const [];
+    return policies;
+  }
 }
 
 void _tapRichTextSpan(WidgetTester tester, String targetText) {
@@ -49,68 +66,77 @@ void _tapRichTextSpan(WidgetTester tester, String targetText) {
 }
 
 void main() {
-  group('Tasks 02.05, 02.06, 02.07: Policy Document Display Tests', () {
-    test('PolicyDocument entity generates valid Terms of Service in EN, TA, and SI', () {
-      final en = PolicyDocument.termsOfService(languageCode: 'en');
-      expect(en.id, equals('terms_of_service'));
-      expect(en.title, equals('Terms of Service'));
-      expect(en.version, equals('2.1'));
-      expect(en.url, equals('https://andril.app/policies/terms'));
-      expect(en.content, isNotEmpty);
+  group('R01.02: Authoritative Policy Document Display & Security Tests', () {
+    test('PolicyDocument entity enforces strict HTTPS URL validation', () {
+      const validDoc = PolicyDocument(
+        id: 'terms_of_service',
+        title: 'Terms of Service',
+        version: '1.0.0',
+        languageCode: 'en',
+        url: 'https://andril.app/policies/terms',
+      );
+      expect(validDoc.hasValidHttpsUrl, isTrue);
 
-      final ta = PolicyDocument.termsOfService(languageCode: 'ta');
-      expect(ta.title, equals('சேவை விதிமுறைகள்'));
-      expect(ta.languageCode, equals('ta'));
+      const insecureDoc = PolicyDocument(
+        id: 'terms_of_service',
+        title: 'Terms of Service',
+        version: '1.0.0',
+        languageCode: 'en',
+        url: 'http://andril.app/policies/terms',
+      );
+      expect(insecureDoc.hasValidHttpsUrl, isFalse);
 
-      final si = PolicyDocument.termsOfService(languageCode: 'si');
-      expect(si.title, equals('සේවා නියමයන්'));
-      expect(si.languageCode, equals('si'));
+      const emptyDoc = PolicyDocument(
+        id: 'terms_of_service',
+        title: 'Terms of Service',
+        version: '1.0.0',
+        languageCode: 'en',
+        url: '',
+      );
+      expect(emptyDoc.hasValidHttpsUrl, isFalse);
     });
 
-    test('PolicyDocument entity generates valid Privacy Policy in EN, TA, and SI', () {
-      final en = PolicyDocument.privacyPolicy(languageCode: 'en');
-      expect(en.id, equals('privacy_policy'));
-      expect(en.title, equals('Privacy Policy'));
-      expect(en.version, equals('2.1'));
-      expect(en.url, equals('https://andril.app/policies/privacy'));
-
-      final ta = PolicyDocument.privacyPolicy(languageCode: 'ta');
-      expect(ta.title, equals('தனியுரிமைக் கொள்கை'));
-
-      final si = PolicyDocument.privacyPolicy(languageCode: 'si');
-      expect(si.title, equals('පෞද්ගලිකත්ව ප්‍රතිපත්තිය'));
+    test('SyntheticPolicyFixtures are strictly marked isSynthetic=true for test isolation', () {
+      final fixtures = SyntheticPolicyFixtures.defaultFixtures();
+      expect(fixtures.length, equals(3));
+      for (final doc in fixtures) {
+        expect(doc.isSynthetic, isTrue);
+        expect(doc.version, equals('1.0.0'));
+        expect(doc.hasValidHttpsUrl, isTrue);
+      }
     });
 
-    test('PolicyDocument entity generates valid Community Guidelines in EN, TA, and SI', () {
-      final en = PolicyDocument.communityGuidelines(languageCode: 'en');
-      expect(en.id, equals('community_guidelines'));
-      expect(en.title, equals('Community Guidelines'));
-      expect(en.version, equals('2.1'));
-      expect(en.url, equals('https://andril.app/policies/community-guidelines'));
-
-      final ta = PolicyDocument.communityGuidelines(languageCode: 'ta');
-      expect(ta.title, equals('சமூக வழிகாட்டுதல்கள்'));
-
-      final si = PolicyDocument.communityGuidelines(languageCode: 'si');
-      expect(si.title, equals('ප්‍රජා මාර්ගෝපදේශ'));
+    test('UnconfiguredEligibilityRepository returns empty documents and fails closed', () async {
+      const unconfigured = UnconfiguredEligibilityRepository();
+      final docs = await unconfigured.getPolicyDocuments();
+      expect(docs, isEmpty);
+      final available = await unconfigured.checkPolicyAvailability();
+      expect(available, isFalse);
     });
 
-    testWidgets('Tapping Community Guidelines opens modal bottom sheet with version and URL',
+    testWidgets('Configured authoritative documents display verified metadata in modal sheet',
         (tester) async {
+      final repo = StubEligibilityRepository(
+        policies: SyntheticPolicyFixtures.defaultFixtures(),
+      );
+
       await tester.pumpWidget(
         MaterialApp(
-          home: EligibilityPoliciesScreen(
-            repository: StubEligibilityRepository(),
-          ),
+          home: EligibilityPoliciesScreen(repository: repo),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.text('Eligibility & Policies'), findsOneWidget);
 
+      // Tap Community Guidelines
       _tapRichTextSpan(tester, 'Community Guidelines');
       await tester.pumpAndSettle();
 
-      expect(find.text('Version 2.1 • Effective November 2026'), findsOneWidget);
+      // Verify authoritative metadata
+      expect(find.text('Community Guidelines'), findsWidgets);
+      expect(find.text('Version 1.0.0'), findsOneWidget);
+      expect(find.text('TEST FIXTURE'), findsOneWidget);
       expect(find.text('https://andril.app/policies/community-guidelines'), findsOneWidget);
       expect(find.text('Close'), findsOneWidget);
 
@@ -120,54 +146,105 @@ void main() {
       expect(find.text('https://andril.app/policies/community-guidelines'), findsNothing);
     });
 
-    testWidgets('Tapping Terms of Service opens modal viewer without auto-checking checkbox',
+    testWidgets('Tapping policy document does NOT auto-check acceptance checkbox',
         (tester) async {
+      final repo = StubEligibilityRepository(
+        policies: SyntheticPolicyFixtures.defaultFixtures(),
+      );
+
       await tester.pumpWidget(
         MaterialApp(
-          home: EligibilityPoliciesScreen(
-            repository: StubEligibilityRepository(),
-          ),
+          home: EligibilityPoliciesScreen(repository: repo),
         ),
       );
+      await tester.pumpAndSettle();
 
       final initialCheckboxes = tester.widgetList<Checkbox>(find.byType(Checkbox)).toList();
       expect(initialCheckboxes[0].value, isFalse);
       expect(initialCheckboxes[1].value, isFalse);
 
+      // Open Terms of Service
       _tapRichTextSpan(tester, 'Terms of Service');
       await tester.pumpAndSettle();
 
       expect(find.text('https://andril.app/policies/terms'), findsOneWidget);
-      expect(find.textContaining('Acceptance of Terms'), findsOneWidget);
+      expect(find.textContaining('Viewing this document does not constitute agreement'), findsOneWidget);
 
+      // Close modal
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
 
+      // Checkboxes must still be unchecked
       final afterCheckboxes = tester.widgetList<Checkbox>(find.byType(Checkbox)).toList();
       expect(afterCheckboxes[0].value, isFalse);
+      expect(afterCheckboxes[1].value, isFalse);
     });
 
-    testWidgets('Tapping Privacy Policy opens modal viewer without auto-checking checkbox',
+    testWidgets('Unconfigured or missing policy documents trigger HTTP 503 fail-closed sheet with Retry',
         (tester) async {
+      // Unconfigured repository (empty documents)
+      const repo = UnconfiguredEligibilityRepository();
+
       await tester.pumpWidget(
-        MaterialApp(
-          home: EligibilityPoliciesScreen(
-            repository: StubEligibilityRepository(),
-          ),
+        const MaterialApp(
+          home: EligibilityPoliciesScreen(repository: repo),
         ),
       );
-
-      _tapRichTextSpan(tester, 'Privacy Policy');
       await tester.pumpAndSettle();
 
-      expect(find.text('https://andril.app/policies/privacy'), findsOneWidget);
-      expect(find.textContaining('Information We Collect'), findsOneWidget);
+      // Tap Terms of Service when documents unavailable
+      _tapRichTextSpan(tester, 'Terms of Service');
+      await tester.pumpAndSettle();
+
+      // Must display 503 unavailable sheet
+      expect(find.text('Policies Temporarily Unavailable'), findsOneWidget);
+      expect(find.textContaining('HTTP 503'), findsAtLeastNWidgets(1));
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('Close'), findsOneWidget);
 
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
 
-      final afterCheckboxes = tester.widgetList<Checkbox>(find.byType(Checkbox)).toList();
-      expect(afterCheckboxes[1].value, isFalse);
+      expect(find.text('Policies Temporarily Unavailable'), findsNothing);
+    });
+
+    testWidgets('Policy viewer presents English legal document with Tamil and Sinhala UI advisory',
+        (tester) async {
+      final repo = StubEligibilityRepository(
+        policies: SyntheticPolicyFixtures.defaultFixtures(),
+      );
+
+      // Render with Tamil locale
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('en'),
+            Locale('ta'),
+            Locale('si'),
+          ],
+          locale: const Locale('ta'),
+          home: EligibilityPoliciesScreen(repository: repo),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('தகுதி மற்றும் கொள்கைகள்'), findsOneWidget);
+
+      _tapRichTextSpan(tester, 'சமூக வழிகாட்டுதல்கள்');
+      await tester.pumpAndSettle();
+
+      // Legal document metadata is shown, with Tamil advisory
+      expect(find.text('Version 1.0.0'), findsOneWidget);
+      expect(find.textContaining('அதிகாரப்பூர்வ கொள்கை ஆவணங்கள்'), findsOneWidget);
+      expect(find.text('மூடு'), findsOneWidget);
+
+      await tester.tap(find.text('மூடு'));
+      await tester.pumpAndSettle();
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../domain/entities/eligibility_result.dart';
 import '../domain/entities/gender_type.dart';
+import '../domain/entities/policy_document.dart';
 import '../domain/repositories/eligibility_repository.dart';
 
 /// ViewModel managing state, age guidance, and submission for Screen 09.
@@ -18,6 +19,9 @@ class EligibilityViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isServiceUnavailable = false;
   String? _errorMessage;
+  List<PolicyDocument> _policyDocuments = [];
+  bool _isPoliciesLoading = false;
+  bool _policiesUnavailable = false;
 
   String _languageCode = 'en';
 
@@ -29,6 +33,53 @@ class EligibilityViewModel extends ChangeNotifier {
   bool get isServiceUnavailable => _isServiceUnavailable;
   String? get errorMessage => _errorMessage;
   String get languageCode => _languageCode;
+  List<PolicyDocument> get policyDocuments => _policyDocuments;
+  bool get isPoliciesLoading => _isPoliciesLoading;
+  bool get policiesUnavailable => _policiesUnavailable;
+
+  PolicyDocument? getPolicyDocument(String id) {
+    for (final doc in _policyDocuments) {
+      if (doc.id == id ||
+          doc.id.replaceAll('_', '') == id.replaceAll('_', '')) {
+        return doc;
+      }
+    }
+    return null;
+  }
+
+  Future<void> loadPolicyDocuments() async {
+    _isPoliciesLoading = true;
+    _policiesUnavailable = false;
+    notifyListeners();
+
+    try {
+      final available = await _repository.checkPolicyAvailability();
+      if (!available) {
+        _isPoliciesLoading = false;
+        _policiesUnavailable = true;
+        _errorMessage =
+            'Policy documents are unavailable (HTTP 503). Progression paused.';
+        notifyListeners();
+        return;
+      }
+
+      final docs = await _repository.getPolicyDocuments();
+      _policyDocuments = docs;
+      _isPoliciesLoading = false;
+      _policiesUnavailable = docs.isEmpty;
+      if (docs.isEmpty) {
+        _errorMessage =
+            'Policy documents are unavailable (HTTP 503). Progression paused.';
+      }
+      notifyListeners();
+    } catch (_) {
+      _isPoliciesLoading = false;
+      _policiesUnavailable = true;
+      _errorMessage =
+          'Policy documents are unavailable (HTTP 503). Progression paused.';
+      notifyListeners();
+    }
+  }
 
   /// ISO-8601 YYYY-MM-DD representation of the selected date of birth.
   String? get dateOfBirthIso {

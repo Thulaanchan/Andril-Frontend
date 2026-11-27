@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../app/themes/shared_core/spacing/m2_spacing.dart';
 import '../../../../app/themes/shared_core/typography/m2_typography.dart';
+import '../localization/onboarding_localizations.dart';
 
 /// ANDRIL Member-02 Brand Logo and Tagline Header.
 ///
@@ -20,6 +21,8 @@ class BrandLogoHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = OnboardingLocalizations.of(context);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -51,7 +54,7 @@ class BrandLogoHeader extends StatelessWidget {
         if (showTagline) ...[
           const SizedBox(height: M2Spacing.xs),
           Text(
-            'Every Path Begins Here',
+            l10n.splashTagline,
             style: emblemSize > 100
                 ? M2Typography.splashTagline
                 : M2Typography.splashTagline.copyWith(fontSize: 13.0),

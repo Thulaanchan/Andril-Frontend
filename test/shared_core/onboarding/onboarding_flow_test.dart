@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:andril_mobile/shared_core/language_selection/domain/repositories/language_preference_repository.dart';
 import 'package:andril_mobile/shared_core/onboarding/presentation/screens/onboarding_flow_coordinator.dart';
+import 'package:andril_mobile/shared_core/onboarding/presentation/screens/welcome_screen.dart';
 
 class MockFailingLanguageRepository implements LanguagePreferenceRepository {
   @override
@@ -86,7 +87,8 @@ void main() {
 
       // Should bypass Choose Language and arrive directly at Welcome
       expect(find.text('Choose Your Language'), findsNothing);
-      expect(find.text('Welcome to Andril'), findsOneWidget);
+      expect(find.byType(WelcomeScreen), findsOneWidget);
+      expect(find.text('அன்றிலுக்கு நல்வரவு'), findsOneWidget);
     });
 
     testWidgets(

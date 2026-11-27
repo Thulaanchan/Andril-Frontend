@@ -3,6 +3,7 @@ import '../../../../app/themes/shared_core/components/m2_background_scaffold.dar
 import '../../../../app/themes/shared_core/components/m2_buttons.dart';
 import '../../../../app/themes/shared_core/spacing/m2_spacing.dart';
 import '../../../../app/themes/shared_core/typography/m2_typography.dart';
+import '../localization/onboarding_localizations.dart';
 import '../viewmodels/welcome_viewmodel.dart';
 import '../widgets/brand_logo_header.dart';
 import '../widgets/module_showcase_widget.dart';
@@ -36,6 +37,7 @@ class WelcomeScreen extends StatelessWidget {
           onNavigateToRegister: onCreateAccount,
           onNavigateToLogin: onLogIn,
         );
+    final l10n = OnboardingLocalizations.of(context);
 
     return M2BackgroundScaffold(
       body: SafeArea(
@@ -58,14 +60,14 @@ class WelcomeScreen extends StatelessWidget {
               const SizedBox(height: M2Spacing.md),
 
               // Hero Headings
-              const Text(
-                'Welcome to Andril',
+              Text(
+                l10n.welcomeHeading,
                 style: M2Typography.welcomeHeadline,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: M2Spacing.xs),
-              const Text(
-                'One account, three independent spaces for your\nlearning, hobbies and social connections.',
+              Text(
+                l10n.welcomeDescription,
                 style: M2Typography.welcomeDescription,
                 textAlign: TextAlign.center,
               ),
@@ -84,7 +86,7 @@ class WelcomeScreen extends StatelessWidget {
 
               // Primary "Create Account" Button
               M2PrimaryButton(
-                text: 'Create Account',
+                text: l10n.createAccountButton,
                 onPressed: effectiveViewModel.createAccount,
               ),
 
@@ -92,7 +94,7 @@ class WelcomeScreen extends StatelessWidget {
 
               // Secondary "Log In" Button
               M2SecondaryButton(
-                text: 'Log In',
+                text: l10n.logInButton,
                 onPressed: effectiveViewModel.logIn,
               ),
 

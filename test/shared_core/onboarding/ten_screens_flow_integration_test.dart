@@ -184,36 +184,42 @@ void main() {
     });
   });
 
-  group('Responsive Layout Verification for All 10 Screens', () {
+  group('Responsive Layout & Localization Verification for All 10 Screens', () {
     const testViewports = [
-      Size(360, 640), // Compact Phone
-      Size(393, 852), // Modern Standard Phone
-      Size(412, 915), // Large Aspect Phone (Pixel 7 Pro)
+      Size(320, 568), // Ultra-compact (iPhone SE 1st gen)
+      Size(360, 640), // Standard Android compact
+      Size(390, 844), // Standard modern phone (iPhone 12/13/14)
+      Size(412, 915), // Large Android flagship (Pixel 7 Pro)
       Size(768, 1024), // Tablet
     ];
 
+    const testLocales = ['en', 'ta', 'si'];
+
     for (final size in testViewports) {
       testWidgets(
-          'Renders all ten screens without overflow on ${size.width}x${size.height}',
+          'Renders all ten screens without overflow on ${size.width}x${size.height} across EN, TA, SI',
           (tester) async {
         tester.view.physicalSize = Size(size.width * 2, size.height * 2);
         tester.view.devicePixelRatio = 2.0;
 
-        for (var step = 0; step <= 9; step++) {
-          await tester.pumpWidget(
-            MaterialApp(
-              home: OnboardingFlowCoordinator(
-                initialStep: step,
+        for (final lang in testLocales) {
+          for (var step = 0; step <= 9; step++) {
+            await tester.pumpWidget(
+              MaterialApp(
+                locale: Locale(lang),
+                home: OnboardingFlowCoordinator(
+                  initialStep: step,
+                ),
               ),
-            ),
-          );
-          await tester.pumpAndSettle();
+            );
+            await tester.pumpAndSettle();
 
-          expect(
-            tester.takeException(),
-            isNull,
-            reason: 'Screen step $step threw exception on $size',
-          );
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: 'Screen step $step threw exception on $size in $lang',
+            );
+          }
         }
 
         tester.view.resetPhysicalSize();

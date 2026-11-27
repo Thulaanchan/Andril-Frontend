@@ -1,5 +1,6 @@
 import '../entities/eligibility_result.dart';
 import '../entities/gender_type.dart';
+import '../entities/policy_document.dart';
 
 /// Domain contract for eligibility verification and policy acknowledgment.
 abstract interface class EligibilityRepository {
@@ -17,4 +18,8 @@ abstract interface class EligibilityRepository {
 
   /// Checks if required policy documents are published and available.
   Future<bool> checkPolicyAvailability();
+
+  /// Retrieves authoritative policy document metadata from the backend catalog
+  /// (`GET /api/v1/account/policies/status`).
+  Future<List<PolicyDocument>> getPolicyDocuments();
 }
