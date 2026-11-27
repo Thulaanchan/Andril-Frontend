@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:andril_mobile/app/router/routes/social/social_routes.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
 import 'package:andril_mobile/features/social/home/viewmodels/social_navigation_coordinator.dart';
 import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
@@ -233,6 +234,59 @@ void main() {
 
       expect(coordinator.currentDestination, SocialDestination.home);
       expect(coordinator.accessEvidence, isNull);
+    });
+
+    test('currentRoutePath matches routeForDestination for all destinations', () {
+      final coordinator = SocialNavigationCoordinator(
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-active-1'),
+      );
+
+      expect(coordinator.currentRoutePath, '/social/home');
+      expect(SocialNavigationCoordinator.routeForDestination(SocialDestination.home), '/social/home');
+      expect(SocialNavigationCoordinator.routeForDestination(SocialDestination.discovery), '/social/discovery');
+      expect(SocialNavigationCoordinator.routeForDestination(SocialDestination.connections), '/social/connections');
+      expect(SocialNavigationCoordinator.routeForDestination(SocialDestination.zones), '/social/zones');
+      expect(SocialNavigationCoordinator.routeForDestination(SocialDestination.profile), '/social/profile');
+      expect(SocialNavigationCoordinator.routeForDestination(SocialDestination.personality), '/social/personality/intro');
+      expect(SocialNavigationCoordinator.routeForDestination(SocialDestination.search), '/social/search');
+      expect(SocialNavigationCoordinator.routeForDestination(SocialDestination.accessDenied), '/social/access-denied');
+
+      coordinator.navigateTo(SocialDestination.zones);
+      expect(coordinator.currentRoutePath, '/social/zones');
+    });
+
+    test('isAuthorized fails closed if subject does not match bound subject', () {
+      fakeSession.subject = 'u-active-1';
+      final coordinator = SocialNavigationCoordinator(
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'u-active-1'),
+      );
+
+      expect(coordinator.isAuthorized, isTrue);
+
+      fakeSession.subject = 'u-intruder';
+      expect(coordinator.isAuthorized, isFalse);
+    });
+  });
+
+  group('SocialRouteRegistry Guard and Route Helpers (Task 123)', () {
+    test('isGuarded correctly classifies guarded and unmapped paths', () {
+      expect(SocialRouteRegistry.isGuarded('/social/home'), isTrue);
+      expect(SocialRouteRegistry.isGuarded('/social/discovery'), isTrue);
+      expect(SocialRouteRegistry.isGuarded('/social/connections'), isTrue);
+      expect(SocialRouteRegistry.isGuarded('/social/zones'), isTrue);
+      expect(SocialRouteRegistry.isGuarded('/social/profile'), isTrue);
+      expect(SocialRouteRegistry.isGuarded('/social/unmapped/route'), isTrue);
+    });
+
+    test('findByName returns descriptor or null', () {
+      final homeRoute = SocialRouteRegistry.findByName('social-home');
+      expect(homeRoute, isNotNull);
+      expect(homeRoute?.path, '/social/home');
+
+      final unknownRoute = SocialRouteRegistry.findByName('non-existent');
+      expect(unknownRoute, isNull);
     });
   });
 }
