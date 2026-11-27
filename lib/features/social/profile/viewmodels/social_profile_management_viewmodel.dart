@@ -144,9 +144,8 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
       if (_disposed || opId != _activeOperationId) return;
 
       final postSubject = _resolveSubject();
-      if (operationSubject == null ||
-          postSubject == null ||
-          postSubject != operationSubject ||
+      if ((operationSubject != null && postSubject != operationSubject) ||
+          (_boundSubject != null && postSubject != _boundSubject) ||
           _sessionController.phase != SessionPhase.signedIn ||
           !isAuthorized) {
         _clearPrivateProfile();
@@ -242,9 +241,8 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
       if (_disposed || opId != _activeOperationId) return false;
 
       final postSubject = _resolveSubject();
-      if (operationSubject == null ||
-          postSubject == null ||
-          postSubject != operationSubject ||
+      if ((operationSubject != null && postSubject != operationSubject) ||
+          (_boundSubject != null && postSubject != _boundSubject) ||
           _sessionController.phase != SessionPhase.signedIn ||
           !isAuthorized) {
         _isSaving = false;
