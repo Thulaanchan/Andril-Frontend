@@ -86,6 +86,17 @@ class _FakeCoverageQuestionnaireRepo implements IPersonalityQuestionnaireReposit
       ],
     ));
   }
+
+  @override
+  Future<QuestionnaireResult<bool>> submitAnswers(
+    PersonalityAnswerDraft draft, {
+    bool skip = false,
+  }) async =>
+      const QuestionnaireResult.success(true);
+
+  @override
+  Future<QuestionnaireResult<PersonalityAnswerDraft>> getSavedAnswers() async =>
+      QuestionnaireResult.success(PersonalityAnswerDraft(questionnaireVersion: 'v1.0'));
 }
 
 class _FakeProfileMgmtRepo implements ISocialProfileManagementRepository {
