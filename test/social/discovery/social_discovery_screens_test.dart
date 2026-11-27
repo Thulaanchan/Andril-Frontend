@@ -261,7 +261,7 @@ void main() {
 
       expect(repo.recordCalls.length, 1);
       expect(repo.recordCalls.first['isPositive'], isTrue);
-      expect(find.text('No Profiles Found'), findsOneWidget);
+      expect(find.text("You're All Caught Up"), findsOneWidget);
     });
 
     testWidgets('renders access denied view when unauthorized', (tester) async {
