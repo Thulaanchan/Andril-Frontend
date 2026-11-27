@@ -7,6 +7,8 @@ import '../../../../features/social/discovery/presentation/social_discovery_view
 import '../../../../features/social/discovery/presentation/social_search_viewmodel.dart';
 import '../../../../features/social/home/viewmodels/social_home_viewmodel.dart';
 import '../../../../features/social/home/viewmodels/social_navigation_coordinator.dart';
+import '../../../../features/social/interests_preferences/data/social_preferences_repository.dart';
+import '../../../../features/social/interests_preferences/presentation/social_preferences_viewmodel.dart';
 import '../../../../features/social/likes_matches/data/social_relationship_repository.dart';
 import '../../../../features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import '../../../../features/social/likes_matches/domain/authorization/social_match_communication_boundary.dart';
@@ -35,11 +37,13 @@ class SocialDependenciesScope {
   final ISocialMatchCommunicationBoundary _communicationBoundary;
   final ISocialProfileManagementRepository? _profileManagementRepository;
   final IPersonalityQuestionnaireRepository? _questionnaireRepository;
+  final ISocialPreferencesRepository? _explicitPreferencesRepository;
   final AndrilApiClient? _apiClient;
   final AppConfig? _appConfig;
 
   // Lazily initialized instances within the scope
   ISocialZoneRepository? _zoneRepository;
+  ISocialPreferencesRepository? _preferencesRepository;
   SocialZonesViewModel? _zonesViewModel;
   SocialZoneManagementViewModel? _zoneManagementViewModel;
   SocialNavigationCoordinator? _navigationCoordinator;
@@ -48,6 +52,7 @@ class SocialDependenciesScope {
   SocialSearchViewModel? _searchViewModel;
   SocialProfileManagementViewModel? _profileManagementViewModel;
   PersonalityQuestionnaireViewModel? _personalityViewModel;
+  SocialPreferencesViewModel? _preferencesViewModel;
 
   VoidCallback? _unregisterSessionClearer;
   bool _isDisposed = false;
@@ -60,6 +65,7 @@ class SocialDependenciesScope {
     ISocialMatchCommunicationBoundary? communicationBoundary,
     ISocialProfileManagementRepository? profileManagementRepository,
     IPersonalityQuestionnaireRepository? questionnaireRepository,
+    ISocialPreferencesRepository? preferencesRepository,
     AndrilApiClient? apiClient,
     AppConfig? appConfig,
   })  : _sessionController = sessionController,
@@ -69,6 +75,7 @@ class SocialDependenciesScope {
         _communicationBoundary = communicationBoundary ?? const SocialMatchCommunicationBoundary(),
         _profileManagementRepository = profileManagementRepository,
         _questionnaireRepository = questionnaireRepository,
+        _explicitPreferencesRepository = preferencesRepository,
         _apiClient = apiClient,
         _appConfig = appConfig {
     _unregisterSessionClearer = _sessionController?.registerPrivateStateClearer(dispose);
@@ -282,6 +289,46 @@ class SocialDependenciesScope {
     );
   }
 
+  /// Scoped [ISocialPreferencesRepository] instance.
+  ISocialPreferencesRepository get preferencesRepository {
+    _checkDisposed();
+    final session = _sessionController;
+    if (session == null) {
+      throw StateError('Cannot initialize SocialPreferencesRepository without an authentic SessionController.');
+    }
+    return _preferencesRepository ??= _explicitPreferencesRepository ??
+        SocialPreferencesRepository(
+          sessionController: session,
+          config: _appConfig,
+        );
+  }
+
+  /// Lazily created scoped [SocialPreferencesViewModel].
+  SocialPreferencesViewModel get preferencesViewModel {
+    _checkDisposed();
+    return _preferencesViewModel ??= SocialPreferencesViewModel(
+      repository: preferencesRepository,
+      sessionController: _sessionController,
+      accessEvidence: _accessEvidence,
+      accessBoundary: _accessBoundary,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
+  /// Creates a scoped [SocialPreferencesViewModel].
+  SocialPreferencesViewModel createPreferencesViewModel({
+    ISocialPreferencesRepository? repository,
+  }) {
+    _checkDisposed();
+    return _preferencesViewModel ??= SocialPreferencesViewModel(
+      repository: repository ?? preferencesRepository,
+      sessionController: _sessionController,
+      accessEvidence: _accessEvidence,
+      accessBoundary: _accessBoundary,
+      isSocialOptedIn: isSocialAuthorized,
+    );
+  }
+
   /// Idempotently disposes all created ViewModels, unregisters listeners, and clears private dependencies.
   void dispose() {
     if (_isDisposed) return;
@@ -311,7 +358,11 @@ class SocialDependenciesScope {
     _personalityViewModel?.dispose();
     _personalityViewModel = null;
 
+    _preferencesViewModel?.dispose();
+    _preferencesViewModel = null;
+
     _zoneRepository = null;
+    _preferencesRepository = null;
 
     _unregisterSessionClearer?.call();
     _unregisterSessionClearer = null;
