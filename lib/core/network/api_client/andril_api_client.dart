@@ -16,6 +16,14 @@ enum AccountEndpoint {
   final String path;
 }
 
+enum SocialEndpoint {
+  activeQuestionnaire('GET', '/api/v1/social/questionnaires/active');
+
+  const SocialEndpoint(this.method, this.path);
+  final String method;
+  final String path;
+}
+
 enum HandoffIssue {
   reauthenticationRequired,
   verificationRequired,
@@ -90,23 +98,34 @@ class AndrilApiClient {
   }
 
   Future<Map<String, Object?>> request(
-      AccountEndpoint endpoint, BackendSession session) async {
-    final initial = await _send(endpoint, session);
+      AccountEndpoint endpoint, BackendSession session) =>
+      _sendAndInterpret(endpoint.method, endpoint.path, session,
+          isMeEndpoint: endpoint == AccountEndpoint.me);
+
+  Future<Map<String, Object?>> requestSocial(
+      SocialEndpoint endpoint, BackendSession session) =>
+      _sendAndInterpret(endpoint.method, endpoint.path, session,
+          isMeEndpoint: false);
+
+  Future<Map<String, Object?>> _sendAndInterpret(
+      String method, String path, BackendSession session,
+      {required bool isMeEndpoint}) async {
+    final initial = await _send(method, path, session);
     final dispatched = initial.credential;
     var response = initial.response;
     // Automatic replay is limited to reads. An uncertain initialize can be
     // recovered by starting from the authoritative GET.
-    if (response.statusCode == 401 && endpoint.method == 'GET') {
+    if (response.statusCode == 401 && method == 'GET') {
       final current = _credential(session);
       if (current.accessToken == dispatched.accessToken) {
         await _refreshOnce(session, current);
       }
       final replacement = _credential(session);
       if (replacement.accessToken != dispatched.accessToken) {
-        response = (await _send(endpoint, session)).response;
+        response = (await _send(method, path, session)).response;
       }
     }
-    return _interpret(endpoint, response);
+    return _interpret(path, response, isMeEndpoint: isMeEndpoint);
   }
 
   Future<void> _refreshOnce(
@@ -126,15 +145,15 @@ class AndrilApiClient {
   }
 
   Future<({Response<String> response, BackendCredential credential})> _send(
-      AccountEndpoint endpoint, BackendSession session) async {
+      String method, String path, BackendSession session) async {
     _credential(session);
     final dispatch = _Dispatch(session);
     Response<String> response;
     try {
       response = await _dio.requestUri<String>(
-        _origin.replace(path: endpoint.path),
+        _origin.replace(path: path),
         options: Options(
-          method: endpoint.method,
+          method: method,
           headers: {'Accept': 'application/json, application/problem+json'},
           extra: {_Dispatch.key: dispatch},
           responseType: ResponseType.plain,
@@ -152,7 +171,8 @@ class AndrilApiClient {
   }
 
   Map<String, Object?> _interpret(
-      AccountEndpoint endpoint, Response<String> response) {
+      String path, Response<String> response,
+      {required bool isMeEndpoint}) {
     final status = response.statusCode;
     final contentTypes = response.headers['content-type'];
     final mediaType = contentTypes?.length == 1
@@ -173,7 +193,7 @@ class AndrilApiClient {
                 ? HandoffIssue.verificationRequired
                 : HandoffIssue.forbidden);
       case 404:
-        if (endpoint == AccountEndpoint.me &&
+        if (isMeEndpoint &&
             problem &&
             json?['title'] == 'Account not initialized') {
           throw const HandoffFailure(HandoffIssue.accountNotInitialized);
