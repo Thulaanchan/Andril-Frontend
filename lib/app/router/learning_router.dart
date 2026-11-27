@@ -1,15 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/security/session/session_controller.dart';
 import '../../features/common/chat/domain/module_config.dart';
 import '../../features/common/chat/presentation/navigation/chat_navigation_contract.dart';
 import '../../features/common/chat/presentation/screens/andril_chat_screen.dart';
 import '../../features/common/chat/presentation/screens/andril_chats_list_screen.dart';
 import '../../features/common/chat/preview/main_app_chat_route_preview.dart';
+import '../../features/learning/circles/data/repositories/learning_circles_repository.dart';
+import '../../features/learning/circles/presentation/screens/learning_circles_hub_screen.dart';
+import '../../features/learning/circles/presentation/viewmodels/learning_circles_viewmodel.dart';
+import '../../features/learning/classrooms/presentation/screens/learning_classrooms_hub_screen.dart';
+import '../../features/learning/connections/data/repositories/learning_connections_repository.dart';
+import '../../features/learning/connections/presentation/screens/learning_connections_screen.dart';
+import '../../features/learning/connections/presentation/viewmodels/learning_connections_viewmodel.dart';
+import '../../features/learning/cv_maker/presentation/screens/cv_editor_screen.dart';
+import '../../features/learning/cv_maker/presentation/screens/cv_template_selection_preview_screen.dart';
+import '../../features/learning/discovery/data/repositories/learning_discovery_repository.dart';
+import '../../features/learning/discovery/presentation/screens/learning_partner_explorer_screen.dart';
+import '../../features/learning/discovery/presentation/viewmodels/learning_partner_explorer_viewmodel.dart';
+import '../../features/learning/growth_mentorship/data/repositories/learning_growth_repository.dart';
+import '../../features/learning/growth_mentorship/presentation/screens/learning_mentorship_hub_screen.dart';
+import '../../features/learning/growth_mentorship/presentation/screens/my_growth_dashboard_screen.dart';
+import '../../features/learning/growth_mentorship/presentation/screens/topic_gap_explanation_screen.dart';
+import '../../features/learning/growth_mentorship/presentation/viewmodels/learning_growth_viewmodel.dart';
+import '../../features/learning/growth_mentorship/presentation/viewmodels/learning_mentorship_viewmodel.dart';
+import '../../features/learning/growth_mentorship/presentation/viewmodels/learning_topic_gap_viewmodel.dart';
+import '../../features/learning/pacts/data/repositories/learning_pacts_repository.dart';
+import '../../features/learning/pacts/presentation/screens/learning_pacts_hub_screen.dart';
+import '../../features/learning/pacts/presentation/screens/learning_pact_progress_screen.dart';
+import '../../features/learning/pacts/presentation/screens/propose_pact_flow_screen.dart';
+import '../../features/learning/pacts/presentation/viewmodels/learning_pacts_viewmodel.dart';
+import '../../features/learning/portfolio_maker/domain/models/portfolio_models.dart';
+import '../../features/learning/portfolio_maker/presentation/screens/portfolio_editor_screen.dart';
+import '../../features/learning/portfolio_maker/presentation/screens/portfolio_template_selection_preview_screen.dart';
+import '../../features/learning/profile/screens/learning_onboarding_screen.dart';
+import '../../features/learning/profile/screens/learning_profile_screen.dart';
 import '../../features/learning/profile/screens/learning_welcome_screen.dart';
+import '../../features/learning/skill_exchange/presentation/screens/skill_exchange_hub_screen.dart';
 import '../../features/shared/presentation/scaffolds/learning_scaffold.dart';
 import '../../features/shared/presentation/widgets/andril_module_app_bar.dart';
 import '../../features/shared/presentation/widgets/error_retry_card.dart';
+import '../dependencies/registrations/learning/learning_dependencies.dart';
 import '../themes/learning/learning_colors.dart';
 
 /// Contract for evaluating route access to protected Learning module surfaces.
@@ -35,9 +67,30 @@ class ProductionLearningAccessPolicy implements LearningAccessPolicy {
   bool get isLearningActivated => false;
 }
 
+/// Evaluates Learning route access against an active [SessionController] standing.
+///
+/// Under M2 admission governance:
+/// - [isAuthenticated] requires an active, signed-in session with verified backend credential.
+/// - [isLearningActivated] requires verified module authorization ([SessionController.moduleHomeAuthorized]).
+class SessionLearningAccessPolicy implements LearningAccessPolicy {
+  final SessionController? session;
+  const SessionLearningAccessPolicy(this.session);
+
+  @override
+  bool get isAuthenticated =>
+      session != null &&
+      session!.phase == SessionPhase.signedIn &&
+      session!.backendSession != null;
+
+  @override
+  bool get isLearningActivated =>
+      session != null && session!.moduleHomeAuthorized;
+}
+
 /// Creates and configures the [GoRouter] instance for the Learning module.
 GoRouter createLearningRouter({
   LearningAccessPolicy accessPolicy = const ProductionLearningAccessPolicy(),
+  LearningDependenciesScope? dependencies,
   String initialLocation = '/learning/welcome',
   List<NavigatorObserver>? observers,
 }) {
@@ -67,6 +120,187 @@ GoRouter createLearningRouter({
         path: '/learning/access-denied',
         name: 'learning-access-denied',
         builder: (context, state) => const _AccessDeniedPlaceholderScreen(),
+      ),
+      GoRoute(
+        path: '/learning/onboarding',
+        name: 'learning-onboarding',
+        builder: (context, state) => LearningOnboardingScreen(
+          viewModel: dependencies?.onboardingViewModel,
+          onExit: () => context.go('/learning/welcome'),
+        ),
+      ),
+      GoRoute(
+        path: '/learning/circles',
+        name: 'learning-circles',
+        builder: (context, state) => LearningCirclesHubScreen(
+          viewModel: dependencies?.circlesViewModel ??
+              LearningCirclesViewModel(
+                repository: const LearningCirclesRepository(),
+              ),
+        ),
+      ),
+      GoRoute(
+        path: '/learning/pacts',
+        name: 'learning-pacts',
+        builder: (context, state) => LearningPactsHubScreen(
+          viewModel: dependencies?.pactsViewModel ??
+              LearningPactsViewModel(
+                repository: const LearningPactsRepository(),
+              ),
+        ),
+        routes: [
+          GoRoute(
+            path: 'progress',
+            name: 'learning-pacts-progress',
+            builder: (context, state) {
+              final pactId =
+                  state.uri.queryParameters['pactId'] ?? 'pact_default';
+              return LearningPactProgressScreen(
+                pactId: pactId,
+                viewModel: dependencies?.pactsViewModel ??
+                    LearningPactsViewModel(
+                      repository: const LearningPactsRepository(),
+                    ),
+              );
+            },
+          ),
+          GoRoute(
+            path: 'propose',
+            name: 'learning-pacts-propose',
+            builder: (context, state) => ProposePactFlowScreen(
+              viewModel: dependencies?.pactsViewModel ??
+                  LearningPactsViewModel(
+                    repository: const LearningPactsRepository(),
+                  ),
+              onPactProposed: () => context.go('/learning/pacts'),
+            ),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/learning/growth',
+        name: 'learning-growth',
+        builder: (context, state) => MyGrowthDashboardScreen(
+          viewModel: dependencies?.growthViewModel ??
+              LearningGrowthViewModel(
+                repository: const LearningGrowthRepository(),
+              ),
+        ),
+        routes: [
+          GoRoute(
+            path: 'topic-gap',
+            name: 'learning-growth-topic-gap',
+            builder: (context, state) {
+              final gapId =
+                  state.uri.queryParameters['gapId'] ?? 'gap_flutter_state';
+              return TopicGapExplanationScreen(
+                viewModel: LearningTopicGapViewModel(
+                  repository: const LearningGrowthRepository(),
+                  gapId: gapId,
+                ),
+                onBack: () => context.canPop()
+                    ? context.pop()
+                    : context.go('/learning/growth'),
+              );
+            },
+          ),
+          GoRoute(
+            path: 'mentorship',
+            name: 'learning-growth-mentorship',
+            builder: (context, state) => LearningMentorshipHubScreen(
+              viewModel: dependencies?.mentorshipViewModel ??
+                  LearningMentorshipViewModel(
+                    repository: const LearningGrowthRepository(),
+                  ),
+            ),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/learning/cv-maker',
+        name: 'learning-cv-maker',
+        builder: (context, state) => CvEditorScreen(
+          onPreview: (draft) =>
+              context.go('/learning/cv-maker/preview', extra: draft),
+        ),
+        routes: [
+          GoRoute(
+            path: 'preview',
+            name: 'learning-cv-maker-preview',
+            builder: (context, state) {
+              final draft = state.extra is CvDraftData
+                  ? state.extra as CvDraftData
+                  : CvDraftData.empty();
+              return CvTemplateSelectionPreviewScreen(
+                initialDraft: draft,
+              );
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/learning/portfolio-maker',
+        name: 'learning-portfolio-maker',
+        builder: (context, state) => PortfolioEditorScreen(
+          onPreviewPortfolio: (portfolio) =>
+              context.go('/learning/portfolio-maker/preview', extra: portfolio),
+        ),
+        routes: [
+          GoRoute(
+            path: 'preview',
+            name: 'learning-portfolio-maker-preview',
+            builder: (context, state) {
+              final portfolio = state.extra is LearningPortfolio
+                  ? state.extra as LearningPortfolio
+                  : LearningPortfolio.empty(
+                      ownerLearningProfileId: 'preview_user');
+              return PortfolioTemplateSelectionPreviewScreen(
+                initialPortfolio: portfolio,
+              );
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/learning/discovery',
+        name: 'learning-discovery',
+        builder: (context, state) => LearningPartnerExplorerScreen(
+          viewModel: dependencies?.discoveryViewModel ??
+              LearningPartnerExplorerViewModel(
+                repository: const LearningDiscoveryRepository(),
+              ),
+        ),
+      ),
+      GoRoute(
+        path: '/learning/connections',
+        name: 'learning-connections',
+        builder: (context, state) => LearningConnectionsScreen(
+          viewModel: dependencies?.connectionsViewModel ??
+              LearningConnectionsViewModel(
+                repository: const LearningConnectionsRepository(),
+              ),
+        ),
+      ),
+      GoRoute(
+        path: '/learning/skill-exchange',
+        name: 'learning-skill-exchange',
+        builder: (context, state) => const SkillExchangeHubScreen(
+          currentUserId: 'learner_current',
+        ),
+      ),
+      GoRoute(
+        path: '/learning/classrooms/hub',
+        name: 'learning-classrooms-hub',
+        builder: (context, state) => const LearningClassroomsHubScreen(
+          currentUserId: 'learner_current',
+        ),
+      ),
+      GoRoute(
+        path: '/learning/profile/editor',
+        name: 'learning-profile-editor',
+        builder: (context, state) => const LearningProfileScreen(
+          isEditMode: true,
+        ),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -136,10 +370,9 @@ GoRouter createLearningRouter({
                     builder: (context, state) {
                       final conversationId =
                           state.pathParameters['conversationId'];
-                      final partnerExtra =
-                          state.extra is AndrilModuleProfile
-                              ? state.extra as AndrilModuleProfile
-                              : null;
+                      final partnerExtra = state.extra is AndrilModuleProfile
+                          ? state.extra as AndrilModuleProfile
+                          : null;
 
                       // Validate conversation against Learning module scope
                       final validation = ChatNavigationParams.validate(
@@ -174,9 +407,9 @@ GoRouter createLearningRouter({
                       }
 
                       // Verify partner consistency if extra was provided (reject spoofed partners).
-                      // Do not rely solely on display-name equality for identity verification.
                       if (partnerExtra != null) {
-                        if (partnerExtra.moduleType != AndrilModuleType.learning ||
+                        if (partnerExtra.moduleType !=
+                                AndrilModuleType.learning ||
                             partnerExtra.name != catalogPartner.name ||
                             partnerExtra.avatarAsset !=
                                 catalogPartner.avatarAsset) {
@@ -228,9 +461,18 @@ String? _handleRedirect(
   final location = state.uri.path;
   final isWelcome = location == '/learning/welcome';
   final isDenied = location == '/learning/access-denied';
+  final isOnboarding = location == '/learning/onboarding';
 
   // Public/unrestricted routes within Learning
   if (isWelcome || isDenied) {
+    return null;
+  }
+
+  // Onboarding requires authenticated identity session
+  if (isOnboarding) {
+    if (!policy.isAuthenticated) {
+      return '/learning/welcome';
+    }
     return null;
   }
 
