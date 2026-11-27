@@ -27,6 +27,7 @@ class SocialHomeScreen extends StatefulWidget {
   final VoidCallback? onProfileTap;
   final int currentNavigationIndex;
   final ValueChanged<int>? onDestinationSelected;
+  final bool showBottomNav;
 
   const SocialHomeScreen({
     super.key,
@@ -39,6 +40,7 @@ class SocialHomeScreen extends StatefulWidget {
     this.onProfileTap,
     this.currentNavigationIndex = 0,
     this.onDestinationSelected,
+    this.showBottomNav = true,
   });
 
   @override
@@ -130,7 +132,7 @@ class _SocialHomeScreenState extends State<SocialHomeScreen> {
         return Scaffold(
           backgroundColor: AndrilSocialColors.cream,
           body: _buildBody(isDenied),
-          bottomNavigationBar: isDenied
+          bottomNavigationBar: (isDenied || !widget.showBottomNav)
               ? null
               : NavigationBar(
                   selectedIndex: widget.currentNavigationIndex,
