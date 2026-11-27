@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
@@ -22,16 +23,24 @@ class MockSocialProfileManagementRepository implements ISocialProfileManagementR
 
   int getCallCount = 0;
   int updateCallCount = 0;
+  Future<SocialProfileResult> Function()? onGetProfile;
+  Future<SocialProfileResult> Function(SocialProfileDraft draft)? onUpdateProfile;
 
   @override
   Future<SocialProfileResult> getProfile() async {
     getCallCount++;
+    if (onGetProfile != null) {
+      return onGetProfile!();
+    }
     return getResult;
   }
 
   @override
   Future<SocialProfileResult> updateProfile(SocialProfileDraft draft) async {
     updateCallCount++;
+    if (onUpdateProfile != null) {
+      return onUpdateProfile!(draft);
+    }
     return updateResult;
   }
 }
@@ -265,6 +274,170 @@ void main() {
       fakeSession.subject = 'switched_user_02';
       expect(vm.status, SocialProfileManagementStatus.accessDenied);
       expect(vm.profile.displayName, isEmpty);
+    });
+
+    test('session switch during inflight loadProfile discards response and sets accessDenied', () async {
+      final completer = Completer<SocialProfileResult>();
+      mockRepo.onGetProfile = () => completer.future;
+
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      final futureLoad = vm.loadProfile();
+      expect(vm.isLoading, isTrue);
+
+      fakeSession.subject = 'switched_user_02';
+      completer.complete(const SocialProfileResult.success(SocialProfileDraft(
+        displayName: 'LateProfile',
+        bio: 'Late bio',
+      )));
+
+      await futureLoad;
+
+      expect(vm.status, SocialProfileManagementStatus.accessDenied);
+      expect(vm.profile.displayName, isEmpty);
+      expect(vm.draft.displayName, isEmpty);
+    });
+
+    test('session switch during inflight saveProfile discards response and sets accessDenied', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      await vm.loadProfile();
+      vm.updateDisplayName('ElenaUpdated');
+
+      final completer = Completer<SocialProfileResult>();
+      mockRepo.onUpdateProfile = (_) => completer.future;
+
+      final futureSave = vm.saveProfile();
+      expect(vm.isSaving, isTrue);
+
+      fakeSession.subject = 'switched_user_02';
+      completer.complete(const SocialProfileResult.success(SocialProfileDraft(
+        displayName: 'ElenaUpdated',
+        bio: 'Photographer and traveler',
+      )));
+
+      final saved = await futureSave;
+
+      expect(saved, isFalse);
+      expect(vm.isSaving, isFalse);
+      expect(vm.status, SocialProfileManagementStatus.accessDenied);
+      expect(vm.profile.displayName, isEmpty);
+    });
+
+    test('sign out during inflight saveProfile discards response and resets isSaving', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      await vm.loadProfile();
+      vm.updateDisplayName('ElenaUpdated');
+
+      final completer = Completer<SocialProfileResult>();
+      mockRepo.onUpdateProfile = (_) => completer.future;
+
+      final futureSave = vm.saveProfile();
+      expect(vm.isSaving, isTrue);
+
+      fakeSession.setPhase(SessionPhase.signedOut);
+      completer.complete(const SocialProfileResult.success(SocialProfileDraft(
+        displayName: 'ElenaUpdated',
+      )));
+
+      final saved = await futureSave;
+
+      expect(saved, isFalse);
+      expect(vm.isSaving, isFalse);
+      expect(vm.status, SocialProfileManagementStatus.accessDenied);
+    });
+
+    test('prevents concurrent duplicate saveProfile calls', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      await vm.loadProfile();
+      vm.updateDisplayName('ElenaUpdated');
+
+      final completer = Completer<SocialProfileResult>();
+      mockRepo.onUpdateProfile = (_) => completer.future;
+
+      final firstSave = vm.saveProfile();
+      expect(vm.isSaving, isTrue);
+      expect(vm.canSave, isFalse);
+
+      final secondSave = vm.saveProfile();
+      expect(await secondSave, isFalse);
+
+      completer.complete(const SocialProfileResult.success(SocialProfileDraft(
+        displayName: 'ElenaUpdated',
+        bio: 'Photographer and traveler',
+      )));
+
+      expect(await firstSave, isTrue);
+      expect(mockRepo.updateCallCount, 1);
+      expect(vm.status, SocialProfileManagementStatus.ready);
+    });
+
+    test('preserves unsaved edits in draft after recoverable save failure', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      await vm.loadProfile();
+      vm.updateDisplayName('TakenName');
+      vm.updateBio('My draft bio');
+
+      mockRepo.updateResult = const SocialProfileResult.failure(SocialProfileFailure(
+        type: SocialProfileFailureType.displayNameUnavailable,
+        message: 'The display name is already taken.',
+      ));
+
+      final saved = await vm.saveProfile();
+      expect(saved, isFalse);
+      expect(vm.status, SocialProfileManagementStatus.error);
+      expect(vm.errorMessage, 'The display name is already taken.');
+
+      // Unsaved edits are preserved in editing draft
+      expect(vm.draft.displayName, 'TakenName');
+      expect(vm.draft.bio, 'My draft bio');
+      expect(vm.hasUnsavedChanges, isTrue);
+
+      // User fixes display name -> transient error clears, canSave is true again
+      vm.updateDisplayName('UniqueName');
+      expect(vm.status, SocialProfileManagementStatus.ready);
+      expect(vm.errorMessage, isNull);
+      expect(vm.canSave, isTrue);
+    });
+
+    test('maps missing profile and dependency failures to error status', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      mockRepo.getResult = const SocialProfileResult.failure(SocialProfileFailure(
+        type: SocialProfileFailureType.dependencyFailure,
+        message: 'Private Social profile not found.',
+      ));
+
+      await vm.loadProfile();
+      expect(vm.status, SocialProfileManagementStatus.error);
+      expect(vm.errorMessage, 'Private Social profile not found.');
     });
   });
 }
