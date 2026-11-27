@@ -115,6 +115,8 @@ class SocialDependenciesScope {
       repository: zoneRepository,
       sessionController: _sessionController,
       isSocialOptedIn: isSocialAuthorized,
+      accessBoundary: _accessBoundary,
+      accessEvidence: _accessEvidence,
     );
   }
 
@@ -124,6 +126,8 @@ class SocialDependenciesScope {
     return _zoneManagementViewModel ??= SocialZoneManagementViewModel(
       sessionController: _sessionController,
       isSocialOptedIn: isSocialAuthorized,
+      accessBoundary: _accessBoundary,
+      accessEvidence: _accessEvidence,
     );
   }
 
