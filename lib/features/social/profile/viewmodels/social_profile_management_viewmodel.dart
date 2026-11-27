@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import '../../likes_matches/domain/authorization/social_access_boundary.dart';
 import 'social_profile_draft.dart';
 import 'social_profile_management_repository.dart';
 import 'social_profile_repository.dart';
@@ -26,6 +27,10 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
   final ISocialProfileManagementRepository _repository;
   final SessionController _sessionController;
   final bool _isSocialOptedIn;
+  final bool _isOnboarding;
+  final ISocialAccessBoundary _accessBoundary;
+  final SocialAccessEvidence? _accessEvidence;
+  String? _boundSubject;
 
   SocialProfileManagementStatus _status = SocialProfileManagementStatus.initial;
   SocialProfileDraft _serverDraft = const SocialProfileDraft();
@@ -38,10 +43,21 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
   SocialProfileManagementViewModel({
     required ISocialProfileManagementRepository repository,
     required SessionController sessionController,
-    bool isSocialOptedIn = true,
+    bool isSocialOptedIn = false,
+    bool isOnboarding = false,
+    ISocialAccessBoundary accessBoundary = const SocialAccessBoundary(),
+    SocialAccessEvidence? accessEvidence,
   })  : _repository = repository,
         _sessionController = sessionController,
-        _isSocialOptedIn = isSocialOptedIn {
+        _isSocialOptedIn = isSocialOptedIn,
+        _isOnboarding = isOnboarding,
+        _accessBoundary = accessBoundary,
+        _accessEvidence = accessEvidence {
+    try {
+      _boundSubject = _sessionController.subject;
+    } catch (_) {
+      _boundSubject = null;
+    }
     _sessionController.addListener(_onSessionChanged);
     _sessionController.registerPrivateStateClearer(_clearPrivateProfile);
   }
@@ -50,12 +66,39 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
   SocialProfileDraft get profile => _serverDraft;
   SocialProfileDraft get draft => _editingDraft;
   String? get errorMessage => _errorMessage;
+  bool get isSocialOptedIn => _isSocialOptedIn;
+  bool get isOnboarding => _isOnboarding;
+  ISocialAccessBoundary get accessBoundary => _accessBoundary;
+  SocialAccessEvidence? get accessEvidence => _accessEvidence;
 
   bool get isLoading => _status == SocialProfileManagementStatus.loading;
   bool get isSaving => _isSaving || _status == SocialProfileManagementStatus.saving;
   bool get isReady => _status == SocialProfileManagementStatus.ready;
   bool get isAccessDenied => _status == SocialProfileManagementStatus.accessDenied;
   bool get isError => _status == SocialProfileManagementStatus.error;
+
+  /// Evaluates authoritative access to private profile management.
+  bool get isAuthorized {
+    if (_disposed) return false;
+    if (_sessionController.phase != SessionPhase.signedIn) return false;
+
+    try {
+      if (_boundSubject != null && _sessionController.subject != _boundSubject) {
+        return false;
+      }
+    } catch (_) {}
+
+    if (_isOnboarding) return true;
+
+    if (_accessEvidence != null) {
+      return _accessBoundary.isAccessGranted(
+        sessionController: _sessionController,
+        evidence: _accessEvidence,
+      );
+    }
+
+    return _isSocialOptedIn;
+  }
 
   /// Whether the user has modified the profile draft compared to the server state.
   bool get hasUnsavedChanges =>
@@ -70,7 +113,7 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
   Future<void> loadProfile({bool refresh = false}) async {
     if (_disposed) return;
 
-    if (!_isSocialOptedIn || _sessionController.phase != SessionPhase.signedIn) {
+    if (!isAuthorized) {
       _status = SocialProfileManagementStatus.accessDenied;
       _errorMessage = 'Adult eligibility verification and Social opt-in are required.';
       notifyListeners();
@@ -141,6 +184,12 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
   /// Saves the current editing draft to the server.
   Future<bool> saveProfile() async {
     if (_disposed || _isSaving || !canSave) return false;
+    if (!isAuthorized) {
+      _status = SocialProfileManagementStatus.accessDenied;
+      _errorMessage = 'Adult eligibility verification and Social opt-in are required.';
+      notifyListeners();
+      return false;
+    }
 
     _isSaving = true;
     final opId = ++_activeOperationId;
@@ -190,14 +239,23 @@ class SocialProfileManagementViewModel extends ChangeNotifier {
     _serverDraft = const SocialProfileDraft();
     _editingDraft = const SocialProfileDraft();
     _errorMessage = null;
+    _isSaving = false;
   }
 
   void _onSessionChanged() {
     if (_disposed) return;
-    if (_sessionController.phase != SessionPhase.signedIn) {
+    String? currentSubject;
+    try {
+      currentSubject = _sessionController.subject;
+    } catch (_) {
+      currentSubject = null;
+    }
+
+    if (_sessionController.phase != SessionPhase.signedIn ||
+        (_boundSubject != null && currentSubject != _boundSubject)) {
       _clearPrivateProfile();
       _status = SocialProfileManagementStatus.accessDenied;
-      _errorMessage = 'Session signed out.';
+      _errorMessage = 'Session signed out or account switched.';
       notifyListeners();
     }
   }

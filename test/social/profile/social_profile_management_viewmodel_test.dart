@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import 'package:andril_mobile/features/social/profile/viewmodels/social_profile_draft.dart';
 import 'package:andril_mobile/features/social/profile/viewmodels/social_profile_management_repository.dart';
 import 'package:andril_mobile/features/social/profile/viewmodels/social_profile_management_viewmodel.dart';
@@ -37,10 +38,19 @@ class MockSocialProfileManagementRepository implements ISocialProfileManagementR
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'test_user_01';
   final List<VoidCallback> _clearers = [];
 
   @override
   SessionPhase get phase => _phase;
+
+  @override
+  String? get subject => _subject;
+
+  set subject(String? value) {
+    _subject = value;
+    notifyListeners();
+  }
 
   void setPhase(SessionPhase phase) {
     _phase = phase;
@@ -202,6 +212,58 @@ void main() {
       expect(vm.profile.displayName, 'ElenaR');
 
       fakeSession.invokeClearers();
+      expect(vm.profile.displayName, isEmpty);
+    });
+
+    test('allows profile editing during onboarding before social opt-in', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isOnboarding: true,
+        isSocialOptedIn: false,
+      );
+
+      await vm.loadProfile();
+      expect(vm.isAuthorized, isTrue);
+      expect(vm.status, SocialProfileManagementStatus.ready);
+      expect(vm.profile.displayName, 'ElenaR');
+    });
+
+    test('denies access and fails closed when default constructor is called without opt-in', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+      );
+
+      await vm.loadProfile();
+      expect(vm.isAuthorized, isFalse);
+      expect(vm.status, SocialProfileManagementStatus.accessDenied);
+    });
+
+    test('authorizes via SocialAccessEvidence when provided', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'test_user_01'),
+      );
+
+      await vm.loadProfile();
+      expect(vm.isAuthorized, isTrue);
+      expect(vm.status, SocialProfileManagementStatus.ready);
+    });
+
+    test('denies access and clears profile upon account switch', () async {
+      final vm = SocialProfileManagementViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      await vm.loadProfile();
+      expect(vm.profile.displayName, 'ElenaR');
+
+      fakeSession.subject = 'switched_user_02';
+      expect(vm.status, SocialProfileManagementStatus.accessDenied);
       expect(vm.profile.displayName, isEmpty);
     });
   });

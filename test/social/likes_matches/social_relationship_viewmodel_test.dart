@@ -5,6 +5,7 @@ import 'package:andril_mobile/core/security/session/session_controller.dart';
 import 'package:andril_mobile/features/social/discovery/data/social_discovery_repository.dart';
 import 'package:andril_mobile/features/social/discovery/domain/social_candidate.dart';
 import 'package:andril_mobile/features/social/likes_matches/data/social_relationship_repository.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import 'package:andril_mobile/features/social/likes_matches/domain/social_relationship.dart';
 import 'package:andril_mobile/features/social/likes_matches/presentation/social_relationship_viewmodel.dart';
 
@@ -88,10 +89,19 @@ class MockRelationshipRepository implements ISocialRelationshipRepository {
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'user-rel-01';
   final List<VoidCallback> _clearers = [];
 
   @override
   SessionPhase get phase => _phase;
+
+  @override
+  String? get subject => _subject;
+
+  set subject(String? s) {
+    _subject = s;
+    notifyListeners();
+  }
 
   void setPhase(SessionPhase newPhase) {
     _phase = newPhase;
@@ -372,6 +382,32 @@ void main() {
       );
 
       expect(() => vm.dispose(), returnsNormally);
+    });
+
+    test('authorizes relationship operations when valid SocialAccessEvidence is provided', () async {
+      final vm = SocialRelationshipViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-rel-01'),
+      );
+
+      expect(vm.isAuthorized, isTrue);
+      await vm.loadReceivedLikes();
+      expect(vm.status, isNot(SocialRelationshipViewStatus.accessDenied));
+    });
+
+    test('clears private state and denies access upon account switch', () async {
+      final vm = SocialRelationshipViewModel(
+        repository: mockRepo,
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+        initialConnections: [sampleRelationship],
+      );
+
+      expect(vm.connections, isNotEmpty);
+      fakeSession.subject = 'switched-rel-02';
+      expect(vm.connections, isEmpty);
+      expect(vm.status, SocialRelationshipViewStatus.accessDenied);
     });
   });
 }
