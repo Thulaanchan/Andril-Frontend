@@ -179,6 +179,49 @@ void main() {
       expect(boundary.evaluateMatchCommunication(emptyChannel), MatchCommunicationStatus.m4Unavailable);
     });
 
+    test('denies communication with unauthorized when verifiedAt timestamp is invalid or zero', () {
+      final invalidTimestampEvidence = MatchCommunicationEvidence(
+        matchId: 'match-101',
+        participantA: 'user-a',
+        participantB: 'user-b',
+        isMutual: true,
+        m4ChannelId: 'm4-ch-999',
+        verifiedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        isM4Authorized: true,
+      );
+
+      final status = boundary.evaluateMatchCommunication(invalidTimestampEvidence);
+      expect(status, MatchCommunicationStatus.unauthorized);
+      expect(boundary.canInitiateCommunication(invalidTimestampEvidence), isFalse);
+    });
+
+    test('redacts private matchId in toString diagnostics', () {
+      final evidence = MatchCommunicationEvidence.authorized(
+        matchId: 'match-secret-12345',
+        participantA: 'u-1',
+        participantB: 'u-2',
+        m4ChannelId: 'ch-1',
+      );
+      expect(evidence.toString(), contains('matchId: redacted'));
+      expect(evidence.toString(), isNot(contains('match-secret-12345')));
+    });
+
+    test('JSON deserialization with invalid timestamp defaults to epoch 0 and fails closed', () {
+      final json = {
+        'matchId': 'match-json',
+        'participantA': 'u-1',
+        'participantB': 'u-2',
+        'isMutual': true,
+        'm4ChannelId': 'm4-channel-abc',
+        'verifiedAt': 'invalid-date-string',
+        'isM4Authorized': true,
+      };
+
+      final restored = MatchCommunicationEvidence.fromJson(json);
+      expect(restored.verifiedAt.millisecondsSinceEpoch, 0);
+      expect(boundary.canInitiateCommunication(restored), isFalse);
+    });
+
     test('JSON roundtrip preserves communication authorization evidence including expired field', () {
       final original = MatchCommunicationEvidence.authorized(
         matchId: 'match-json',
