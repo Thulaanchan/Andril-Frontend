@@ -298,9 +298,24 @@ GoRouter createLearningRouter({
       GoRoute(
         path: '/learning/profile/editor',
         name: 'learning-profile-editor',
-        builder: (context, state) => const LearningProfileScreen(
-          isEditMode: true,
-        ),
+        builder: (context, state) {
+          final session = dependencies?.sessionController;
+          final currentUserId = session?.subject ?? 'lp_current_user';
+          return LearningProfileScreen(
+            isEditMode: true,
+            currentUserId: currentUserId,
+            onSaveProfile: (profile) async {
+              await dependencies?.profileRepository?.updateProfile(profile);
+            },
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/learning/home');
+              }
+            },
+          );
+        },
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {

@@ -41,10 +41,18 @@ class _FakeRemoteDataSource implements ILearningRemoteDataSource {
     required String displayName,
     String? bio,
     String visibility = 'private',
+    Map<String, Object?>? preferences,
+    String? avatarUrl,
   }) async {
     if (errorToThrow != null) throw errorToThrow!;
     updateProfileDraftCalled = true;
-    return {'displayName': displayName, 'bio': bio, 'visibility': visibility};
+    return {
+      'displayName': displayName,
+      'bio': bio,
+      'visibility': visibility,
+      if (preferences != null) 'preferences': preferences,
+      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+    };
   }
 
   @override

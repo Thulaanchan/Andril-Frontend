@@ -57,6 +57,8 @@ abstract class ILearningRemoteDataSource {
     required String displayName,
     String? bio,
     String visibility = 'private',
+    Map<String, Object?>? preferences,
+    String? avatarUrl,
   });
 
   /// Reads the caller's private learning profile draft.
@@ -170,15 +172,21 @@ class LearningRemoteDataSource implements ILearningRemoteDataSource {
     required String displayName,
     String? bio,
     String visibility = 'private',
+    Map<String, Object?>? preferences,
+    String? avatarUrl,
   }) async {
+    final body = <String, Object?>{
+      'displayName': displayName,
+      'visibility': visibility,
+    };
+    if (bio != null) body['bio'] = bio;
+    if (preferences != null) body['preferences'] = preferences;
+    if (avatarUrl != null) body['avatarUrl'] = avatarUrl;
+
     return _apiClient.requestLearning(
       LearningEndpoint.profileDraft,
       session,
-      body: {
-        'displayName': displayName,
-        'bio': bio,
-        'visibility': visibility,
-      },
+      body: body,
     );
   }
 
