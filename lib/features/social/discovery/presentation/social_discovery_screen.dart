@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/themes/social/social_theme.dart';
 import '../../../../features/shared/presentation/widgets/andril_module_app_bar.dart';
 import '../domain/social_candidate.dart';
+import 'social_discovery_empty_state.dart';
 import 'social_discovery_viewmodel.dart';
 import 'social_pass_confirmation.dart';
 
@@ -452,48 +453,14 @@ class _SocialDiscoveryScreenState extends State<SocialDiscoveryScreen> {
   }
 
   Widget _buildEmptyView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.explore_off_outlined,
-              size: 64,
-              color: AndrilSocialColors.copper,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'No Profiles Found',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AndrilSocialColors.ink,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'You have reviewed all available profiles for your current filters. Adjust your radius or preferences to see more people.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: AndrilSocialColors.ink),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => _vm.refresh(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AndrilSocialColors.royalPurple,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                minimumSize: const Size(140, 48),
-              ),
-              child: const Text('Refresh Feed'),
-            ),
-          ],
-        ),
-      ),
+    final type = _vm.candidates.isNotEmpty && _vm.currentIndex >= _vm.candidates.length
+        ? SocialDiscoveryEmptyType.endOfDeck
+        : SocialDiscoveryEmptyType.noCandidates;
+
+    return SocialDiscoveryEmptyState(
+      type: type,
+      onOpenFilters: widget.onOpenFilters ?? _vm.triggerOpenFilters,
+      onRefresh: () => _vm.refresh(),
     );
   }
 
