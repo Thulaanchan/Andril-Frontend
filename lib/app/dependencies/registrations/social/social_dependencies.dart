@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
 import '../../../../features/social/home/viewmodels/social_home_viewmodel.dart';
+import '../../../../features/social/home/viewmodels/social_navigation_coordinator.dart';
 import '../../../../features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import '../../../../features/social/likes_matches/domain/authorization/social_match_communication_boundary.dart';
 import '../../../../features/social/zones/group_contracts/social_zone_repository.dart';
@@ -26,6 +27,7 @@ class SocialDependenciesScope {
   ISocialZoneRepository? _zoneRepository;
   SocialZonesViewModel? _zonesViewModel;
   SocialZoneManagementViewModel? _zoneManagementViewModel;
+  SocialNavigationCoordinator? _navigationCoordinator;
 
   VoidCallback? _unregisterSessionClearer;
   bool _isDisposed = false;
@@ -142,10 +144,26 @@ class SocialDependenciesScope {
     );
   }
 
+  /// Creates or retrieves the scoped [SocialNavigationCoordinator] instance.
+  SocialNavigationCoordinator createNavigationCoordinator({ValueChanged<String>? onChatHandoff}) {
+    _checkDisposed();
+    return _navigationCoordinator ??= SocialNavigationCoordinator(
+      accessBoundary: _accessBoundary,
+      communicationBoundary: _communicationBoundary,
+      sessionController: _sessionController,
+      accessEvidence: _accessEvidence,
+      isSocialOptedIn: isSocialAuthorized,
+      onChatHandoff: onChatHandoff,
+    );
+  }
+
   /// Idempotently disposes all created ViewModels, unregisters listeners, and clears private dependencies.
   void dispose() {
     if (_isDisposed) return;
     _isDisposed = true;
+
+    _navigationCoordinator?.dispose();
+    _navigationCoordinator = null;
 
     _zonesViewModel?.dispose();
     _zonesViewModel = null;
