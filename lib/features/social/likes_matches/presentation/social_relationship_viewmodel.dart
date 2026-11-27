@@ -3,6 +3,7 @@ import '../../../../core/security/session/session_controller.dart';
 import '../../discovery/data/social_discovery_repository.dart';
 import '../../discovery/domain/social_candidate.dart';
 import '../data/social_relationship_repository.dart';
+import '../domain/authorization/social_access_boundary.dart';
 import '../domain/social_relationship.dart';
 
 /// Presentation operational states for Social relationship flows (SOC-03 / CF-20).
@@ -40,6 +41,9 @@ class SocialRelationshipViewModel extends ChangeNotifier {
   final ISocialRelationshipRepository repository;
   final SessionController? sessionController;
   final bool isSocialOptedIn;
+  final ISocialAccessBoundary accessBoundary;
+  final SocialAccessEvidence? accessEvidence;
+  String? _boundSubject;
 
   VoidCallback? _unregisterSessionClearer;
 
@@ -64,6 +68,8 @@ class SocialRelationshipViewModel extends ChangeNotifier {
     required this.repository,
     this.sessionController,
     this.isSocialOptedIn = false,
+    this.accessBoundary = const SocialAccessBoundary(),
+    this.accessEvidence,
     List<SocialRelationship>? initialReceivedLikes,
     List<SocialRelationship>? initialSentLikes,
     List<SocialRelationship>? initialConnections,
@@ -78,6 +84,11 @@ class SocialRelationshipViewModel extends ChangeNotifier {
             : const [] {
     final session = sessionController;
     if (session != null) {
+      try {
+        _boundSubject = session.subject;
+      } catch (_) {
+        _boundSubject = null;
+      }
       _unregisterSessionClearer =
           session.registerPrivateStateClearer(_onSessionCleared);
       session.addListener(_onSessionStateChanged);
@@ -103,8 +114,21 @@ class SocialRelationshipViewModel extends ChangeNotifier {
   bool get isAuthorized {
     if (_disposed) return false;
     final session = sessionController;
-    if (session == null) return false;
-    if (session.phase != SessionPhase.signedIn) return false;
+    if (session == null || session.phase != SessionPhase.signedIn) return false;
+
+    try {
+      if (_boundSubject != null && session.subject != _boundSubject) {
+        return false;
+      }
+    } catch (_) {}
+
+    if (accessEvidence != null) {
+      return accessBoundary.isAccessGranted(
+        sessionController: session,
+        evidence: accessEvidence,
+      );
+    }
+
     return isSocialOptedIn;
   }
 
@@ -332,8 +356,21 @@ class SocialRelationshipViewModel extends ChangeNotifier {
 
   void _onSessionStateChanged() {
     if (_disposed) return;
-    if (!isAuthorized) {
+    final session = sessionController;
+    if (session == null) return;
+    String? currentSubject;
+    try {
+      currentSubject = session.subject;
+    } catch (_) {
+      currentSubject = null;
+    }
+
+    if (session.phase != SessionPhase.signedIn ||
+        (_boundSubject != null && currentSubject != _boundSubject)) {
       _onSessionCleared();
+      _status = SocialRelationshipViewStatus.accessDenied;
+      _errorMessage = 'Session terminated or account switched.';
+      notifyListeners();
     }
   }
 
