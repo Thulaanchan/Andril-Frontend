@@ -10,6 +10,8 @@ class ClassroomCard extends StatelessWidget {
   final VoidCallback? onRequestToJoin;
   final VoidCallback? onCancelRequest;
   final VoidCallback? onViewDetails;
+  final VoidCallback? onManageRequests;
+  final int pendingRequestsCount;
 
   const ClassroomCard({
     super.key,
@@ -18,6 +20,8 @@ class ClassroomCard extends StatelessWidget {
     this.onRequestToJoin,
     this.onCancelRequest,
     this.onViewDetails,
+    this.onManageRequests,
+    this.pendingRequestsCount = 0,
   });
 
   Color _getPrivacyColor(ClassroomPrivacy privacy) {
@@ -248,22 +252,50 @@ class ClassroomCard extends StatelessWidget {
 
   Widget _buildActionRow(BuildContext context) {
     if (classroom.membershipStatus == ClassroomMembershipStatus.host) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: LearningColors.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        child: const Text(
-          'Educator / Host',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: LearningColors.primary,
-            fontSize: 13.0,
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: LearningColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+            child: const Text(
+              'Educator / Host',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: LearningColors.primary,
+                fontSize: 13.0,
+              ),
+            ),
           ),
-        ),
+          if (onManageRequests != null) ...[
+            const SizedBox(height: 8.0),
+            OutlinedButton.icon(
+              key: ValueKey('btn_manage_requests_${classroom.id}'),
+              onPressed: onManageRequests,
+              icon: const Icon(Icons.people_outline, size: 16.0),
+              label: Text(
+                pendingRequestsCount > 0
+                    ? 'Review Requests ($pendingRequestsCount)'
+                    : 'Manage Admission Requests',
+                style: const TextStyle(fontSize: 12.5),
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 44.0),
+                foregroundColor: LearningColors.primary,
+                side: BorderSide(
+                    color: LearningColors.primary.withValues(alpha: 0.3)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+            ),
+          ],
+        ],
       );
     }
 

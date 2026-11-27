@@ -140,6 +140,11 @@ GoRouter createLearningRouter({
           viewModel: dependencies?.circlesViewModel ??
               LearningCirclesViewModel(
                 repository: const LearningCirclesRepository(),
+                sessionController: dependencies?.sessionController,
+                isLearningActivated: accessPolicy.isLearningActivated,
+                currentProfileId: dependencies?.sessionController?.subject ??
+                    'current_learner_prof',
+                currentDisplayName: 'Current Learner',
               ),
         ),
       ),
@@ -347,8 +352,14 @@ GoRouter createLearningRouter({
       GoRoute(
         path: '/learning/classrooms/hub',
         name: 'learning-classrooms-hub',
-        builder: (context, state) => const LearningClassroomsHubScreen(
-          currentUserId: 'learner_current',
+        builder: (context, state) => LearningClassroomsHubScreen(
+          currentUserId:
+              dependencies?.sessionController?.subject ?? 'learner_current',
+          currentAccountId: 'acc_current_user',
+          currentDisplayName: 'Thusa Learner',
+          isLearningActivated: accessPolicy.isLearningActivated,
+          onBack: () =>
+              context.canPop() ? context.pop() : context.go('/learning/home'),
         ),
       ),
       GoRoute(
@@ -635,6 +646,20 @@ class _LearningDestinationPlaceholder extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (destinationName == 'Classrooms') ...[
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    key: const ValueKey('btn_open_classrooms_hub'),
+                    onPressed: () => context.go('/learning/classrooms/hub'),
+                    icon: const Icon(Icons.hub_outlined, size: 18),
+                    label: const Text('Open Classrooms Hub'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: LearningColors.primary,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(180, 44),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
