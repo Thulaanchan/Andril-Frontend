@@ -20,12 +20,23 @@ abstract class ISocialProfileManagementRepository {
 class SocialProfileManagementRepository implements ISocialProfileManagementRepository {
   final SocialProfileRepository _innerRepository;
   final SessionController _sessionController;
+  final String? _boundSubject;
 
   SocialProfileManagementRepository({
     required SocialProfileRepository innerRepository,
     required SessionController sessionController,
+    String? boundSubject,
   })  : _innerRepository = innerRepository,
-        _sessionController = sessionController;
+        _sessionController = sessionController,
+        _boundSubject = boundSubject ?? _extractSubject(sessionController);
+
+  static String? _extractSubject(SessionController session) {
+    try {
+      return session.subject;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Future<SocialProfileResult> getProfile() async {
@@ -35,6 +46,15 @@ class SocialProfileManagementRepository implements ISocialProfileManagementRepos
         message: 'Caller is not authenticated.',
       ));
     }
+
+    try {
+      if (_boundSubject != null && _sessionController.subject != _boundSubject) {
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.authorizationDenied,
+          message: 'Account context mismatch detected.',
+        ));
+      }
+    } catch (_) {}
 
     try {
       return await _innerRepository.getProfileDraft();
@@ -54,6 +74,15 @@ class SocialProfileManagementRepository implements ISocialProfileManagementRepos
         message: 'Caller is not authenticated.',
       ));
     }
+
+    try {
+      if (_boundSubject != null && _sessionController.subject != _boundSubject) {
+        return const SocialProfileResult.failure(SocialProfileFailure(
+          type: SocialProfileFailureType.authorizationDenied,
+          message: 'Account context mismatch detected.',
+        ));
+      }
+    } catch (_) {}
 
     // Invariant: Visibility must remain strictly private
     if (draft.visibility != SocialProfileDraft.privateVisibility) {
