@@ -164,6 +164,25 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
       final result = await _repository.getActiveQuestionnaire();
       if (_disposed || opId != _activeOperationId) return;
 
+      // Validate session continuity after async operation
+      final currentSubject = _resolveSubject();
+      if (_boundSubject != null && currentSubject != null && currentSubject != _boundSubject) {
+        _questionnaire = null;
+        _clearPrivateDraft();
+        _status = PersonalityQuestionnaireStatus.accessDenied;
+        _errorMessage = 'Session subject changed.';
+        notifyListeners();
+        return;
+      }
+      if (_sessionController.phase != SessionPhase.signedIn) {
+        _questionnaire = null;
+        _clearPrivateDraft();
+        _status = PersonalityQuestionnaireStatus.accessDenied;
+        _errorMessage = 'Session signed out.';
+        notifyListeners();
+        return;
+      }
+
       if (result.isSuccess && result.data != null) {
         _questionnaire = result.data;
         _answerDraft = PersonalityAnswerDraft(
@@ -173,10 +192,14 @@ class PersonalityQuestionnaireViewModel extends ChangeNotifier {
         _status = PersonalityQuestionnaireStatus.ready;
         _errorMessage = null;
       } else {
+        _questionnaire = null;
+        _clearPrivateDraft();
         _handleFailure(result.failureType, result.errorMessage);
       }
     } catch (_) {
       if (_disposed || opId != _activeOperationId) return;
+      _questionnaire = null;
+      _clearPrivateDraft();
       _status = PersonalityQuestionnaireStatus.error;
       _errorMessage = 'Failed to load questionnaire.';
     }
