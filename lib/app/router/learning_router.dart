@@ -14,11 +14,14 @@ import '../../features/learning/classrooms/presentation/screens/learning_classro
 import '../../features/learning/connections/data/repositories/learning_connections_repository.dart';
 import '../../features/learning/connections/presentation/screens/learning_connections_screen.dart';
 import '../../features/learning/connections/presentation/viewmodels/learning_connections_viewmodel.dart';
+import '../../features/learning/connections/presentation/widgets/send_connection_request_dialog.dart';
 import '../../features/learning/cv_maker/presentation/screens/cv_editor_screen.dart';
 import '../../features/learning/cv_maker/presentation/screens/cv_template_selection_preview_screen.dart';
 import '../../features/learning/discovery/data/repositories/learning_discovery_repository.dart';
+import '../../features/learning/discovery/domain/entities/learning_partner_candidate.dart';
 import '../../features/learning/discovery/presentation/screens/learning_partner_explorer_screen.dart';
 import '../../features/learning/discovery/presentation/viewmodels/learning_partner_explorer_viewmodel.dart';
+import '../../features/learning/discovery/presentation/widgets/learning_partner_profile_dialog.dart';
 import '../../features/learning/growth_mentorship/data/repositories/learning_growth_repository.dart';
 import '../../features/learning/growth_mentorship/presentation/screens/learning_mentorship_hub_screen.dart';
 import '../../features/learning/growth_mentorship/presentation/screens/my_growth_dashboard_screen.dart';
@@ -265,22 +268,74 @@ GoRouter createLearningRouter({
       GoRoute(
         path: '/learning/discovery',
         name: 'learning-discovery',
-        builder: (context, state) => LearningPartnerExplorerScreen(
-          viewModel: dependencies?.discoveryViewModel ??
+        builder: (context, state) {
+          final discoveryVm = dependencies?.discoveryViewModel ??
               LearningPartnerExplorerViewModel(
                 repository: const LearningDiscoveryRepository(),
-              ),
-        ),
+              );
+          final connectionsVm = dependencies?.connectionsViewModel;
+          return LearningPartnerExplorerScreen(
+            viewModel: discoveryVm,
+            onConnect: (candidate) async {
+              if (connectionsVm != null) {
+                final sent = await SendConnectionRequestDialog.show(
+                  context,
+                  candidate: candidate,
+                  onSend: (note) async {
+                    return await connectionsVm.sendRequest(
+                      candidate,
+                      note: note,
+                    );
+                  },
+                );
+                if (sent == true && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Connection request sent to ${candidate.displayName}.',
+                      ),
+                    ),
+                  );
+                }
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Connection request to ${candidate.displayName} registered.',
+                    ),
+                  ),
+                );
+              }
+            },
+          );
+        },
       ),
       GoRoute(
         path: '/learning/connections',
         name: 'learning-connections',
-        builder: (context, state) => LearningConnectionsScreen(
-          viewModel: dependencies?.connectionsViewModel ??
+        builder: (context, state) {
+          final connectionsVm = dependencies?.connectionsViewModel ??
               LearningConnectionsViewModel(
                 repository: const LearningConnectionsRepository(),
-              ),
-        ),
+              );
+          return LearningConnectionsScreen(
+            viewModel: connectionsVm,
+            onExplorePartners: () => context.go('/learning/discovery'),
+            onMessage: (connection) => context.go('/learning/chat'),
+            onViewProfile: (connection) {
+              final candidate = LearningPartnerCandidate(
+                id: connection.peerProfileId,
+                displayName: connection.peerDisplayName,
+                skillsToShare: connection.sharedSkills,
+              );
+              LearningPartnerProfileDialog.show(
+                context,
+                candidate: candidate,
+                onConnect: (_) {},
+              );
+            },
+          );
+        },
       ),
       GoRoute(
         path: '/learning/skill-exchange',
