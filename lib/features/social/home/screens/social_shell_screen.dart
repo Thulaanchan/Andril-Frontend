@@ -45,7 +45,6 @@ class SocialShellScreen extends StatefulWidget {
 
 class _SocialShellScreenState extends State<SocialShellScreen> {
   late final SocialNavigationCoordinator _coordinator;
-  bool _isLocalCoordinator = false;
   int _currentIndex = 0;
 
   @override
@@ -55,14 +54,10 @@ class _SocialShellScreenState extends State<SocialShellScreen> {
         ? widget.initialIndex
         : 0;
 
-    if (widget.coordinator != null) {
-      _coordinator = widget.coordinator!;
-    } else {
-      _coordinator = widget.scope.createNavigationCoordinator(
-        onChatHandoff: widget.onChatHandoff,
-      );
-      _isLocalCoordinator = true;
-    }
+    _coordinator = widget.coordinator ??
+        widget.scope.createNavigationCoordinator(
+          onChatHandoff: widget.onChatHandoff,
+        );
 
     _coordinator.addListener(_onCoordinatorStateChanged);
   }
@@ -75,9 +70,6 @@ class _SocialShellScreenState extends State<SocialShellScreen> {
   @override
   void dispose() {
     _coordinator.removeListener(_onCoordinatorStateChanged);
-    if (_isLocalCoordinator) {
-      _coordinator.dispose();
-    }
     super.dispose();
   }
 
@@ -285,6 +277,7 @@ class _SocialShellScreenState extends State<SocialShellScreen> {
             onQuickAction: _handleQuickAction,
             currentNavigationIndex: _currentIndex,
             onDestinationSelected: _onDestinationSelected,
+            showBottomNav: false,
           ),
 
           // 1: Zones (Communities)
