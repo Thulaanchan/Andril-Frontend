@@ -98,11 +98,13 @@ abstract class ISocialZoneRepository {
 class SocialZoneRepository implements ISocialZoneRepository {
   final SessionController _sessionController;
   final bool isDormant;
+  final bool isPreviewEnvironment;
   final List<SocialZone>? _fixtureZones;
 
   const SocialZoneRepository({
     required SessionController sessionController,
     this.isDormant = false,
+    this.isPreviewEnvironment = false,
     List<SocialZone>? fixtureZones,
   })  : _sessionController = sessionController,
         _fixtureZones = fixtureZones;
@@ -119,14 +121,14 @@ class SocialZoneRepository implements ISocialZoneRepository {
       ));
     }
 
-    if (isDormant) {
+    if (isDormant || (_fixtureZones == null && !isPreviewEnvironment)) {
       return const ZoneResult.failure(ZoneFailure(
         type: ZoneFailureType.serviceUnavailable,
         message: 'Zone discovery service is currently dormant pending backend service activation.',
       ));
     }
 
-    final allZones = _fixtureZones ?? _testFallbackZones;
+    final allZones = _fixtureZones ?? _previewFallbackZones;
     var filtered = allZones;
 
     if (category != null && category.isNotEmpty && category.toLowerCase() != 'all') {
@@ -153,14 +155,14 @@ class SocialZoneRepository implements ISocialZoneRepository {
       ));
     }
 
-    if (isDormant) {
+    if (isDormant || (_fixtureZones == null && !isPreviewEnvironment)) {
       return const ZoneResult.failure(ZoneFailure(
         type: ZoneFailureType.serviceUnavailable,
         message: 'Zone detail service is currently dormant pending backend service activation.',
       ));
     }
 
-    final allZones = _fixtureZones ?? _testFallbackZones;
+    final allZones = _fixtureZones ?? _previewFallbackZones;
     final match = allZones.where((z) => z.id == zoneId).firstOrNull;
     if (match != null) {
       return ZoneResult.success(match);
@@ -204,7 +206,7 @@ class SocialZoneRepository implements ISocialZoneRepository {
     ));
   }
 
-  static const List<SocialZone> _testFallbackZones = [
+  static const List<SocialZone> _previewFallbackZones = [
     SocialZone(
       id: 'zone-tech-innovators',
       name: 'Tech Innovators & Makers',

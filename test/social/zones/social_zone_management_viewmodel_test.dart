@@ -1,15 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 import 'package:andril_mobile/features/social/zones/group_contracts/social_zone_management.dart';
 import 'package:andril_mobile/features/social/zones/presentation/social_zone_management_viewmodel.dart';
 
 class FakeSessionController extends ChangeNotifier implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
+  String? _subject = 'user-mgmt-01';
   final List<VoidCallback> _clearers = [];
 
   @override
   SessionPhase get phase => _phase;
+
+  @override
+  String? get subject => _subject;
+
+  set subject(String? s) {
+    _subject = s;
+    notifyListeners();
+  }
 
   set phase(SessionPhase newPhase) {
     _phase = newPhase;
@@ -194,6 +204,55 @@ void main() {
       expect(vm.draft.name, '');
       expect(vm.status, ZoneManagementStatus.initial);
       expect(vm.permissionEvidence, isNull);
+    });
+
+    test('authorizes via SocialAccessEvidence when provided', () {
+      final vm = SocialZoneManagementViewModel(
+        sessionController: fakeSession,
+        accessEvidence: SocialAccessEvidence.authorized(userId: 'user-mgmt-01'),
+      );
+
+      expect(vm.isAuthorized, isTrue);
+    });
+
+    test('denies access and clears draft upon account switch', () async {
+      final vm = SocialZoneManagementViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      vm.updateDraft(ZoneManagementDraft(
+        name: 'Account Switch Draft',
+        description: 'Description of sufficient length.',
+        category: 'Tech',
+      ));
+      expect(vm.draft.name, 'Account Switch Draft');
+
+      fakeSession.subject = 'switched-mgmt-02';
+      expect(vm.draft.name, '');
+      expect(vm.isAuthorized, isFalse);
+      final success = await vm.createZone();
+      expect(success, isFalse);
+      expect(vm.status, ZoneManagementStatus.accessDenied);
+    });
+
+    test('rejects non-authoritative permission evidence', () {
+      final vm = SocialZoneManagementViewModel(
+        sessionController: fakeSession,
+        isSocialOptedIn: true,
+      );
+
+      final fakeEvidence = ZonePermissionEvidence(
+        zoneId: 'z-1',
+        userId: 'user-mgmt-01',
+        role: ZoneRole.host,
+        permissions: {ZoneManagementPermission.manageRoles},
+        verifiedAt: DateTime.now(),
+        isAuthoritative: false, // Non-authoritative / forged
+      );
+
+      vm.setPermissionEvidence(fakeEvidence);
+      expect(vm.permissionEvidence?.hasPermission(ZoneManagementPermission.manageRoles), isFalse);
     });
   });
 }

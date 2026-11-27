@@ -112,7 +112,7 @@ void main() {
     });
 
     test('clears in-memory private state across all viewmodels upon session sign out', () async {
-      final zoneRepo = SocialZoneRepository(sessionController: fakeSession);
+      final zoneRepo = SocialZoneRepository(sessionController: fakeSession, isPreviewEnvironment: true);
 
       final zonesVm = SocialZonesViewModel(
         repository: zoneRepo,
@@ -155,7 +155,7 @@ void main() {
     });
 
     test('clears in-memory state upon simulated account switch to prevent data leakage', () async {
-      final zoneRepo = SocialZoneRepository(sessionController: fakeSession);
+      final zoneRepo = SocialZoneRepository(sessionController: fakeSession, isPreviewEnvironment: true);
 
       final zonesVm = SocialZonesViewModel(
         repository: zoneRepo,

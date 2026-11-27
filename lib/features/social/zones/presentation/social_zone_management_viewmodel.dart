@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import '../../likes_matches/domain/authorization/social_access_boundary.dart';
 import '../group_contracts/social_zone_management.dart';
 
 /// Presentation state for Zone creation and management operations.
@@ -24,6 +25,9 @@ enum ZoneManagementStatus {
 class SocialZoneManagementViewModel extends ChangeNotifier {
   final SessionController? _sessionController;
   final bool _isSocialOptedIn;
+  final ISocialAccessBoundary _accessBoundary;
+  final SocialAccessEvidence? _accessEvidence;
+  String? _boundSubject;
 
   ZoneManagementStatus _status = ZoneManagementStatus.initial;
   ZoneManagementDraft _draft = const ZoneManagementDraft.empty();
@@ -38,9 +42,19 @@ class SocialZoneManagementViewModel extends ChangeNotifier {
     SessionController? sessionController,
     bool isSocialOptedIn = false,
     ZonePermissionEvidence? initialEvidence,
+    ISocialAccessBoundary accessBoundary = const SocialAccessBoundary(),
+    SocialAccessEvidence? accessEvidence,
   })  : _sessionController = sessionController,
         _isSocialOptedIn = isSocialOptedIn,
-        _permissionEvidence = initialEvidence {
+        _permissionEvidence = initialEvidence,
+        _accessBoundary = accessBoundary,
+        _accessEvidence = accessEvidence {
+    try {
+      _boundSubject = _sessionController?.subject;
+    } catch (_) {
+      _boundSubject = null;
+    }
+    _sessionController?.addListener(_onSessionStateChanged);
     _unregisterSessionClearer = _sessionController?.registerPrivateStateClearer(_clearPrivateState);
   }
 
@@ -50,12 +64,39 @@ class SocialZoneManagementViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   String? get successMessage => _successMessage;
   bool get isSubmitting => _isSubmitting;
+  bool get isSocialOptedIn => _isSocialOptedIn;
+  ISocialAccessBoundary get accessBoundary => _accessBoundary;
+  SocialAccessEvidence? get accessEvidence => _accessEvidence;
 
-  bool get isAuthorized =>
-      _sessionController?.phase == SessionPhase.signedIn && _isSocialOptedIn;
+  bool get isAuthorized {
+    if (_sessionController == null || _sessionController.phase != SessionPhase.signedIn) {
+      return false;
+    }
+    try {
+      if (_boundSubject != null && _sessionController.subject != _boundSubject) {
+        return false;
+      }
+    } catch (_) {}
+
+    if (_accessEvidence != null) {
+      return _accessBoundary.isAccessGranted(
+        sessionController: _sessionController,
+        evidence: _accessEvidence,
+      );
+    }
+
+    return _isSocialOptedIn;
+  }
 
   void setPermissionEvidence(ZonePermissionEvidence evidence) {
-    _permissionEvidence = evidence;
+    if (!evidence.isAuthoritative || evidence.verifiedAt.millisecondsSinceEpoch <= 0) {
+      _permissionEvidence = ZonePermissionEvidence.unverified(
+        zoneId: evidence.zoneId,
+        userId: evidence.userId,
+      );
+    } else {
+      _permissionEvidence = evidence;
+    }
     notifyListeners();
   }
 
@@ -212,8 +253,23 @@ class SocialZoneManagementViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onSessionStateChanged() {
+    String? currentSubject;
+    try {
+      currentSubject = _sessionController?.subject;
+    } catch (_) {
+      currentSubject = null;
+    }
+
+    if (_sessionController?.phase != SessionPhase.signedIn ||
+        (_boundSubject != null && currentSubject != _boundSubject)) {
+      _clearPrivateState();
+    }
+  }
+
   @override
   void dispose() {
+    _sessionController?.removeListener(_onSessionStateChanged);
     _unregisterSessionClearer?.call();
     _unregisterSessionClearer = null;
     super.dispose();

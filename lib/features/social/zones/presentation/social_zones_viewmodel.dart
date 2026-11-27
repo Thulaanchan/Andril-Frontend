@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
+import '../../likes_matches/domain/authorization/social_access_boundary.dart';
 import '../group_contracts/social_zone.dart';
 import '../group_contracts/social_zone_repository.dart';
 
@@ -25,6 +26,9 @@ class SocialZonesViewModel extends ChangeNotifier {
   final ISocialZoneRepository _repository;
   final SessionController? _sessionController;
   final bool _isSocialOptedIn;
+  final ISocialAccessBoundary _accessBoundary;
+  final SocialAccessEvidence? _accessEvidence;
+  String? _boundSubject;
 
   SocialZonesStatus _status = SocialZonesStatus.initial;
   List<SocialZone> _zones = const [];
@@ -42,9 +46,19 @@ class SocialZonesViewModel extends ChangeNotifier {
     required ISocialZoneRepository repository,
     SessionController? sessionController,
     bool isSocialOptedIn = false,
+    ISocialAccessBoundary accessBoundary = const SocialAccessBoundary(),
+    SocialAccessEvidence? accessEvidence,
   })  : _repository = repository,
         _sessionController = sessionController,
-        _isSocialOptedIn = isSocialOptedIn {
+        _isSocialOptedIn = isSocialOptedIn,
+        _accessBoundary = accessBoundary,
+        _accessEvidence = accessEvidence {
+    try {
+      _boundSubject = _sessionController?.subject;
+    } catch (_) {
+      _boundSubject = null;
+    }
+    _sessionController?.addListener(_onSessionStateChanged);
     _unregisterSessionClearer = _sessionController?.registerPrivateStateClearer(_clearPrivateState);
   }
 
@@ -56,6 +70,9 @@ class SocialZonesViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isActionInProgress => _isActionInProgress;
   String? get actionFeedbackMessage => _actionFeedbackMessage;
+  bool get isSocialOptedIn => _isSocialOptedIn;
+  ISocialAccessBoundary get accessBoundary => _accessBoundary;
+  SocialAccessEvidence? get accessEvidence => _accessEvidence;
 
   bool get isLoading => _status == SocialZonesStatus.loading;
   bool get isReady => _status == SocialZonesStatus.ready;
@@ -64,8 +81,25 @@ class SocialZonesViewModel extends ChangeNotifier {
   bool get isAccessDenied => _status == SocialZonesStatus.accessDenied;
   bool get isServiceUnavailable => _status == SocialZonesStatus.serviceUnavailable;
 
-  bool get isAuthorized =>
-      _sessionController?.phase == SessionPhase.signedIn && _isSocialOptedIn;
+  bool get isAuthorized {
+    if (_sessionController == null || _sessionController.phase != SessionPhase.signedIn) {
+      return false;
+    }
+    try {
+      if (_boundSubject != null && _sessionController.subject != _boundSubject) {
+        return false;
+      }
+    } catch (_) {}
+
+    if (_accessEvidence != null) {
+      return _accessBoundary.isAccessGranted(
+        sessionController: _sessionController,
+        evidence: _accessEvidence,
+      );
+    }
+
+    return _isSocialOptedIn;
+  }
 
   Future<void> loadZones({bool refresh = false}) async {
     if (_isActionInProgress && !refresh) return;
@@ -217,8 +251,23 @@ class SocialZonesViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onSessionStateChanged() {
+    String? currentSubject;
+    try {
+      currentSubject = _sessionController?.subject;
+    } catch (_) {
+      currentSubject = null;
+    }
+
+    if (_sessionController?.phase != SessionPhase.signedIn ||
+        (_boundSubject != null && currentSubject != _boundSubject)) {
+      _clearPrivateState();
+    }
+  }
+
   @override
   void dispose() {
+    _sessionController?.removeListener(_onSessionStateChanged);
     _unregisterSessionClearer?.call();
     _unregisterSessionClearer = null;
     super.dispose();

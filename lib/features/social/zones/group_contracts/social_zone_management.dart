@@ -143,6 +143,8 @@ class ZonePermissionEvidence {
   /// Whether the caller possesses the requested [permission] backed by authoritative evidence.
   bool hasPermission(ZoneManagementPermission permission) {
     if (!isAuthoritative) return false;
+    if (verifiedAt.millisecondsSinceEpoch <= 0) return false;
+    if (zoneId.trim().isEmpty || userId.trim().isEmpty) return false;
     return permissions.contains(permission);
   }
 
