@@ -4,6 +4,8 @@ import 'package:andril_mobile/app/themes/learning/learning_colors.dart';
 import 'package:andril_mobile/features/shared/presentation/widgets/andril_module_app_bar.dart';
 import 'package:andril_mobile/features/learning/portfolio_maker/domain/models/portfolio_models.dart';
 import 'package:andril_mobile/features/learning/portfolio_maker/presentation/screens/portfolio_editor_screen.dart';
+import 'package:andril_mobile/features/learning/portfolio_maker/presentation/widgets/portfolio_pdf_export_sheet.dart';
+import 'package:andril_mobile/features/learning/portfolio_maker/presentation/widgets/portfolio_cv_import_sheet.dart';
 
 /// Extension providing visual theme tokens, icons, and highlights for [PortfolioTemplate].
 extension PortfolioTemplateVisuals on PortfolioTemplate {
@@ -239,6 +241,26 @@ class _PortfolioTemplateSelectionPreviewScreenState
           : 'Portfolio "${updated.title}" saved locally. Remote repository persistence contract pending.';
     });
     widget.onSaveDraft?.call(updated);
+  }
+
+  void _handleExportPdf() {
+    if (!_validatePortfolioTitle()) return;
+    final updated = _buildUpdatedPortfolio();
+    PortfolioPdfExportSheet.show(
+      context,
+      portfolio: updated,
+      currentUserId: widget.currentUserId,
+    );
+  }
+
+  void _handleImportToCv() {
+    if (!_validatePortfolioTitle()) return;
+    final updated = _buildUpdatedPortfolio();
+    PortfolioCvImportSheet.show(
+      context,
+      portfolio: updated,
+      currentUserId: widget.currentUserId,
+    );
   }
 
   @override
@@ -714,19 +736,51 @@ class _PortfolioTemplateSelectionPreviewScreenState
             ),
             onPressed: _handleBackToSelection,
           ),
-          ElevatedButton.icon(
-            key: const Key('edit_portfolio_from_preview_button'),
-            icon: const Icon(Icons.edit_outlined, size: 18.0),
-            label: const Text('Edit Projects'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _selectedTemplate.accentColor,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(120, 42),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.0),
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 8.0,
+            children: [
+              OutlinedButton.icon(
+                key: const Key('import_to_cv_button'),
+                icon: const Icon(Icons.import_contacts_outlined, size: 18.0),
+                label: const Text('Import to CV'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(110, 42),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
+                ),
+                onPressed: _handleImportToCv,
               ),
-            ),
-            onPressed: _handleContinue,
+              ElevatedButton.icon(
+                key: const Key('export_portfolio_pdf_button'),
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18.0),
+                label: const Text('Export PDF'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _selectedTemplate.accentColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(110, 42),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
+                ),
+                onPressed: _handleExportPdf,
+              ),
+              ElevatedButton.icon(
+                key: const Key('edit_portfolio_from_preview_button'),
+                icon: const Icon(Icons.edit_outlined, size: 18.0),
+                label: const Text('Edit Projects'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _selectedTemplate.accentColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(110, 42),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
+                ),
+                onPressed: _handleContinue,
+              ),
+            ],
           ),
         ],
       ),
