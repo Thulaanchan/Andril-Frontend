@@ -145,8 +145,9 @@ class ProfileCreationLayout extends StatelessWidget {
                 photoPath: viewModel.profilePhotoPath,
                 helperText: config.profilePhotoHelperText,
                 errorText: viewModel.photoError,
-                isLoading: viewModel.isLoading,
-                onPickPhoto: onPickProfilePhoto ?? () {},
+                isLoading: viewModel.isLoading || viewModel.isPhotoLoading,
+                onPickPhoto: onPickProfilePhoto ??
+                    () => viewModel.pickProfilePhoto(context: context),
                 onRemovePhoto: viewModel.removeProfilePhoto,
               ),
               const SizedBox(height: 24),
@@ -198,11 +199,24 @@ class ProfileCreationLayout extends StatelessWidget {
                       photoPaths: viewModel.additionalPhotoPaths,
                       maxPhotos: config.maxAdditionalPhotos,
                       primaryColor: config.primaryColor,
-                      onAddPhoto: onAddGalleryPhoto ?? () {},
+                      onAddPhoto: onAddGalleryPhoto ??
+                          () {
+                            final nextSlot =
+                                viewModel.additionalPhotoPaths.length;
+                            viewModel.pickAdditionalPhoto(
+                              slotIndex: nextSlot,
+                              context: context,
+                            );
+                          },
                       onRemovePhoto: viewModel.removeAdditionalPhoto,
                       onReplacePhoto: (idx) {
                         if (onAddGalleryPhoto != null) {
                           onAddGalleryPhoto!();
+                        } else {
+                          viewModel.pickAdditionalPhoto(
+                            slotIndex: idx,
+                            context: context,
+                          );
                         }
                       },
                     ),
