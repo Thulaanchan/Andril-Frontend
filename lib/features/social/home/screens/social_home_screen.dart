@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../app/themes/social/social_theme.dart';
+import '../../../../app/themes/social/social_prototype_theme.dart';
+import '../widgets/social_prototype_navigation.dart';
 import '../viewmodels/social_home_viewmodel.dart';
 import '../widgets/social_home_action_grid.dart';
 import '../widgets/social_home_header.dart';
@@ -8,7 +10,7 @@ import '../widgets/social_home_header.dart';
 ///
 /// Follows M5-FE-S21-UI-04 architectural requirements:
 /// - Fails closed: Displays access denied banner/view if unauthorized.
-/// - Houses [SocialHomeHeader] with module badge, user greeting, and notifications.
+/// - Uses the original black logo, source greeting, and live notification indicator.
 /// - Houses [SocialHeroBanner] with "Explore People →" CTA and carousel indicators.
 /// - Houses [SocialHomeActionGrid] with 2x2 action cards (Connections, Diary, Personality, Saved Profiles).
 /// - Houses [SocialRecommendedPeopleSection] with horizontal cards and "View" callbacks.
@@ -94,35 +96,6 @@ class _SocialHomeScreenState extends State<SocialHomeScreen> {
     super.dispose();
   }
 
-  /// Approved 5-destination bottom navigation for Social Module.
-  static const List<NavigationDestination> _socialDestinations = [
-    NavigationDestination(
-      icon: Icon(Icons.home_outlined),
-      selectedIcon: Icon(Icons.home_rounded),
-      label: 'Home',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.diversity_3_outlined),
-      selectedIcon: Icon(Icons.diversity_3_rounded),
-      label: 'Zones',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.explore_outlined),
-      selectedIcon: Icon(Icons.explore_rounded),
-      label: 'Explore',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.chat_bubble_outline_rounded),
-      selectedIcon: Icon(Icons.chat_bubble_rounded),
-      label: 'Chat',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.person_outline_rounded),
-      selectedIcon: Icon(Icons.person_rounded),
-      label: 'Profile',
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -131,13 +104,14 @@ class _SocialHomeScreenState extends State<SocialHomeScreen> {
         final isDenied = _vm.isAccessDenied || !_vm.isAuthorized;
         return Scaffold(
           backgroundColor: AndrilSocialColors.cream,
-          body: _buildBody(isDenied),
+          body: Theme(
+              data: SocialPrototypeTheme.lightTheme,
+              child: SocialPrototypeBackground(child: _buildBody(isDenied))),
           bottomNavigationBar: (isDenied || !widget.showBottomNav)
               ? null
-              : NavigationBar(
-                  selectedIndex: widget.currentNavigationIndex,
-                  onDestinationSelected: widget.onDestinationSelected,
-                  destinations: _socialDestinations,
+              : SocialPrototypeNavigation(
+                  currentIndex: widget.currentNavigationIndex,
+                  onTap: widget.onDestinationSelected ?? (_) {},
                 ),
         );
       },
@@ -161,41 +135,51 @@ class _SocialHomeScreenState extends State<SocialHomeScreen> {
       return _buildErrorView();
     }
 
-    return RefreshIndicator(
-      color: AndrilSocialColors.royalPurple,
-      backgroundColor: Colors.white,
-      onRefresh: _vm.refresh,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SocialHomeHeader(
-              displayName: _vm.displayName,
-              avatarUrl: _vm.avatarUrl,
-              unreadNotificationsCount: _vm.unreadNotificationsCount,
-              onNotificationTap: _vm.triggerNotificationTap,
-              onSearchTap: _vm.triggerSearchTap,
-              onProfileTap: widget.onProfileTap,
-            ),
-            SocialHeroBanner(
-              onExploreTap: _vm.triggerExplorePeople,
-            ),
-            SocialHomeActionGrid(
-              actions: _vm.quickActions,
-              onActionTap: _vm.triggerQuickAction,
-            ),
-            if (_vm.recommendedPeople.isNotEmpty)
+    return Column(children: [
+      SocialHomeBrandBar(
+          unreadNotificationsCount: _vm.unreadNotificationsCount,
+          onNotificationTap: _vm.triggerNotificationTap,
+          onSearchTap: _vm.onSearchTap == null ? null : _vm.triggerSearchTap,
+          onProfileTap: widget.onProfileTap),
+      Expanded(
+          child: RefreshIndicator(
+        color: AndrilSocialColors.royalPurple,
+        backgroundColor: Colors.white,
+        onRefresh: _vm.refresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SocialHomeHeader(
+                showBrandBar: false,
+                displayName: _vm.displayName,
+                avatarUrl: _vm.avatarUrl,
+                unreadNotificationsCount: _vm.unreadNotificationsCount,
+                onNotificationTap: _vm.triggerNotificationTap,
+                onSearchTap:
+                    _vm.onSearchTap == null ? null : _vm.triggerSearchTap,
+                onProfileTap: widget.onProfileTap,
+              ),
+              SocialHeroBanner(
+                onExploreTap: _vm.triggerExplorePeople,
+              ),
+              SocialHomeActionGrid(
+                actions: _vm.quickActions,
+                onActionTap: _vm.triggerQuickAction,
+              ),
+              const SizedBox(height: 24),
               SocialRecommendedPeopleSection(
                 people: _vm.recommendedPeople,
                 onViewProfile: _vm.triggerViewProfile,
                 onSeeAll: _vm.triggerSeeAllRecommendations,
               ),
-            const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
-      ),
-    );
+      ))
+    ]);
   }
 
   Widget _buildAccessDeniedView() {
