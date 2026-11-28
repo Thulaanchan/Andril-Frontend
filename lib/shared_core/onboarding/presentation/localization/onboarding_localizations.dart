@@ -365,4 +365,89 @@ class OnboardingLocalizations {
         AppLanguage.sinhala => 'මම වයස අවුරුදු 18 ක් හෝ ඊට වැඩි බව තහවුරු කරමි.',
         AppLanguage.english => 'I confirm that I am 18 years of age or older.',
       };
+
+  // --- Screens 12, 14, 16: Profile Photograph Selection and Processing ---
+  String get chooseFromGallery => switch (language) {
+        AppLanguage.tamil => 'கேலரியில் இருந்து தேர்ந்தெடுக்கவும்',
+        AppLanguage.sinhala => 'ගැලරියෙන් තෝරන්න',
+        AppLanguage.english => 'Choose from Gallery',
+      };
+
+  String get takePhoto => switch (language) {
+        AppLanguage.tamil => 'புகைப்படம் எடுக்கவும்',
+        AppLanguage.sinhala => 'ඡායාරූපයක් ගන්න',
+        AppLanguage.english => 'Take Photo',
+      };
+
+  String get cropPhotoTitle => switch (language) {
+        AppLanguage.tamil => 'புகைப்படத்தை வெட்டவும்',
+        AppLanguage.sinhala => 'ඡායාරූපය කපන්න',
+        AppLanguage.english => 'Crop Photo',
+      };
+
+  String get cropPhotoSubtitle => switch (language) {
+        AppLanguage.tamil => 'நகர்த்தி அளவிடவும்',
+        AppLanguage.sinhala => 'ඡායාරූපය ස්ථානගත කිරීමට ගෙන ගොස් විශාලනය කරන්න',
+        AppLanguage.english => 'Move and scale to position your photo',
+      };
+
+  String get confirmCrop => switch (language) {
+        AppLanguage.tamil => 'உறுதிப்படுத்து',
+        AppLanguage.sinhala => 'තහවුරු කරන්න',
+        AppLanguage.english => 'Confirm',
+      };
+
+  String get replacePhoto => switch (language) {
+        AppLanguage.tamil => 'புகைப்படத்தை மாற்றவும்',
+        AppLanguage.sinhala => 'ඡායාරූපය වෙනස් කරන්න',
+        AppLanguage.english => 'Replace Photo',
+      };
+
+  String get removePhoto => switch (language) {
+        AppLanguage.tamil => 'புகைப்படத்தை நீக்கு',
+        AppLanguage.sinhala => 'ඡායාරූපය ඉවත් කරන්න',
+        AppLanguage.english => 'Remove Photo',
+      };
+
+  String get photoFormatError => switch (language) {
+        AppLanguage.tamil => 'ஆதரிக்கப்படாத வடிவமைப்பு. JPEG அல்லது PNG படத்தை தேர்ந்தெடுக்கவும்.',
+        AppLanguage.sinhala => 'සහාය නොදක්වන ආකෘතියකි. කරුණාකර JPEG හෝ PNG තෝරන්න.',
+        AppLanguage.english => 'Unsupported image format. Please select a JPEG or PNG image.',
+      };
+
+  String get photoSizeError => switch (language) {
+        AppLanguage.tamil => 'படம் மிகவும் பெரியது. அதிகபட்ச அளவு 5 MB.',
+        AppLanguage.sinhala => 'ඡායාරූපය විශාල වැඩිය. උපරිම ප්‍රමාණය 5 MB.',
+        AppLanguage.english => 'Image is too large. Maximum allowed size is 5 MB.',
+      };
+
+  String get photoResolutionTooSmall => switch (language) {
+        AppLanguage.tamil => 'படத்தின் தரம் மிகவும் குறைவு. குறைந்தபட்சம் 300x300 தேவை.',
+        AppLanguage.sinhala => 'ඡායාරූප විභේදනය අඩු වැඩිය. අවම වශයෙන් 300x300 අවශ්‍ය වේ.',
+        AppLanguage.english => 'Image resolution is too low. Minimum resolution is 300x300.',
+      };
+
+  String get photoResolutionTooLarge => switch (language) {
+        AppLanguage.tamil => 'படத்தின் அளவு வரம்பை மீறுகிறது (அதிகபட்சம் 4096x4096).',
+        AppLanguage.sinhala => 'ඡායාරූප විභේදනය උපරිම සීමාව (4096x4096) ඉක්මවයි.',
+        AppLanguage.english => 'Image resolution exceeds maximum limit (4096x4096).',
+      };
+
+  String get photoProcessingError => switch (language) {
+        AppLanguage.tamil => 'புகைப்படத்தை செயலாக்க முடியவில்லை. வேறு படத்தை முயற்சிக்கவும்.',
+        AppLanguage.sinhala => 'ඡායාරූපය සැකසීමට නොහැකි විය. වෙනත් එකක් උත්සාහ කරන්න.',
+        AppLanguage.english => 'Failed to process photo. Please try another image.',
+      };
+
+  String get cameraUnavailableError => switch (language) {
+        AppLanguage.tamil => 'கேமரா இந்த சாதனத்தில் கிடைக்கவில்லை.',
+        AppLanguage.sinhala => 'මෙම උපාංගයේ කැමරාව නොමැත.',
+        AppLanguage.english => 'Camera is not available on this device.',
+      };
+
+  String get permissionDeniedError => switch (language) {
+        AppLanguage.tamil => 'கேமரா அல்லது கேலரி அனுமதி மறுக்கப்பட்டது.',
+        AppLanguage.sinhala => 'කැමරා හෝ ගැලරි ප්‍රවේශය ප්‍රතික්ෂේප විය.',
+        AppLanguage.english => 'Permission to access camera or gallery was denied.',
+      };
 }

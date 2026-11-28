@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../domain/models/profile_creation_config.dart';
 import '../viewmodels/module_profile_viewmodel.dart';
 import '../widgets/profile_creation_layout.dart';
@@ -40,7 +39,6 @@ class HobbiesProfileScreen extends StatefulWidget {
 class _HobbiesProfileScreenState extends State<HobbiesProfileScreen> {
   late final ModuleProfileViewModel _viewModel;
   late final bool _isInternallyOwned;
-  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -69,18 +67,7 @@ class _HobbiesProfileScreenState extends State<HobbiesProfileScreen> {
       widget.onPickProfilePhoto!();
       return;
     }
-    try {
-      final picked = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
-      if (picked != null && mounted) {
-        await _viewModel.setProfilePhoto(picked.path);
-      }
-    } catch (_) {
-      // Fail gracefully
-    }
+    await _viewModel.pickProfilePhoto(context: context);
   }
 
   Future<void> _handleAddGalleryPhoto() async {
@@ -88,18 +75,11 @@ class _HobbiesProfileScreenState extends State<HobbiesProfileScreen> {
       widget.onAddGalleryPhoto!();
       return;
     }
-    try {
-      final picked = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
-      if (picked != null && mounted) {
-        _viewModel.addAdditionalPhoto(picked.path);
-      }
-    } catch (_) {
-      // Fail gracefully
-    }
+    final nextSlot = _viewModel.additionalPhotoPaths.length;
+    await _viewModel.pickAdditionalPhoto(
+      slotIndex: nextSlot,
+      context: context,
+    );
   }
 
   @override
