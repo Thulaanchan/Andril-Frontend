@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:andril_mobile/app/themes/social/social_theme.dart';
+import '../../../../app/themes/social/social_prototype_theme.dart';
 import '../viewmodels/social_home_viewmodel.dart';
 
 /// 2x2 Quick Action Grid for Social Home (S21).
@@ -24,7 +24,7 @@ class SocialHomeActionGrid extends StatelessWidget {
       case SocialHomeActionId.myConnections:
         return Icons.people_outline_rounded;
       case SocialHomeActionId.andrilDiary:
-        return Icons.auto_stories_outlined;
+        return Icons.menu_book_outlined;
       case SocialHomeActionId.personality:
         return Icons.psychology_outlined;
       case SocialHomeActionId.savedProfiles:
@@ -35,18 +35,18 @@ class SocialHomeActionGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 0.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
             padding: EdgeInsets.only(bottom: 12.0),
             child: Text(
-              'Quick Actions',
+              'Explore your Social world',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AndrilSocialColors.ink,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: SocialPrototypeColors.textPrimary,
               ),
             ),
           ),
@@ -90,18 +90,23 @@ class _ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 100),
-          padding: const EdgeInsets.all(14.0),
+          constraints: const BoxConstraints(minHeight: 126),
+          padding: const EdgeInsets.all(16.0),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x082D1155), blurRadius: 8, offset: Offset(0, 2))
+            ],
             border: Border.all(
-              color: AndrilSocialColors.border,
-              width: 1.2,
+              color: SocialPrototypeColors.borderLight,
+              width: 1.0,
             ),
           ),
           child: Column(
@@ -112,22 +117,17 @@ class _ActionCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
-                      color: AndrilSocialColors.faintPurple,
+                      color: const Color(0xFFF4ECFF),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
                       icon,
-                      size: 20,
-                      color: AndrilSocialColors.royalPurple,
+                      size: 22,
+                      color: SocialPrototypeColors.primaryPurple,
                     ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 20,
-                    color: AndrilSocialColors.copper,
                   ),
                 ],
               ),
@@ -135,19 +135,25 @@ class _ActionCard extends StatelessWidget {
               Text(
                 action.title,
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 15,
+                  letterSpacing: -0.2,
                   fontWeight: FontWeight.w700,
-                  color: AndrilSocialColors.ink,
+                  color: SocialPrototypeColors.textPrimary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
               Text(
-                action.subtitle,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AndrilSocialColors.ink.withValues(alpha: 0.6),
+                switch (action.id) {
+                  SocialHomeActionId.myConnections => 'View your matches',
+                  SocialHomeActionId.andrilDiary => 'Reflect & grow',
+                  SocialHomeActionId.personality => 'Review quiz',
+                  SocialHomeActionId.savedProfiles => 'Profiles you kept',
+                },
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: SocialPrototypeColors.textMuted,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -175,25 +181,24 @@ class SocialRecommendedPeopleSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (people.isEmpty) return const SizedBox.shrink();
-
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Expanded(
                   child: Text(
-                    'Recommended for you',
+                    'Recommended people',
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AndrilSocialColors.ink,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: SocialPrototypeColors.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -203,7 +208,7 @@ class SocialRecommendedPeopleSection extends StatelessWidget {
                   TextButton(
                     onPressed: onSeeAll,
                     style: TextButton.styleFrom(
-                      foregroundColor: AndrilSocialColors.royalPurple,
+                      foregroundColor: SocialPrototypeColors.primaryPurple,
                       minimumSize: const Size(60, 48),
                     ),
                     child: const Row(
@@ -226,20 +231,26 @@ class SocialRecommendedPeopleSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           SizedBox(
-            height: 180,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              scrollDirection: Axis.horizontal,
-              itemCount: people.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final person = people[index];
-                return _RecommendedPersonCard(
-                  person: person,
-                  onTap: () => onViewProfile?.call(person.id),
-                );
-              },
-            ),
+            height: 220,
+            child: people.isEmpty
+                ? const Center(
+                    child: Text('No recommendations currently available.',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: SocialPrototypeColors.textMuted)))
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: people.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final person = people[index];
+                      return _RecommendedPersonCard(
+                        person: person,
+                        onTap: () => onViewProfile?.call(person.id),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -259,45 +270,51 @@ class _RecommendedPersonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 136,
+      width: 140,
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: AndrilSocialColors.border,
+          color: SocialPrototypeColors.borderLight,
           width: 1.0,
         ),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: AndrilSocialColors.faintPurple,
-            backgroundImage: (person.photoUrl != null && person.photoUrl!.isNotEmpty)
-                ? NetworkImage(person.photoUrl!)
-                : null,
-            child: (person.photoUrl == null || person.photoUrl!.isEmpty)
-                ? Text(
-                    person.displayName.isNotEmpty
-                        ? person.displayName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AndrilSocialColors.royalPurple,
-                    ),
-                  )
-                : null,
-          ),
-          const SizedBox(height: 8),
+          ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: CircleAvatar(
+                    radius: 36,
+                    backgroundColor: SocialPrototypeColors.lavenderTint,
+                    backgroundImage:
+                        (person.photoUrl != null && person.photoUrl!.isNotEmpty)
+                            ? NetworkImage(person.photoUrl!)
+                            : null,
+                    child: (person.photoUrl == null || person.photoUrl!.isEmpty)
+                        ? Text(
+                            person.displayName.isNotEmpty
+                                ? person.displayName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: SocialPrototypeColors.primaryPurple,
+                            ),
+                          )
+                        : null,
+                  ))),
+          const SizedBox(height: 10),
           Text(
             person.displayName,
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 14.5,
               fontWeight: FontWeight.w700,
-              color: AndrilSocialColors.ink,
+              color: SocialPrototypeColors.textPrimary,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -306,9 +323,9 @@ class _RecommendedPersonCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             person.location,
-            style: TextStyle(
-              fontSize: 11,
-              color: AndrilSocialColors.ink.withValues(alpha: 0.6),
+            style: const TextStyle(
+              fontSize: 12,
+              color: SocialPrototypeColors.textMuted,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -317,25 +334,28 @@ class _RecommendedPersonCard extends StatelessWidget {
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
-            height: 32,
-            child: OutlinedButton(
+            height: 48,
+            child: ElevatedButton(
               onPressed: onTap,
-              style: OutlinedButton.styleFrom(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: SocialPrototypeColors.primaryPurple,
+                foregroundColor: Colors.white,
+                elevation: 0,
                 side: const BorderSide(
-                  color: AndrilSocialColors.royalPurple,
+                  color: SocialPrototypeColors.primaryPurple,
                   width: 1.0,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 padding: EdgeInsets.zero,
               ),
               child: const Text(
-                'View',
-                style: TextStyle(
-                  fontSize: 11,
+                'View profile',
+                style: const TextStyle(
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: AndrilSocialColors.royalPurple,
+                  color: Colors.white,
                 ),
               ),
             ),
