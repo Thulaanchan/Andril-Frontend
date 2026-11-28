@@ -9,6 +9,7 @@ import '../../zones/presentation/social_zones_screen.dart';
 import '../viewmodels/social_home_viewmodel.dart';
 import '../viewmodels/social_navigation_coordinator.dart';
 import 'social_home_screen.dart';
+import '../widgets/social_prototype_navigation.dart';
 
 /// Top-level shell screen housing the 5 approved Social destinations (S21).
 ///
@@ -305,36 +306,9 @@ class _SocialShellScreenState extends State<SocialShellScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: _onDestinationSelected,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.diversity_3_outlined),
-            selectedIcon: Icon(Icons.diversity_3_rounded),
-            label: 'Zones',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.explore_outlined),
-            selectedIcon: Icon(Icons.explore_rounded),
-            label: 'Explore',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline_rounded),
-            selectedIcon: Icon(Icons.chat_bubble_rounded),
-            label: 'Chat',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profile',
-          ),
-        ],
+      bottomNavigationBar: SocialPrototypeNavigation(
+        currentIndex: _currentIndex,
+        onTap: _onDestinationSelected,
       ),
     );
   }
