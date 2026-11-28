@@ -152,6 +152,16 @@ GoRouter createLearningRouter({
         path: '/learning/pacts',
         name: 'learning-pacts',
         builder: (context, state) => LearningPactsHubScreen(
+          appBar: AppBar(
+            title: const Text('Learning Pacts'),
+            actions: [
+              IconButton(
+                tooltip: 'Skill Exchange',
+                icon: const Icon(Icons.swap_horiz),
+                onPressed: () => context.go('/learning/skill-exchange'),
+              )
+            ],
+          ),
           viewModel: dependencies?.pactsViewModel ??
               LearningPactsViewModel(
                 repository: const LearningPactsRepository(),
@@ -162,8 +172,7 @@ GoRouter createLearningRouter({
             path: 'progress',
             name: 'learning-pacts-progress',
             builder: (context, state) {
-              final pactId =
-                  state.uri.queryParameters['pactId'] ?? 'pact_default';
+              final pactId = state.uri.queryParameters['pactId']?.trim() ?? '';
               return LearningPactProgressScreen(
                 pactId: pactId,
                 viewModel: dependencies?.pactsViewModel ??
@@ -345,8 +354,18 @@ GoRouter createLearningRouter({
       GoRoute(
         path: '/learning/skill-exchange',
         name: 'learning-skill-exchange',
-        builder: (context, state) => const SkillExchangeHubScreen(
-          currentUserId: 'learner_current',
+        builder: (context, state) => SkillExchangeHubScreen(
+          currentUserId: '',
+          currentAccountId: '',
+          currentDisplayName: '',
+          userSkillsToShare: const [],
+          userSkillsToLearn: const [],
+          initialPartners: const [],
+          initialExchanges: const [],
+          isLearningActivated: accessPolicy.isLearningActivated,
+          isUnavailable: true,
+          onOpenPacts: () => context.go('/learning/pacts'),
+          onBack: () => context.go('/learning/home'),
         ),
       ),
       GoRoute(

@@ -185,6 +185,9 @@ class LearningDependenciesScope {
       repository: const LearningPactsRepository(),
       sessionController: _sessionController,
       isLearningActivated: _sessionController?.moduleHomeAuthorized ?? false,
+      currentProfileId: '',
+      currentDisplayName: '',
+      profileRepository: profileRepository,
     );
   }
 
