@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
-import 'package:andril_mobile/features/shared/presentation/widgets/andril_module_app_bar.dart';
+import 'package:andril_mobile/features/social/home/widgets/social_home_header.dart';
+import 'package:andril_mobile/features/social/home/widgets/social_prototype_navigation.dart';
 import 'package:andril_mobile/features/social/home/screens/social_home_screen.dart';
 import 'package:andril_mobile/features/social/home/viewmodels/social_home_viewmodel.dart';
 import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
-class FakeScreenSessionController extends ChangeNotifier implements SessionController {
+class FakeScreenSessionController extends ChangeNotifier
+    implements SessionController {
   SessionPhase _stubPhase;
   final String? _subject;
 
@@ -34,12 +36,15 @@ class FakeScreenSessionController extends ChangeNotifier implements SessionContr
 
 void main() {
   group('SocialHomeScreen Widget & Accessibility Tests (M5-FE-S21-UI-04)', () {
-    testWidgets('renders all authorized S21 components at standard 400x800 without overflow', (tester) async {
+    testWidgets(
+        'renders all authorized S21 components at standard 400x800 without overflow',
+        (tester) async {
       tester.view.physicalSize = const Size(400, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      final fakeSession =
+          FakeScreenSessionController(phase: SessionPhase.signedIn);
       const fixtureRecommendations = [
         SocialRecommendedPerson(
           id: 'rec_fixture_01',
@@ -50,7 +55,8 @@ void main() {
 
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
+        accessEvidence:
+            SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
         initialDisplayName: 'Amara K.',
         initialUnreadNotifications: 2,
         initialRecommendations: fixtureRecommendations,
@@ -73,29 +79,28 @@ void main() {
       expect(tester.takeException(), isNull);
 
       // Verify Header & Module Bar
-      expect(find.byType(AndrilModuleAppBar), findsOneWidget);
-      expect(find.text('Social'), findsOneWidget);
-      expect(find.text('Welcome back,'), findsOneWidget);
-      expect(find.text('Amara K.'), findsOneWidget);
+      expect(find.byType(SocialHomeHeader), findsOneWidget);
+      expect(find.text('YOUR SOCIAL SPACE'), findsOneWidget);
+      expect(find.text('Welcome back, Amara K.!'), findsOneWidget);
 
       // Verify Hero Banner
-      expect(find.text('Discover Meaningful\nConnections'), findsOneWidget);
-      expect(find.text('Explore People'), findsOneWidget);
+      expect(find.byType(SocialHeroBanner), findsOneWidget);
+      expect(find.bySemanticsLabel('Explore People'), findsOneWidget);
 
       // Verify 2x2 Quick Action Grid
-      expect(find.text('Quick Actions'), findsOneWidget);
+      expect(find.text('Explore your Social world'), findsOneWidget);
       expect(find.text('My Connections'), findsOneWidget);
       expect(find.text('Andril Diary'), findsOneWidget);
       expect(find.text('Personality'), findsOneWidget);
       expect(find.text('Saved Profiles'), findsOneWidget);
 
       // Verify Recommendations Section with fixture profile
-      expect(find.text('Recommended for you'), findsOneWidget);
+      expect(find.text('Recommended people'), findsOneWidget);
       expect(find.text('Nivetha R.'), findsOneWidget);
-      expect(find.text('View'), findsWidgets);
+      expect(find.text('View profile'), findsWidgets);
 
       // Verify 5-Destination Navigation Bar
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(SocialPrototypeNavigation), findsOneWidget);
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Zones'), findsOneWidget);
       expect(find.text('Explore'), findsOneWidget);
@@ -103,12 +108,15 @@ void main() {
       expect(find.text('Profile'), findsOneWidget);
     });
 
-    testWidgets('renders cleanly on small screen 320x640 at TextScaler 1.0 without overflow', (tester) async {
+    testWidgets(
+        'renders cleanly on small screen 320x640 at TextScaler 1.0 without overflow',
+        (tester) async {
       tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      final fakeSession =
+          FakeScreenSessionController(phase: SessionPhase.signedIn);
       const fixtureRecommendations = [
         SocialRecommendedPerson(
           id: 'rec_fixture_01',
@@ -119,7 +127,8 @@ void main() {
 
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
+        accessEvidence:
+            SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
         initialDisplayName: 'Amara K.',
         initialRecommendations: fixtureRecommendations,
       );
@@ -139,18 +148,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Social'), findsOneWidget);
-      expect(find.text('Explore People'), findsOneWidget);
-      expect(find.text('Quick Actions'), findsOneWidget);
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.text('YOUR SOCIAL SPACE'), findsOneWidget);
+      expect(find.bySemanticsLabel('Explore People'), findsOneWidget);
+      expect(find.text('Explore your Social world'), findsOneWidget);
+      expect(find.byType(SocialPrototypeNavigation), findsOneWidget);
     });
 
-    testWidgets('renders cleanly on small screen 320x640 with accessibility scaling (1.3) without overflow', (tester) async {
+    testWidgets(
+        'renders cleanly on small screen 320x640 with accessibility scaling (1.3) without overflow',
+        (tester) async {
       tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      final fakeSession =
+          FakeScreenSessionController(phase: SessionPhase.signedIn);
       const fixtureRecommendations = [
         SocialRecommendedPerson(
           id: 'rec_fixture_01',
@@ -161,7 +173,8 @@ void main() {
 
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
+        accessEvidence:
+            SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
         initialDisplayName: 'Amara K.',
         initialRecommendations: fixtureRecommendations,
       );
@@ -181,20 +194,24 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Social'), findsOneWidget);
-      expect(find.text('Explore People'), findsOneWidget);
-      expect(find.text('Quick Actions'), findsOneWidget);
+      expect(find.text('YOUR SOCIAL SPACE'), findsOneWidget);
+      expect(find.bySemanticsLabel('Explore People'), findsOneWidget);
+      expect(find.text('Explore your Social world'), findsOneWidget);
     });
 
-    testWidgets('renders cleanly on tablet 800x1200 at TextScaler 1.0 without overflow', (tester) async {
+    testWidgets(
+        'renders cleanly on tablet 800x1200 at TextScaler 1.0 without overflow',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      final fakeSession =
+          FakeScreenSessionController(phase: SessionPhase.signedIn);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
+        accessEvidence:
+            SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
         initialDisplayName: 'TabletUser',
       );
       await vm.initialize();
@@ -213,21 +230,25 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Social'), findsOneWidget);
-      expect(find.text('Quick Actions'), findsOneWidget);
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.text('YOUR SOCIAL SPACE'), findsOneWidget);
+      expect(find.text('Explore your Social world'), findsOneWidget);
+      expect(find.byType(SocialPrototypeNavigation), findsOneWidget);
     });
 
-    testWidgets('tapping 2x2 action card dispatches onQuickAction when authorized', (tester) async {
+    testWidgets(
+        'tapping 2x2 action card dispatches onQuickAction when authorized',
+        (tester) async {
       tester.view.physicalSize = const Size(600, 1000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       SocialHomeActionId? tappedAction;
-      final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      final fakeSession =
+          FakeScreenSessionController(phase: SessionPhase.signedIn);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
+        accessEvidence:
+            SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
       );
       await vm.initialize();
 
@@ -250,16 +271,20 @@ void main() {
       expect(tappedAction, SocialHomeActionId.andrilDiary);
     });
 
-    testWidgets('tapping Explore People button triggers onExplorePeople when authorized', (tester) async {
+    testWidgets(
+        'tapping Explore People button triggers onExplorePeople when authorized',
+        (tester) async {
       tester.view.physicalSize = const Size(600, 1000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       var exploreTapped = false;
-      final fakeSession = FakeScreenSessionController(phase: SessionPhase.signedIn);
+      final fakeSession =
+          FakeScreenSessionController(phase: SessionPhase.signedIn);
       final vm = SocialHomeViewModel(
         sessionController: fakeSession,
-        accessEvidence: SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
+        accessEvidence:
+            SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
       );
       await vm.initialize();
 
@@ -273,9 +298,58 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Explore People'));
+      await tester.tap(find.bySemanticsLabel('Explore People'));
       await tester.pumpAndSettle();
       expect(exploreTapped, isTrue);
     });
+  });
+  testWidgets(
+      'prototype header retains profile, search and notification callbacks',
+      (tester) async {
+    var profile = false, search = false, notification = false;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: SocialHomeHeader(
+                displayName: 'Maya',
+                unreadNotificationsCount: 2,
+                onProfileTap: () => profile = true,
+                onSearchTap: () => search = true,
+                onNotificationTap: () => notification = true))));
+    await tester.tap(find.bySemanticsLabel('Open your Social profile'));
+    await tester.tap(find.byTooltip('Search people'));
+    await tester.tap(find.byTooltip('Notifications'));
+    expect(profile, isTrue);
+    expect(search, isTrue);
+    expect(notification, isTrue);
+    expect(tester.getSize(find.byTooltip('Notifications')).height,
+        greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('source brand bar remains fixed while greeting and cards scroll',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final session = FakeScreenSessionController();
+    final vm = SocialHomeViewModel(
+        sessionController: session,
+        accessEvidence:
+            SocialAccessEvidence.authorized(userId: 'user_fixture_01'),
+        initialDisplayName: 'Maya');
+    await vm.initialize();
+    await tester.pumpWidget(MaterialApp(home: SocialHomeScreen(viewModel: vm)));
+    await tester.pumpAndSettle();
+    final header = find.byType(SocialHomeBrandBar);
+    final originalPosition = tester.getTopLeft(header);
+    await tester.drag(
+        find.byType(SingleChildScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(header), originalPosition);
+    expect(find.text('Welcome back, Maya!').hitTestable(), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    vm.dispose();
+    session.dispose();
   });
 }
