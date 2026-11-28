@@ -5,10 +5,12 @@ import 'package:andril_mobile/app/router/routes/social/social_router.dart';
 import 'package:andril_mobile/app/router/routes/social/social_routes.dart';
 import 'package:andril_mobile/core/security/session/session_controller.dart';
 import 'package:andril_mobile/features/social/home/screens/social_shell_screen.dart';
+import 'package:andril_mobile/features/social/home/widgets/social_prototype_navigation.dart';
 import 'package:andril_mobile/features/social/home/widgets/social_shared_feature_entry.dart';
 import 'package:andril_mobile/features/social/likes_matches/domain/authorization/social_access_boundary.dart';
 
-class _MockSessionController extends ChangeNotifier implements SessionController {
+class _MockSessionController extends ChangeNotifier
+    implements SessionController {
   SessionPhase _phase = SessionPhase.signedIn;
   String? _subject = 'user-test-subject';
   final List<VoidCallback> _clearers = [];
@@ -70,7 +72,8 @@ void main() {
   });
 
   group('SocialRouteRegistry Tests (Task 147)', () {
-    test('contains all approved M5 screen routes without missing descriptors', () {
+    test('contains all approved M5 screen routes without missing descriptors',
+        () {
       expect(SocialRouteRegistry.approvedRoutes.isNotEmpty, isTrue);
 
       final expectedPaths = [
@@ -112,7 +115,8 @@ void main() {
 
       for (final p in expectedPaths) {
         final d = SocialRouteRegistry.findByPath(p);
-        expect(d, isNotNull, reason: 'Route $p must have an approved descriptor');
+        expect(d, isNotNull,
+            reason: 'Route $p must have an approved descriptor');
         expect(SocialRouteRegistry.isApproved(p), isTrue);
         expect(SocialRouteRegistry.isSocialPath(p), isTrue);
       }
@@ -136,7 +140,9 @@ void main() {
   });
 
   group('SocialRouter Tests (Task 148)', () {
-    testWidgets('unauthorized caller is strictly redirected to AccessDeniedScreen', (tester) async {
+    testWidgets(
+        'unauthorized caller is strictly redirected to AccessDeniedScreen',
+        (tester) async {
       final unauthScope = SocialDependenciesScope(
         sessionController: session,
         accessEvidence: null, // No authoritative evidence
@@ -144,7 +150,8 @@ void main() {
       );
 
       final router = SocialRouter(scope: unauthScope);
-      final route = router.onGenerateRoute(const RouteSettings(name: SocialRoutes.home));
+      final route =
+          router.onGenerateRoute(const RouteSettings(name: SocialRoutes.home));
 
       await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) {
         return ElevatedButton(
@@ -162,9 +169,11 @@ void main() {
       unauthScope.dispose();
     });
 
-    testWidgets('unapproved deep links fail closed to AccessDeniedScreen', (tester) async {
+    testWidgets('unapproved deep links fail closed to AccessDeniedScreen',
+        (tester) async {
       final router = SocialRouter(scope: scope);
-      final route = router.onGenerateRoute(const RouteSettings(name: '/social/unapproved-path'));
+      final route = router.onGenerateRoute(
+          const RouteSettings(name: '/social/unapproved-path'));
 
       await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) {
         return ElevatedButton(
@@ -179,9 +188,11 @@ void main() {
       expect(find.byType(SocialAccessDeniedScreen), findsOneWidget);
     });
 
-    testWidgets('authorized caller generates shell route successfully for home', (tester) async {
+    testWidgets('authorized caller generates shell route successfully for home',
+        (tester) async {
       final router = SocialRouter(scope: scope);
-      final route = router.onGenerateRoute(const RouteSettings(name: SocialRoutes.home));
+      final route =
+          router.onGenerateRoute(const RouteSettings(name: SocialRoutes.home));
 
       await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) {
         return ElevatedButton(
@@ -198,14 +209,16 @@ void main() {
   });
 
   group('SocialShellScreen Navigation Tests (Task 148)', () {
-    testWidgets('renders 5 navigation destinations and switches tabs', (tester) async {
+    testWidgets('renders 5 navigation destinations and switches tabs',
+        (tester) async {
       tester.view.physicalSize = const Size(400, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(
         MaterialApp(
-          onGenerateRoute: (settings) => SocialRouter(scope: scope).onGenerateRoute(settings),
+          onGenerateRoute: (settings) =>
+              SocialRouter(scope: scope).onGenerateRoute(settings),
           home: SocialShellScreen(scope: scope),
         ),
       );
@@ -235,14 +248,16 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('tapping Chat tab opens M4 messaging bottom sheet', (tester) async {
+    testWidgets('tapping Chat tab opens M4 messaging bottom sheet',
+        (tester) async {
       tester.view.physicalSize = const Size(400, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(
         MaterialApp(
-          onGenerateRoute: (settings) => SocialRouter(scope: scope).onGenerateRoute(settings),
+          onGenerateRoute: (settings) =>
+              SocialRouter(scope: scope).onGenerateRoute(settings),
           home: SocialShellScreen(scope: scope),
         ),
       );
@@ -255,7 +270,8 @@ void main() {
       expect(find.text('View Connections'), findsOneWidget);
     });
 
-    testWidgets('quick action diary triggers handoff or unavailable dialog', (tester) async {
+    testWidgets('quick action diary triggers handoff or unavailable dialog',
+        (tester) async {
       tester.view.physicalSize = const Size(400, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -264,7 +280,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          onGenerateRoute: (settings) => SocialRouter(scope: scope).onGenerateRoute(settings),
+          onGenerateRoute: (settings) =>
+              SocialRouter(scope: scope).onGenerateRoute(settings),
           home: SocialShellScreen(
             scope: scope,
             onDiaryHandoff: () => diaryHandoffCalled = true,
@@ -279,7 +296,9 @@ void main() {
       expect(diaryHandoffCalled, isTrue);
     });
 
-    testWidgets('fails closed and renders access restricted view when unauthorized', (tester) async {
+    testWidgets(
+        'fails closed and renders access restricted view when unauthorized',
+        (tester) async {
       final unauthScope = SocialDependenciesScope(
         sessionController: session,
         accessEvidence: null,
@@ -294,19 +313,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Access Restricted'), findsOneWidget);
-      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(SocialPrototypeNavigation), findsNothing);
 
       unauthScope.dispose();
     });
 
-    testWidgets('renders cleanly on small viewport (320x640) without overflow', (tester) async {
+    testWidgets('renders cleanly on small viewport (320x640) without overflow',
+        (tester) async {
       tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(
         MaterialApp(
-          onGenerateRoute: (settings) => SocialRouter(scope: scope).onGenerateRoute(settings),
+          onGenerateRoute: (settings) =>
+              SocialRouter(scope: scope).onGenerateRoute(settings),
           home: SocialShellScreen(scope: scope),
         ),
       );
@@ -318,7 +339,9 @@ void main() {
   });
 
   group('SocialSharedFeatureHandoff Tests (Task 149)', () {
-    testWidgets('presents unavailable dialog when handoff callback is unconfigured', (tester) async {
+    testWidgets(
+        'presents unavailable dialog when handoff callback is unconfigured',
+        (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -347,7 +370,8 @@ void main() {
       expect(find.text('Community Safety & Reporting'), findsNothing);
     });
 
-    testWidgets('invokes delegate callback directly when supplied', (tester) async {
+    testWidgets('invokes delegate callback directly when supplied',
+        (tester) async {
       bool handoffInvoked = false;
 
       await tester.pumpWidget(
