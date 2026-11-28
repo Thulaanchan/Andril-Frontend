@@ -35,6 +35,7 @@ class SkillExchangeHubScreen extends StatefulWidget {
   final List<SkillExchange>? initialExchanges;
   final VoidCallback? onBack;
   final VoidCallback? onRetry;
+  final VoidCallback? onOpenPacts;
 
   const SkillExchangeHubScreen({
     super.key,
@@ -58,6 +59,7 @@ class SkillExchangeHubScreen extends StatefulWidget {
     this.initialExchanges,
     this.onBack,
     this.onRetry,
+    this.onOpenPacts,
   });
 
   @override
@@ -76,6 +78,7 @@ class _SkillExchangeHubScreenState extends State<SkillExchangeHubScreen> {
   late List<SkillPartner> _partners;
   late List<SkillExchange> _myExchanges;
   String? _confirmationBannerMessage;
+  BuildContext? _proposalDialogContext;
 
   @override
   void initState() {
@@ -84,15 +87,30 @@ class _SkillExchangeHubScreenState extends State<SkillExchangeHubScreen> {
   }
 
   void _initData() {
+    if (!widget.isLearningActivated ||
+        widget.isUnavailable ||
+        widget.currentUserId.trim().isEmpty ||
+        widget.currentAccountId.trim().isEmpty) {
+      _partners = [];
+      _myExchanges = [];
+      return;
+    }
     _partners = List.of(widget.initialPartners ?? SkillPartner.samplePartners);
-    _myExchanges = List.of(widget.initialExchanges ?? []);
+    _myExchanges = (widget.initialExchanges ?? <SkillExchange>[])
+        .where((e) =>
+            e.sender == _currentParticipant ||
+            e.recipient == _currentParticipant)
+        .toList();
   }
 
   @override
   void didUpdateWidget(SkillExchangeHubScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Session revocation: Purge state immediately when caller ID changes.
-    if (widget.currentUserId != oldWidget.currentUserId) {
+    if (widget.currentUserId != oldWidget.currentUserId ||
+        widget.currentAccountId != oldWidget.currentAccountId ||
+        widget.isLearningActivated != oldWidget.isLearningActivated ||
+        widget.isUnavailable != oldWidget.isUnavailable) {
       _searchController.clear();
       _selectedCategory = 'All';
       _filterOfferOnly = false;
@@ -100,6 +118,14 @@ class _SkillExchangeHubScreenState extends State<SkillExchangeHubScreen> {
       _confirmationBannerMessage = null;
       _selectedTabIndex = 0;
       _initData();
+      final dialogContext = _proposalDialogContext;
+      if (dialogContext != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!dialogContext.mounted) return;
+          final route = ModalRoute.of(dialogContext);
+          if (route != null) Navigator.of(dialogContext).removeRoute(route);
+        });
+      }
     }
   }
 
@@ -115,31 +141,40 @@ class _SkillExchangeHubScreenState extends State<SkillExchangeHubScreen> {
       );
 
   void _handleProposeExchange(SkillPartner partner) {
+    final actor = _currentParticipant;
     showDialog(
       context: context,
-      builder: (dialogCtx) => ProposeExchangeDialog(
-        partner: partner,
-        userSkillsToShare: widget.userSkillsToShare,
-        existingProposals: _myExchanges,
-        onSubmit: (offeredSkill, wantedSkill, note) {
-          final newExchange = SkillExchange.propose(
-            id: 'ex_${DateTime.now().millisecondsSinceEpoch}',
-            sender: _currentParticipant,
-            recipient: partner.toParticipant(),
-            offeredSkill: offeredSkill,
-            wantedSkill: wantedSkill,
-            note: note,
-            existingProposals: _myExchanges,
-          );
+      builder: (dialogCtx) {
+        _proposalDialogContext = dialogCtx;
+        return ProposeExchangeDialog(
+          partner: partner,
+          userSkillsToShare: widget.userSkillsToShare,
+          existingProposals: _myExchanges,
+          onSubmit: (offeredSkill, wantedSkill, note) {
+            if (!mounted ||
+                !widget.isLearningActivated ||
+                widget.isUnavailable ||
+                widget.currentUserId != actor.learningProfileId ||
+                widget.currentAccountId != actor.accountId) return;
+            final newExchange = SkillExchange.propose(
+              id: 'ex_${DateTime.now().millisecondsSinceEpoch}',
+              sender: _currentParticipant,
+              recipient: partner.toParticipant(),
+              offeredSkill: offeredSkill,
+              wantedSkill: wantedSkill,
+              note: note,
+              existingProposals: _myExchanges,
+            );
 
-          setState(() {
-            _myExchanges.insert(0, newExchange);
-            _confirmationBannerMessage =
-                'Skill exchange proposal sent to ${partner.displayName}.';
-          });
-        },
-      ),
-    );
+            setState(() {
+              _myExchanges.insert(0, newExchange);
+              _confirmationBannerMessage =
+                  'Skill exchange proposal sent to ${partner.displayName}.';
+            });
+          },
+        );
+      },
+    ).whenComplete(() => _proposalDialogContext = null);
   }
 
   void _handleCancelExchange(SkillExchange exchange) {
@@ -235,7 +270,10 @@ class _SkillExchangeHubScreenState extends State<SkillExchangeHubScreen> {
   @override
   Widget build(BuildContext context) {
     // Gate 1: Fail-closed access denial
-    if (widget.currentUserId.trim().isEmpty || !widget.isLearningActivated) {
+    if (!widget.isLearningActivated ||
+        (!widget.isUnavailable &&
+            (widget.currentUserId.trim().isEmpty ||
+                widget.currentAccountId.trim().isEmpty))) {
       return Scaffold(
         backgroundColor: LearningColors.background,
         appBar: _buildAppBar(),
@@ -454,6 +492,14 @@ class _SkillExchangeHubScreenState extends State<SkillExchangeHubScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
+      actions: [
+        if (widget.onOpenPacts != null)
+          IconButton(
+            tooltip: 'Learning Pacts',
+            onPressed: widget.onOpenPacts,
+            icon: const Icon(Icons.handshake_outlined),
+          ),
+      ],
       backgroundColor: LearningColors.background,
       elevation: 0,
       centerTitle: false,
@@ -778,7 +824,7 @@ class _SkillExchangeHubScreenState extends State<SkillExchangeHubScreen> {
               ),
               const SizedBox(height: 8.0),
               const Text(
-                'The Skill Exchange Hub is currently paused for scheduled maintenance. Please check back later.',
+                'Skill exchange is not connected yet. Requests cannot be sent or changed right now.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,

@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../../core/security/session/session_controller.dart';
 import '../../domain/entities/learning_pact.dart';
+import '../../../profile/domain/entities/learning_profile.dart';
+import '../../../profile/domain/repositories/profile_repository.dart';
 import '../../domain/repositories/i_learning_pacts_repository.dart';
 
 /// Presentation statuses for Learning Pacts view (LRN-03).
@@ -41,7 +43,9 @@ class LearningPactsViewModel extends ChangeNotifier {
   final ILearningPactsRepository repository;
   final SessionController? sessionController;
   final bool isLearningActivated;
-  final String currentProfileId;
+  String _currentProfileId;
+  String get currentProfileId => _currentProfileId;
+  final ProfileRepository? profileRepository;
   final String currentDisplayName;
 
   VoidCallback? _unregisterSessionClearer;
@@ -55,19 +59,21 @@ class LearningPactsViewModel extends ChangeNotifier {
 
   int _requestEpoch = 0;
   bool _disposed = false;
+  bool _sessionRevoked = false;
 
   /// Notice displayed when running under disconnected / pending backend contract.
   static const String disconnectedNotice =
-      'Remote Pacts backend contract pending in OpenAPI v1. Pacts operate in local presentation mode.';
+      'Remote Pacts backend contract pending in OpenAPI v1. Changes cannot be saved until the service is connected.';
 
   LearningPactsViewModel({
     required this.repository,
     this.sessionController,
     this.isLearningActivated = false,
-    this.currentProfileId = 'current_learner_prof',
+    String currentProfileId = 'current_learner_prof',
+    this.profileRepository,
     this.currentDisplayName = 'Current Learner',
     List<LearningPact>? initialPacts,
-  }) {
+  }) : _currentProfileId = currentProfileId {
     if (initialPacts != null) {
       _distributePacts(initialPacts);
     }
@@ -84,7 +90,7 @@ class LearningPactsViewModel extends ChangeNotifier {
   LearningPactsTab get activeTab => _activeTab;
   String? get errorMessage => _errorMessage;
 
-  List<LearningPact> get allPacts => _pacts;
+  List<LearningPact> get allPacts => List.unmodifiable(_pacts);
 
   /// Active pacts where status == active (both participants mutually agreed).
   List<LearningPact> get activePacts =>
@@ -142,13 +148,11 @@ class LearningPactsViewModel extends ChangeNotifier {
 
   /// Initializes the ViewModel and loads pacts.
   Future<void> initialize({bool force = false}) async {
-    if (_status == LearningPactsViewStatus.loading && !force) return;
+    if (_disposed || (_status == LearningPactsViewStatus.loading && !force))
+      return;
 
     if (!_isAuthorized()) {
-      _status = LearningPactsViewStatus.accessDenied;
-      _errorMessage =
-          'Authentication and an activated Learning profile are required.';
-      notifyListeners();
+      _onSessionCleared();
       return;
     }
 
@@ -157,11 +161,35 @@ class LearningPactsViewModel extends ChangeNotifier {
     notifyListeners();
 
     final currentEpoch = ++_requestEpoch;
+    _activeOperations.clear();
 
     try {
+      final profiles = profileRepository;
+      if (profiles != null) {
+        final profile = await profiles.getProfile();
+        if (!_isCurrent(currentEpoch)) return;
+        if (profile is! ProfileSuccess<LearningProfile> ||
+            !profile.data.isActivated) {
+          _pacts = const [];
+          _currentProfileId = '';
+          _status = profile is ProfileAccessDenied
+              ? LearningPactsViewStatus.accessDenied
+              : LearningPactsViewStatus.unavailableService;
+          _errorMessage = 'Your Learning profile could not be verified.';
+          notifyListeners();
+          return;
+        }
+        _currentProfileId = profile.data.profileId;
+      }
+      if (currentProfileId.trim().isEmpty) {
+        _status = LearningPactsViewStatus.unavailableService;
+        _errorMessage = 'Your Learning profile could not be verified.';
+        notifyListeners();
+        return;
+      }
       final result = await repository.getPacts();
 
-      if (_disposed || currentEpoch != _requestEpoch) return;
+      if (!_isCurrent(currentEpoch)) return;
 
       if (result.failureType == LearningPactsFailureType.serviceUnavailable) {
         _status = LearningPactsViewStatus.unavailableService;
@@ -171,9 +199,7 @@ class LearningPactsViewModel extends ChangeNotifier {
       }
 
       if (result.failureType == LearningPactsFailureType.accessDenied) {
-        _status = LearningPactsViewStatus.accessDenied;
-        _errorMessage = result.errorMessage;
-        notifyListeners();
+        _onSessionCleared();
         return;
       }
 
@@ -190,14 +216,14 @@ class LearningPactsViewModel extends ChangeNotifier {
           : LearningPactsViewStatus.ready;
       notifyListeners();
     } catch (e) {
-      if (_disposed || currentEpoch != _requestEpoch) return;
+      if (!_isCurrent(currentEpoch)) return;
       _status = LearningPactsViewStatus.error;
       _errorMessage = 'An unexpected error occurred while loading pacts.';
       notifyListeners();
     }
   }
 
-  /// Proposes a new Learning Pact between the current user and a selected partner.
+  /// Saves only a confirmed repository result; unavailable operations stay closed.
   Future<bool> proposePact({
     required String title,
     required String sharedGoal,
@@ -208,509 +234,200 @@ class LearningPactsViewModel extends ChangeNotifier {
     String? studyPlan,
     Iterable<String>? commitmentTexts,
   }) async {
-    if (!_isAuthorized()) return false;
-    final cleanTitle = title.trim();
-    final cleanGoal = sharedGoal.trim();
-    final cleanPartnerId = partnerProfileId.trim();
-    final cleanPartnerName = partnerDisplayName.trim();
-
-    if (cleanTitle.isEmpty ||
-        cleanGoal.isEmpty ||
-        cleanPartnerId.isEmpty ||
-        cleanPartnerName.isEmpty) {
-      _errorMessage = 'Title, goal, and partner selection are required.';
-      notifyListeners();
-      return false;
-    }
-
-    try {
-      final result = await repository.proposePact(
-        title: cleanTitle,
-        sharedGoal: cleanGoal,
-        partnerProfileId: cleanPartnerId,
-        partnerDisplayName: cleanPartnerName,
+    if (title.trim().isEmpty ||
+        sharedGoal.trim().isEmpty ||
+        partnerProfileId.trim().isEmpty ||
+        partnerDisplayName.trim().isEmpty ||
+        partnerProfileId.trim() == currentProfileId) return false;
+    return _mutate(
+      'proposal:${partnerProfileId.trim()}',
+      () => repository.proposePact(
+        title: title.trim(),
+        sharedGoal: sharedGoal.trim(),
+        partnerProfileId: partnerProfileId.trim(),
+        partnerDisplayName: partnerDisplayName.trim(),
         partnerAvatarUrl: partnerAvatarUrl,
         duration: duration,
         studyPlan: studyPlan,
         commitmentTexts: commitmentTexts,
+      ),
+      validate: (pact) =>
+          pact.isProposer(currentProfileId) &&
+          pact.status == LearningPactStatus.pending,
+    );
+  }
+
+  Future<bool> acceptPact(String pactId) => _change(
+        pactId,
+        repository.acceptPact,
+        permitted: (p) => _canRespond(p),
       );
 
-      final newPact = result.data ??
-          LearningPact.propose(
-            id: 'pact_${DateTime.now().millisecondsSinceEpoch}',
-            title: cleanTitle,
-            sharedGoal: cleanGoal,
-            proposerProfileId: currentProfileId,
-            proposerDisplayName: currentDisplayName,
-            partnerProfileId: cleanPartnerId,
-            partnerDisplayName: cleanPartnerName,
-            partnerAvatarUrl: partnerAvatarUrl,
-            duration: duration,
-            studyPlan: studyPlan,
-            commitmentTexts: commitmentTexts,
-          );
+  Future<bool> declinePact(String pactId) => _change(
+        pactId,
+        repository.declinePact,
+        permitted: (p) => _canRespond(p),
+      );
 
-      _updatePactInList(newPact);
-      if (_status == LearningPactsViewStatus.empty) {
-        _status = LearningPactsViewStatus.ready;
-      }
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _errorMessage = 'Error proposing pact.';
-      notifyListeners();
-      return false;
-    }
-  }
+  Future<bool> cancelPact(String pactId) => _change(
+        pactId,
+        repository.cancelPact,
+        permitted: (p) =>
+            p.status == LearningPactStatus.pending &&
+            p.isProposer(currentProfileId),
+      );
 
-  /// Records acceptance of an incoming pact invitation.
-  ///
-  /// CRITICAL GOVERNANCE INVARIANT:
-  /// The pact activates IF AND ONLY IF all participants have voluntarily accepted.
-  Future<bool> acceptPact(String pactId) async {
-    if (!_isAuthorized()) return false;
-    final cleanId = pactId.trim();
-    if (cleanId.isEmpty || _activeOperations.contains(cleanId)) return false;
+  Future<bool> withdrawPact(String pactId) => _change(
+        pactId,
+        repository.withdrawPact,
+        permitted: (p) => p.status == LearningPactStatus.active,
+      );
 
-    _activeOperations.add(cleanId);
-    notifyListeners();
+  Future<bool> confirmCompletion(String pactId) => _change(
+        pactId,
+        repository.confirmCompletion,
+        permitted: (p) =>
+            p.status == LearningPactStatus.active &&
+            p.myParticipation(currentProfileId)?.completionConfirmed == false,
+      );
 
-    try {
-      final result = await repository.acceptPact(cleanId);
-      _activeOperations.remove(cleanId);
-
-      if (result.isSuccess && result.data != null) {
-        _updatePactInList(result.data!);
-        notifyListeners();
-        return true;
-      }
-
-      // Local fallback presentation update
-      final idx = _pacts.indexWhere((p) => p.id == cleanId);
-      if (idx != -1) {
-        final existing = _pacts[idx];
-        final updatedParticipants = existing.participants.map((p) {
-          if (p.participantProfileId == currentProfileId) {
-            return p.copyWith(
-              decision: PactInvitationDecision.accepted,
-              agreedAt: DateTime.now(),
-            );
-          }
-          return p;
-        }).toList();
-
-        final allAccepted = updatedParticipants
-            .every((p) => p.decision == PactInvitationDecision.accepted);
-
-        final updatedHistory = [
-          ...existing.history,
-          PactHistoryEvent(
-            id: 'hist_${cleanId}_${existing.history.length + 1}',
-            pactId: cleanId,
-            title: 'Pact accepted',
-            description: 'Both participants accepted the commitment.',
-            type: PactHistoryEventType.agreed,
-            actorDisplayName: currentDisplayName,
-          ),
-        ];
-
-        final updatedPact = existing.copyWith(
-          participants: updatedParticipants,
-          status: allAccepted
-              ? LearningPactStatus.active
-              : LearningPactStatus.pending,
-          history: updatedHistory,
-        );
-
-        _updatePactInList(updatedPact);
-        notifyListeners();
-        return true;
-      }
-
-      _errorMessage = result.errorMessage ?? 'Failed to accept pact.';
-      notifyListeners();
-      return false;
-    } catch (e) {
-      _activeOperations.remove(cleanId);
-      _errorMessage = 'Error accepting pact.';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// Records decline of an incoming pact invitation.
-  Future<bool> declinePact(String pactId) async {
-    if (!_isAuthorized()) return false;
-    final cleanId = pactId.trim();
-    if (cleanId.isEmpty || _activeOperations.contains(cleanId)) return false;
-
-    _activeOperations.add(cleanId);
-    notifyListeners();
-
-    try {
-      final result = await repository.declinePact(cleanId);
-      _activeOperations.remove(cleanId);
-
-      if (result.isSuccess && result.data != null) {
-        _updatePactInList(result.data!);
-        notifyListeners();
-        return true;
-      }
-
-      final idx = _pacts.indexWhere((p) => p.id == cleanId);
-      if (idx != -1) {
-        final existing = _pacts[idx];
-        final updatedParticipants = existing.participants.map((p) {
-          if (p.participantProfileId == currentProfileId) {
-            return p.copyWith(decision: PactInvitationDecision.declined);
-          }
-          return p;
-        }).toList();
-
-        final updatedHistory = [
-          ...existing.history,
-          PactHistoryEvent(
-            id: 'hist_${cleanId}_${existing.history.length + 1}',
-            pactId: cleanId,
-            title: 'Pact invitation declined',
-            description: '$currentDisplayName declined the invitation.',
-            type: PactHistoryEventType.withdrawn,
-            actorDisplayName: currentDisplayName,
-          ),
-        ];
-
-        final updatedPact = existing.copyWith(
-          participants: updatedParticipants,
-          history: updatedHistory,
-        );
-
-        _updatePactInList(updatedPact);
-        notifyListeners();
-        return true;
-      }
-
-      _errorMessage = result.errorMessage ?? 'Failed to decline pact.';
-      notifyListeners();
-      return false;
-    } catch (e) {
-      _activeOperations.remove(cleanId);
-      _errorMessage = 'Error declining pact.';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// Cancels a pending pact proposal initiated by the current user.
-  Future<bool> cancelPact(String pactId) async {
-    if (!_isAuthorized()) return false;
-    final cleanId = pactId.trim();
-    if (cleanId.isEmpty || _activeOperations.contains(cleanId)) return false;
-
-    _activeOperations.add(cleanId);
-    notifyListeners();
-
-    try {
-      final result = await repository.cancelPact(cleanId);
-      _activeOperations.remove(cleanId);
-
-      if (result.isSuccess && result.data != null) {
-        _updatePactInList(result.data!);
-        notifyListeners();
-        return true;
-      }
-
-      final idx = _pacts.indexWhere((p) => p.id == cleanId);
-      if (idx != -1) {
-        final existing = _pacts[idx];
-        if (!existing.isProposer(currentProfileId)) {
-          _errorMessage = 'Only the designated proposer may cancel.';
-          notifyListeners();
-          return false;
-        }
-
-        final updatedHistory = [
-          ...existing.history,
-          PactHistoryEvent(
-            id: 'hist_${cleanId}_${existing.history.length + 1}',
-            pactId: cleanId,
-            title: 'Pact cancelled',
-            description: 'The proposal was cancelled by the proposer.',
-            type: PactHistoryEventType.withdrawn,
-            actorDisplayName: currentDisplayName,
-          ),
-        ];
-
-        final updatedPact = existing.copyWith(
-          status: LearningPactStatus.cancelled,
-          history: updatedHistory,
-        );
-
-        _updatePactInList(updatedPact);
-        notifyListeners();
-        return true;
-      }
-
-      _errorMessage = result.errorMessage ?? 'Failed to cancel pact.';
-      notifyListeners();
-      return false;
-    } catch (e) {
-      _activeOperations.remove(cleanId);
-      _errorMessage = 'Error cancelling pact.';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// Withdraws the current user from an active pact, ending participation.
-  Future<bool> withdrawPact(String pactId) async {
-    if (!_isAuthorized()) return false;
-    final cleanId = pactId.trim();
-    if (cleanId.isEmpty || _activeOperations.contains(cleanId)) return false;
-
-    _activeOperations.add(cleanId);
-    notifyListeners();
-
-    try {
-      final result = await repository.withdrawPact(cleanId);
-      _activeOperations.remove(cleanId);
-
-      if (result.isSuccess && result.data != null) {
-        _updatePactInList(result.data!);
-        notifyListeners();
-        return true;
-      }
-
-      final idx = _pacts.indexWhere((p) => p.id == cleanId);
-      if (idx != -1) {
-        final existing = _pacts[idx];
-        final updatedHistory = [
-          ...existing.history,
-          PactHistoryEvent(
-            id: 'hist_${cleanId}_${existing.history.length + 1}',
-            pactId: cleanId,
-            title: 'Participation ended',
-            description: '$currentDisplayName ended their participation.',
-            type: PactHistoryEventType.withdrawn,
-            actorDisplayName: currentDisplayName,
-          ),
-        ];
-
-        final updatedPact = existing.copyWith(
-          status: LearningPactStatus.cancelled,
-          history: updatedHistory,
-        );
-
-        _updatePactInList(updatedPact);
-        notifyListeners();
-        return true;
-      }
-
-      _errorMessage = result.errorMessage ?? 'Failed to withdraw from pact.';
-      notifyListeners();
-      return false;
-    } catch (e) {
-      _activeOperations.remove(cleanId);
-      _errorMessage = 'Error withdrawing from pact.';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// Records this participant's report of pact completion.
-  Future<bool> confirmCompletion(String pactId) async {
-    if (!_isAuthorized()) return false;
-    final cleanId = pactId.trim();
-    if (cleanId.isEmpty || _activeOperations.contains(cleanId)) return false;
-
-    _activeOperations.add(cleanId);
-    notifyListeners();
-
-    try {
-      final result = await repository.confirmCompletion(cleanId);
-      _activeOperations.remove(cleanId);
-
-      if (result.isSuccess && result.data != null) {
-        _updatePactInList(result.data!);
-        notifyListeners();
-        return true;
-      }
-
-      final idx = _pacts.indexWhere((p) => p.id == cleanId);
-      if (idx != -1) {
-        final existing = _pacts[idx];
-        final updatedParticipants = existing.participants.map((p) {
-          if (p.participantProfileId == currentProfileId) {
-            return p.copyWith(completionConfirmed: true);
-          }
-          return p;
-        }).toList();
-
-        final allConfirmed =
-            updatedParticipants.every((p) => p.completionConfirmed);
-
-        final updatedHistory = [
-          ...existing.history,
-          PactHistoryEvent(
-            id: 'hist_${cleanId}_${existing.history.length + 1}',
-            pactId: cleanId,
-            title: 'Pact completed',
-            description: '$currentDisplayName confirmed completion.',
-            type: PactHistoryEventType.completed,
-            actorDisplayName: currentDisplayName,
-          ),
-        ];
-
-        final updatedPact = existing.copyWith(
-          participants: updatedParticipants,
-          status: allConfirmed
-              ? LearningPactStatus.completed
-              : LearningPactStatus.active,
-          history: updatedHistory,
-        );
-
-        _updatePactInList(updatedPact);
-        notifyListeners();
-        return true;
-      }
-
-      _errorMessage = result.errorMessage ?? 'Failed to confirm completion.';
-      notifyListeners();
-      return false;
-    } catch (e) {
-      _activeOperations.remove(cleanId);
-      _errorMessage = 'Error confirming completion.';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// Toggles self-reported completion of an agreed commitment milestone.
   Future<bool> toggleCommitment({
     required String pactId,
     required String commitmentId,
     required bool isCompleted,
-  }) async {
-    if (!_isAuthorized()) return false;
-    final cleanPactId = pactId.trim();
-    final cleanCmtId = commitmentId.trim();
-    if (cleanPactId.isEmpty || cleanCmtId.isEmpty) return false;
-
-    try {
-      final result = await repository.updateCommitmentProgress(
-        pactId: cleanPactId,
-        commitmentId: cleanCmtId,
-        isCompleted: isCompleted,
+  }) =>
+      _change(
+        pactId,
+        (id) => repository.updateCommitmentProgress(
+          pactId: id,
+          commitmentId: commitmentId.trim(),
+          isCompleted: isCompleted,
+        ),
+        permitted: (p) =>
+            p.status == LearningPactStatus.active &&
+            p.commitments.any((c) => c.id == commitmentId.trim()),
       );
 
-      if (result.isSuccess && result.data != null) {
-        _updatePactInList(result.data!);
-        notifyListeners();
-        return true;
-      }
+  bool _canRespond(LearningPact pact) =>
+      pact.status == LearningPactStatus.pending &&
+      !pact.isProposer(currentProfileId) &&
+      pact.myParticipation(currentProfileId)?.decision ==
+          PactInvitationDecision.pending;
 
-      final idx = _pacts.indexWhere((p) => p.id == cleanPactId);
-      if (idx != -1) {
-        final existing = _pacts[idx];
-        String commitmentText = 'Milestone';
-        final updatedCommitments = existing.commitments.map((c) {
-          if (c.id == cleanCmtId) {
-            commitmentText = c.text;
-            return c.copyWith(
-              isCompleted: isCompleted,
-              completedAt: isCompleted ? DateTime.now() : null,
-            );
-          }
-          return c;
-        }).toList();
-
-        final updatedHistory = [
-          ...existing.history,
-          PactHistoryEvent(
-            id: 'hist_${cleanPactId}_${existing.history.length + 1}',
-            pactId: cleanPactId,
-            title: 'Progress update recorded',
-            description: isCompleted
-                ? '$currentDisplayName completed milestone: $commitmentText'
-                : '$currentDisplayName updated progress on: $commitmentText',
-            type: PactHistoryEventType.selfReported,
-            actorDisplayName: currentDisplayName,
-          ),
-        ];
-
-        final updatedPact = existing.copyWith(
-          commitments: updatedCommitments,
-          history: updatedHistory,
-        );
-
-        _updatePactInList(updatedPact);
-        notifyListeners();
-        return true;
-      }
-
+  Future<bool> _change(
+    String pactId,
+    Future<LearningPactsResult<LearningPact>> Function(String) operation, {
+    required bool Function(LearningPact) permitted,
+  }) async {
+    final id = pactId.trim();
+    final pact = _pacts.where((p) => p.id == id).firstOrNull;
+    if (id.isEmpty ||
+        pact == null ||
+        pact.myParticipation(currentProfileId) == null ||
+        !permitted(pact)) {
       return false;
-    } catch (e) {
-      _errorMessage = 'Error updating commitment.';
-      notifyListeners();
+    }
+    return _mutate(id, () => operation(id), validate: (p) => p.id == id);
+  }
+
+  Future<bool> _mutate(
+    String key,
+    Future<LearningPactsResult<LearningPact>> Function() operation, {
+    required bool Function(LearningPact) validate,
+  }) async {
+    if (!_isAuthorized() ||
+        currentProfileId.trim().isEmpty ||
+        !_activeOperations.add(key)) return false;
+    final epoch = _requestEpoch;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final result = await operation();
+      if (!_isCurrent(epoch)) return false;
+      final pact = result.data;
+      if (!result.isSuccess || pact == null) {
+        _errorMessage = result.errorMessage ?? 'The change could not be saved.';
+        if (result.failureType == LearningPactsFailureType.accessDenied) {
+          _onSessionCleared();
+        } else if (result.failureType ==
+            LearningPactsFailureType.serviceUnavailable) {
+          _status = LearningPactsViewStatus.unavailableService;
+        }
+        return false;
+      }
+      if (pact.id.trim().isEmpty ||
+          pact.module != LearningPact.moduleScope ||
+          pact.myParticipation(currentProfileId) == null ||
+          !validate(pact)) {
+        _errorMessage = 'The returned pact could not be verified.';
+        return false;
+      }
+      final updated = List<LearningPact>.of(_pacts);
+      final index = updated.indexWhere((p) => p.id == pact.id);
+      if (index < 0) {
+        updated.add(pact);
+      } else {
+        updated[index] = pact;
+      }
+      _pacts = List.unmodifiable(updated);
+      _status = LearningPactsViewStatus.ready;
+      return true;
+    } catch (_) {
+      if (_isCurrent(epoch)) _errorMessage = 'The change could not be saved.';
       return false;
+    } finally {
+      if (_isCurrent(epoch)) {
+        _activeOperations.remove(key);
+        notifyListeners();
+      }
     }
   }
 
   void _distributePacts(List<LearningPact> pacts) {
-    final sanitized =
-        pacts.where((p) => p.module == LearningPact.moduleScope).toList();
     final seen = <String>{};
-    final unique = <LearningPact>[];
-    for (final p in sanitized) {
-      if (seen.add(p.id)) {
-        unique.add(p);
-      }
-    }
-    _pacts = unique;
+    _pacts = List.unmodifiable(pacts.where((p) =>
+        p.module == LearningPact.moduleScope &&
+        p.myParticipation(currentProfileId) != null &&
+        seen.add(p.id)));
   }
 
-  void _updatePactInList(LearningPact updated) {
-    final list = List<LearningPact>.of(_pacts);
-    final idx = list.indexWhere((p) => p.id == updated.id);
-    if (idx != -1) {
-      list[idx] = updated;
-    } else {
-      list.add(updated);
-    }
-    _pacts = list;
-  }
+  bool _isAuthorized() =>
+      !_disposed &&
+      !_sessionRevoked &&
+      isLearningActivated &&
+      (sessionController == null ||
+          sessionController!.phase == SessionPhase.signedIn);
 
-  bool _isAuthorized() {
-    final session = sessionController;
-    if (session != null && session.phase != SessionPhase.signedIn) {
-      return false;
-    }
-    return isLearningActivated;
-  }
+  bool _isCurrent(int epoch) => _isAuthorized() && epoch == _requestEpoch;
 
   void _onSessionCleared() {
+    if (_disposed) return;
+    _sessionRevoked = true;
     _pacts = const [];
     _status = LearningPactsViewStatus.accessDenied;
     _errorMessage = null;
     _activeOperations.clear();
     _requestEpoch++;
+    if (profileRepository != null) _currentProfileId = '';
     notifyListeners();
   }
 
   void _onSessionStateChanged() {
-    if (!_isAuthorized()) {
-      _onSessionCleared();
-    }
+    if (!_isAuthorized()) _onSessionCleared();
   }
 
   @override
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
+    _requestEpoch++;
+    _pacts = const [];
+    _activeOperations.clear();
     _unregisterSessionClearer?.call();
     sessionController?.removeListener(_onSessionStateChanged);
     super.dispose();
   }
 
   @override
-  String toString() =>
-      'LearningPactsViewModel(status: ${_status.name}, tab: ${_activeTab.name}, pacts: ${_pacts.length})';
+  String toString() => 'LearningPactsViewModel(status: ${_status.name})';
 }

@@ -24,7 +24,10 @@ class LearningPactsRepository implements ILearningPactsRepository {
         failureType: LearningPactsFailureType.serviceUnavailable,
       );
     }
-    return const LearningPactsResult.success(<LearningPact>[]);
+    return const LearningPactsResult.failure(
+      errorMessage: LearningPact.disconnectedNotice,
+      failureType: LearningPactsFailureType.serviceUnavailable,
+    );
   }
 
   @override
@@ -43,8 +46,8 @@ class LearningPactsRepository implements ILearningPactsRepository {
       );
     }
     return const LearningPactsResult.failure(
-      errorMessage: 'Pact not found.',
-      failureType: LearningPactsFailureType.notFound,
+      errorMessage: LearningPact.disconnectedNotice,
+      failureType: LearningPactsFailureType.serviceUnavailable,
     );
   }
 

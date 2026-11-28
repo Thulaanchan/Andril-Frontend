@@ -46,10 +46,8 @@ class _ProposePactFlowScreenState extends State<ProposePactFlowScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _goalController = TextEditingController();
-  final TextEditingController _durationController =
-      TextEditingController(text: '4 weeks');
-  final TextEditingController _studyPlanController =
-      TextEditingController(text: '3 days per week');
+  final TextEditingController _durationController = TextEditingController();
+  final TextEditingController _studyPlanController = TextEditingController();
   final TextEditingController _milestoneInputController =
       TextEditingController();
   final TextEditingController _partnerSearchController =
@@ -64,27 +62,8 @@ class _ProposePactFlowScreenState extends State<ProposePactFlowScreen> {
   @override
   void initState() {
     super.initState();
-    _availablePartners = widget.candidatePartners ??
-        const [
-          PactPartnerCandidate(
-            profileId: 'prof_naveen',
-            displayName: 'Naveen R.',
-            skillsToShare: 'Python, SQL',
-            wantsToLearn: 'Flutter',
-          ),
-          PactPartnerCandidate(
-            profileId: 'prof_dilini',
-            displayName: 'Dilini S.',
-            skillsToShare: 'UI/UX, Design',
-            wantsToLearn: 'App Development',
-          ),
-          PactPartnerCandidate(
-            profileId: 'prof_arun',
-            displayName: 'Arun K.',
-            skillsToShare: 'Flutter, Dart',
-            wantsToLearn: 'Product Design',
-          ),
-        ];
+    _availablePartners =
+        List.unmodifiable(widget.candidatePartners ?? const []);
 
     if (_availablePartners.isNotEmpty) {
       _selectedPartner = _availablePartners.first;
